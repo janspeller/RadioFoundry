@@ -16,10 +16,10 @@ BOARD_T_NAME := AT-D878UVII
 # Bench knobs (docs/testing/d878uv2-bringup.md)
 D878UV2_DEFS ?=
 MCU_DEFS   += $(D878UV2_DEFS)
+# drivers/modem/sct, the GPS and the daughter board join this list when their board glue is written
 BOARD_DIRS := boards/d878uv2 drivers/display/st7735 drivers/flash/spi_nand drivers/input/quadrature \
-              drivers/input/keymatrix drivers/modem/sct drivers/rf/rfbus drivers/rf/subaudio drivers/rf/at1846s \
-              drivers/gps/nmea_line drivers/gps/gps_rx platform/gd32f30x/gps_uart drivers/bcast/rda5807m \
-              drivers/bus/i2c_gpio
+              drivers/input/keymatrix drivers/rf/rfbus drivers/rf/subaudio drivers/rf/at1846s \
+              drivers/bcast/rda5807m drivers/bus/i2c_gpio
 # The core's storage on the NAND, with CONFIG_NAND_STORAGE (hardware-d878uv2.md 5)
 BOARD_NAND_DIRS := drivers/flash/nand_sectors drivers/flash/nand_blocks
 # The 128x160 panel in 16 colors: the 4 bpp frame buffer is 10240 B over 160 rows, not the RGB565 default. A screen

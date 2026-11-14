@@ -12,6 +12,10 @@
 extern const hal_display_t d878uv2_display;
 extern const hal_input_t d878uv2_input;
 extern const hal_power_t d878uv2_power;
+extern const hal_radio_t d878uv2_radio;
+
+// board_rf_safe's part: the PA gate down and the transmit level at zero. Plain register writes only
+void d878uv2_rf_safe(void);
 
 // The keys by their printed names. The front panel is a 4 x 3 numeric keypad with MENU, EXIT and the two arrows
 // above it; PF1 and PF2 are the side keys below PTT and PF3 is the orange key on top.
@@ -55,8 +59,15 @@ void d878uv2_nand_lock(void);
 void d878uv2_nand_unlock(void);
 #if CONFIG_NAND_STORAGE
 #include "flash/nand_sectors/nand_sectors.h"
+#include "flash/nand_blocks/nand_blocks.h"
 extern const nand_dev_t d878uv2_nand_dev;
 extern const nand_dev_t d878uv2_nand_iddb_dev;
+
+// The core's data flash over those two ranges (flash_d878uv2.c)
+extern hal_flash_t d878uv2_flash;
+bool d878uv2_flash_init(void);
+void d878uv2_flash_stats(nand_sectors_stats_t *st);
+void d878uv2_flash_ext_stats(nand_blocks_stats_t *st);
 #endif
 
 // LCD backlight, 0..100 %: TIM8 channel 2's complementary output on PB0 (power_d878uv2.c, hardware-d878uv2.md 4.3)

@@ -6,7 +6,7 @@
 #
 # DMR runs through the SCT3258 baseband, which carries its own vocoder and plays the voice to the codec itself
 # (CAP_MODEM_VOICE, docs/spec/modem-sct.md 7). Its driver, drivers/modem/sct, is shared with every SCT3258 radio
-CONFIG_DMR ?= y
+CONFIG_DMR ?= n
 # What needs the voice frames on the MCU is not written (below); with DMR on, what needs RAM this radio doesn't
 # have is off, as on the family's other board: the USB network adapter and the IP gateway behind it, and zone sharing
 CONFIG_HOTSPOT ?= n
@@ -20,6 +20,8 @@ endif
 CONFIG_FONT_XL ?= n
 # The core's storage in RadioFoundry's own NAND block range
 CONFIG_NAND_STORAGE ?= y
+# Not written yet (below)
+CONFIG_GPS ?= n
 # A handheld on a battery, unlike the family's mobile: the battery monitor and its warnings are on (ADC1 channel 11,
 # hardware-d878uv2.md 4.3)
 CONFIG_BATTERY_SAVE ?= y
@@ -43,6 +45,9 @@ BOARD_UNSUPPORTED += AM_RX	# no air band receiver on the I2C bus (hardware-d878u
 MAXIMAL_SKIP := USB_NETWORK NET_PPP DMR_IP_GATEWAY NET_TCP NET_KISS NET_HTTP NET_HTTP_GZIP NET_WEBCTL NET_RIGCTL \
 	NET_APRSIS MDNS TFTP TFTP_IDDB SNMP DMR_CONTROL_STATION ZONE_SHARE APRS_RX APRS_IGATE
 # What the hardware can do but this radio's driver or glue doesn't yet
+BOARD_NOT_WRITTEN += DMR	# the baseband's board glue (the host port, reset and boot block load) isn't written
+BOARD_NOT_WRITTEN += GPS	# the module is enabled from the RF chip's gpio2; the glue isn't written
+BOARD_NOT_WRITTEN += GPS_SKY	# needs the GPS (above)
 BOARD_NOT_WRITTEN += HOTSPOT	# needs the voice frames on the MCU: the baseband's frame bypass isn't written
 BOARD_NOT_WRITTEN += HOTSPOT_SPLIT	# needs the hotspot (above)
 BOARD_NOT_WRITTEN += SFR	# needs the voice frames on the MCU (above)
