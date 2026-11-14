@@ -2,7 +2,7 @@
 /* Copyright (c) 2026 The RadioFoundry Authors */
 /* AnyTone AT-D878UVII PLUS, GD32F303VG (1 MB flash, 96 KB SRAM), application behind the vendor bootloader
  * (docs/spec/hardware-d878uv2.md 1.3). The bootloader holds 0x08000000..0x08003FFF and starts the image at
- * 0x08004000 (board.mk APP_BASE), 8 KB lower than the AT-D578UV's. RadioFoundry's image stays below the modem boot
+ * 0x08004000 (board.mk APP_BASE), 8 KB lower than the family's mobile. RadioFoundry's image stays below the modem boot
  * block slot (0x080FF000..0x08100000), where the boot block the DMR baseband needs is merged from the user's stock
  * file on their machine (hardware-anytone.md 2.2). On this 1 MB part the slot is its last 4 KB.
  * The layout is the platform's (platform/gd32f30x/common.ld). */

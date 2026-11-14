@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The RadioFoundry Authors
-// AT-D878UVII PLUS keys and channel knob (docs/spec/hardware-d878uv2.md 4.1).
+// AT-D878UVII PLUS keys, PTT and channel knob (docs/spec/hardware-d878uv2.md 4.1, 4.3).
 //
-// The key matrix is driven on the LCD's data lines PE7-PE14, one line low at a time, and read on six pull-up
+// The key matrix is driven on the LCD's data lines PE7-PE14, one line low at a time, and read on three pull-up
 // inputs; keys are active low. The stock firmware scans between LCD writes, and so does this: the scan leaves the
 // data bus high, and the display's own writes set it again on every byte.
 //
-// **The map is empty.** Which printed key sits at which matrix position is not recorded anywhere: the image gave
-// the pins and the scanning scheme, not the layout. Until a bench session fills it in, no matrix key reports, and
-// d878uv2_key_raw() reports the raw sense reading per drive line so that session can map them in one sitting
-// (docs/testing/d878uv2-bringup.md, stage 3). Nothing here guesses a layout: a plausible-looking wrong map would
-// be harder to find than no map at all.
+// Four more inputs are not matrix positions at all. They are wired to ground and read with every drive line high:
+// PTT on PA10 (active low), PA14 and PE1 (pull-ups, active low), and PA13, which is read with its output register
+// cleared so it uses the internal pull-down and reads *high* when pressed. Which key PA13, PA14 and PE1 are was not
+// identified, so they are reported raw and mapped to nothing.
+//
+// **The matrix map is empty.** Which printed key sits at which position is recorded nowhere. Until a bench session
+// fills it in, no matrix key reports, and d878uv2_key_raw() and d878uv2_key_direct() report the raw readings so
+// that session can map them in one sitting (docs/testing/d878uv2-bringup.md, stage 3). Nothing here guesses a
+// layout: a plausible-looking wrong map would be harder to find than no map at all.
 #include "d878uv2.h"
 #include "config.h"
 #include "pins.h"
@@ -19,31 +23,27 @@
 #include "input/quadrature/quadrature.h"
 
 #define ROWS	8u	// the LCD data lines PE7-PE14
-#define COLS	6u	// the sense inputs
+#define COLS	3u	// the matrix sense inputs
 
 // The sense lines, in column order. Bit n of a scan byte is low when column n reads low
-static mcu_gpio_t *const sense_port[COLS] = { GPIOA, GPIOA, GPIOB, GPIOB, GPIOC, GPIOE };
-static const uint16_t sense_bit[COLS] = {
-	MCU_PIN(10), MCU_PIN(14), MCU_PIN(1), MCU_PIN(2), MCU_PIN(5), MCU_PIN(1),
-};
+static mcu_gpio_t *const sense_port[COLS] = { GPIOB, GPIOB, GPIOC };
+static const uint16_t sense_bit[COLS] = { MCU_PIN(1), MCU_PIN(2), MCU_PIN(5) };
 
-// Not recorded: every position is KEYMATRIX_NONE until the bench fills it in (hardware-d878uv2.md 4.1). The order
-// is row 0 (PE7) first, six columns to a row
+// Not recorded: every position is KEYMATRIX_NONE until the bench fills it in (hardware-d878uv2.md 4.1). Row 0
+// (PE7) first, three columns to a row
 static const uint8_t key_map[ROWS * COLS] = {
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
 };
 
-// No column-to-ground key is known on this board either
-static const uint8_t key_direct[COLS] = {
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-};
+// The direct keys hang off their own pins here, not off a sense column, so the matrix has none of its own
+static const uint8_t key_direct[COLS] = { KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE };
 
 static const keymatrix_t matrix = {
 	.rows = ROWS,
@@ -54,6 +54,8 @@ static const keymatrix_t matrix = {
 
 static quad_dec_t knob;
 static uint8_t last_raw[ROWS];
+static uint8_t last_direct;
+static bool ptt_prev;
 
 // The settle between driving a line and reading the senses. The stock firmware uses a short busy loop; at 120 MHz
 // this is a few hundred nanoseconds, well over the RC of a pull-up on a short trace
@@ -72,6 +74,31 @@ static uint8_t read_sense(void)
 		}
 	}
 	return low;
+}
+
+// The four direct inputs as "pressed" bits, each in its own polarity: bit 0 PTT (PA10, low), bit 1 PA14 (low),
+// bit 2 PE1 (low), bit 3 PA13 (high, internal pull-down)
+#define DIRECT_PTT	0x01u
+#define DIRECT_A	0x02u
+#define DIRECT_B	0x04u
+#define DIRECT_PULLDOWN	0x08u
+
+static uint8_t read_direct(void)
+{
+	uint8_t v = 0;
+	if (!mcu_pin_read(PIN_PTT)) {
+		v |= DIRECT_PTT;
+	}
+	if (!mcu_pin_read(PIN_DIRECT_A)) {
+		v |= DIRECT_A;
+	}
+	if (!mcu_pin_read(PIN_DIRECT_B)) {
+		v |= DIRECT_B;
+	}
+	if (mcu_pin_read(PIN_DIRECT_PULLDOWN)) {
+		v |= DIRECT_PULLDOWN;
+	}
+	return v;
 }
 
 // All drive lines high: the state the LCD leaves them in between bytes, and the state a scan returns them to
@@ -103,6 +130,10 @@ static void init(void)
 	for (unsigned c = 0; c < COLS; c++) {
 		mcu_pin_in(sense_port[c], sense_bit[c], MCU_PULL_UP);
 	}
+	mcu_pin_in(PIN_PTT, MCU_PULL_UP);
+	mcu_pin_in(PIN_DIRECT_A, MCU_PULL_UP);
+	mcu_pin_in(PIN_DIRECT_B, MCU_PULL_UP);
+	mcu_pin_in(PIN_DIRECT_PULLDOWN, MCU_PULL_DOWN);
 	mcu_pin_in(PIN_KNOB_A, MCU_PULL_UP);
 	mcu_pin_in(PIN_KNOB_B, MCU_PULL_UP);
 	// The drive lines are the LCD's data bus and the display's init already made them outputs; leave them high
@@ -114,8 +145,10 @@ static uint32_t scan(void)
 {
 	uint8_t row_low[ROWS];
 
+	// The direct inputs are read with every drive line high, as the stock firmware does
 	drive_all_high();
 	settle();
+	uint8_t direct = read_direct();
 	uint8_t idle_low = read_sense();
 
 	for (unsigned r = 0; r < ROWS; r++) {
@@ -125,11 +158,20 @@ static uint32_t scan(void)
 		last_raw[r] = row_low[r];
 	}
 	drive_all_high();
+	last_direct = direct;
 
 	// The knob is sampled with the scan: a detent is slower than the UI's scan interval
 	(void)quad_sample(&knob, knob_ab());
 
-	return keymatrix_decode(&matrix, idle_low, row_low);
+	uint32_t keys = keymatrix_decode(&matrix, idle_low, row_low);
+	// PTT keys the transmitter, so it is reported only once two scans running agree, the way the stock firmware
+	// confirms a press with a second read. The other three direct inputs map to no key yet
+	bool ptt = (direct & DIRECT_PTT) != 0;
+	if (ptt && ptt_prev) {
+		keys |= 1u << KEY_PTT;
+	}
+	ptt_prev = ptt;
+	return keys;
 }
 
 static int8_t encoder(void)
@@ -147,11 +189,16 @@ static void encoder_stats(hal_encoder_stats_t *st)
 	st->steps_per_detent = knob.steps;
 }
 
-void d878uv2_key_raw(uint8_t raw[ROWS])
+void d878uv2_key_raw(uint8_t raw[8])
 {
 	for (unsigned r = 0; r < ROWS; r++) {
 		raw[r] = last_raw[r];
 	}
+}
+
+uint8_t d878uv2_key_direct(void)
+{
+	return last_direct;
 }
 
 const hal_input_t d878uv2_input = {

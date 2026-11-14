@@ -3,7 +3,8 @@
 // AT-D878UVII PLUS power hold, power key, battery and backlight (docs/spec/hardware-d878uv2.md 4.3).
 //
 // A handheld on a 2-cell pack (the QB-44HL is 7.4 V): PC3 holds the radio on and dropping it powers it down, so
-// "off" is really off, unlike the AT-D578UV's standby. The battery sits on ADC1 channel 11 (PC1) behind about a
+// "off" is really off, not the standby a radio on a fixed supply falls back to. The battery sits on ADC1
+// channel 11 (PC1) behind about a
 // 1:4 divider, and a panel potentiometer on channel 12 (PC2) is most likely the volume.
 //
 // **Two things to check on the bench before anything else** (docs/testing/d878uv2-bringup.md, stage 3):
@@ -39,10 +40,10 @@ static void init(void)
 	mcu_pin_in(PIN_POWER_KEY, MCU_PULL_UP);
 	mcu_pin_analog(GPIOC, MCU_PIN(0) | MCU_PIN(1) | MCU_PIN(2));
 	mcu_adc_init();
-	// The three indicator outputs, all off. Which is which color is not recorded (hardware-d878uv2.md 6)
-	mcu_pin_out(PIN_LED0, false, false);
-	mcu_pin_out(PIN_LED1, false, false);
-	mcu_pin_out(PIN_LED2, false, false);
+	// The three indicator outputs, all off (hardware-d878uv2.md 4.3)
+	mcu_pin_out(PIN_LED_RX, false, false);
+	mcu_pin_out(PIN_LED_BT, false, false);
+	mcu_pin_out(PIN_LED_TX, false, false);
 	// The backlight, off until the UI sets it
 	mcu_pin_out(PIN_BACKLIGHT, false, false);
 	pwrkey_init(&power_key);
@@ -97,18 +98,15 @@ static bool switch_on(void)
 	return pwrkey_on(&power_key, mcu_pin_read(PIN_POWER_KEY));
 }
 
+// PE3 is driven from the receive and call paths and PE5 where transmit starts, so they are the green and red
+// lights. PE4 is the Bluetooth indicator, driven by that path and not by the core, so LED_BLUE does nothing here
+// and the board does not set CAP_LED_RGB (hardware-d878uv2.md 4.3)
 static void led(uint8_t which, bool on)
 {
-	switch (which) {
-	case 0:
-		mcu_pin_write(PIN_LED0, on);
-		break;
-	case 1:
-		mcu_pin_write(PIN_LED1, on);
-		break;
-	default:
-		mcu_pin_write(PIN_LED2, on);
-		break;
+	if (which == LED_GREEN) {
+		mcu_pin_write(PIN_LED_RX, on);
+	} else if (which == LED_RED) {
+		mcu_pin_write(PIN_LED_TX, on);
 	}
 }
 

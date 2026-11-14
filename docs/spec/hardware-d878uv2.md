@@ -13,7 +13,9 @@ pin map (hardware-anytone.md section 4) pin by pin against this radio. The order
 
 **Summary.** The 878UVII PLUS board is the 868 board with four changes: the baseband bring-up drives three more
 lines, the LCD has no read strobe, the backlight and the frequency-dependent tuning voltage are on different timers
-and pins, and a Bluetooth/APRS daughter board hangs off UART4 with its own reset line. Everything else — the
+and pins, and a Bluetooth/APRS daughter board hangs off UART4 with its own reset line. Two things the 868 page
+does not record are filled in here: PTT is PA10, and the band and front-end switching is on the AT1846S's GPIO
+pins rather than on any MCU pin. Everything else — the
 SCT3258 host port, the LCD transport and controller, the keypad matrix, the AT1846S three-wire bus, the SPI NAND,
 I2C, the GPS UART, the per-slot PA gate — carries over pin for pin. The calibration layout carries over too, with
 wider UHF tables.
@@ -30,10 +32,10 @@ schematic, block diagram, operational description and parts list are withheld un
 | MCU | `GD32F303VGT6` | Cortex-M4, 1 MB flash, 96 KB RAM, no CCM. 100-pin LQFP |
 | DMR baseband | `SCT3258TD` | QFN64. Runs DMR layers 1-2 and the AMBE+2 vocoder itself ([modem-sct.md](modem-sct.md)) |
 | Audio codec | `AIC3204` | TLV320AIC3204. Set up through the baseband, not from the MCU ([hardware-anytone.md](hardware-anytone.md) 2.5), which is why it is on no bus in section 4 |
-| RF transceiver | `AT1846S` | `drivers/rf/at1846s` drives it. One chip: no second receiver, unlike the AT-D578UV |
+| RF transceiver | `AT1846S` | `drivers/rf/at1846s` drives it. One chip: no second receiver, unlike the AT-D578UV. Its own GPIO pins carry the band and front-end switching (4.3) |
 | PA | `A5M06` | NXP AFT05MS006 |
 | External flash | `TC58CVG1S3H RA1G` | 2 Gbit SPI NAND, the same part the AT-D578UV carries, and the part the identity check in 4.1 demands |
-| GNSS | `AT6558` | The chip an ATGM336H module carries. Not fitted to every unit |
+| GNSS | `AT6558` | The chip an ATGM336H module carries, enabled from the RF chip's gpio2 (4.3). Not fitted to every unit |
 | Bluetooth and APRS board | silkscreen `APRS-BT 201208 V2.1` | Its own HDSC `HC32F005` Cortex-M0+ (the "BHT_BOARD" firmware), a CML `CMX865` Bell-202 FSK modem for APRS, and a Bluetooth module carrying a Cypress `CYW20707` and a Nuvoton `NAU88C22` codec. The MCU's link to it is in 4.4 |
 
 ### 1.2 The stock image
@@ -84,6 +86,9 @@ This differs from the 868 only in form. The buses are still bit-banged one pin a
 peripheral on the LCD, NAND, RF or baseband paths. Where a bus has to change direction, the firmware rewrites the
 port's CRL/CRH nibble for that one pin.
 
+Not every board control is an MCU pin. Eight more outputs are the AT1846S's own GPIO pins, driven through that
+chip's register 0x1F; they carry the band and front-end switching and the GPS enable (4.3).
+
 Bring-up order, from the board's entry point: tuning PWM, backlight PWM, LCD bus pins, I2C pins, LCD controller
 init, splash, AT1846S pins, SPI NAND pins, tone PWM, three periodic timers, GPS UART, NAND identity, NAND feature
 registers, then the rest.
@@ -122,7 +127,7 @@ this board.
 | SCT3258 host port (HPI) | Data PD8–PD15. HCSN PD2, HWRN PD3, HRDN PD4 (active low). HOBIB PD5 (input, low = data waiting) | Intel mode. **Same as the 868.** The data pins switch as a group between push-pull output (CRH 0x33333333) and pull-up input (CRH 0x88888888). Byte write: HCSN low, HWRN low, short wait, data onto PD8–PD15, HWRN high, HCSN high — so data is latched on the rising edge of HWRN. Byte read: HCSN low, HRDN low, wait, read IDR >> 8, HRDN high, HCSN high. A block read holds HCSN low and pulses HRDN per byte. The wait between strobes is a fixed 20-iteration busy loop on a RAM byte |
 | SCT3258 control | RSTN PD6. PIO1 strap PC12. Enables PA8, PC6. Also driven in the same sequence: PD1, PD7, PC7 | Reset: PA8 high, PD2/PD3/PD4 high, PD1 low, PD7 low, PC12 low (Intel mode), PC7 low, PC6 high, 100 ms, RSTN high, 100 ms, RSTN low, 500 ms. Then RSTN high and PC12 released to a pulled-down input, and the 1024-word boot block follows over the host port. **The 868's sequence plus PD1, PD7 and PC7**, which the 868 page lists as unidentified outputs. Power-down drives PA8, PD1–PD4, PD6, PD7, PC6, PC7 and PC12 all low |
 | LCD (8080, 8-bit) | Data PE7–PE14 (bit 0 on PE7). RS/DC PB10 (low = command). CS PB12, WR PB13 (active low). RESET PB11 | Section 4.2. The byte write reads ODR, masks it with 0x807F and ORs the byte shifted left by 7, so PE0–PE6 and PE15 are untouched. **The 868's RD on PE15 does not exist here**: this board drives no read strobe, and PE15 is something else (4.3) |
-| Keypad | Drive lines PE7–PE14 (shared with the LCD data bus). Sense inputs with pull-ups: PA10, PA14, PB1, PB2, PC5, PE1 | **Same six sense lines as the 868.** One drive line is pulled low at a time while the others stay high; each sense line is read, and a hit is confirmed by a second read after a delay. Keys are active low |
+| Keypad matrix | Drive lines PE7–PE14 (shared with the LCD data bus). Sense inputs with pull-ups: **PB1, PB2 and PC5 only** | One drive line is pulled low at a time while the others stay high; the three sense lines are read, and a hit is confirmed by a second read after a delay. Keys are active low. **The 868 page lists six sense lines; on this radio only three are read with a row driven.** The other three (PA10, PA14, PE1), and PA13, are read on their own with every drive line high, so they are direct inputs wired to ground rather than matrix positions (4.3) |
 | Channel knob | PC8, PC9 (quadrature, pull-up inputs) | **Same as the 868.** PC8 raises EXTI line 8 on both edges, IRQ EXTI9_5, preempt priority 9 |
 | AT1846S | SCLK PB3, SDIO PB4 (bidirectional), SEN PB5 (active low) | **Same as the 868.** Idle: SCLK low, SDIO low, SEN high. Write: SEN low, 8-bit address with bit 7 clear, then 16 bits of data MSB first (high byte then low byte), SEN high. Read: the same address byte with bit 7 set, then SDIO is turned to a pull-up input and 16 bits are clocked in MSB first, sampled while SCLK is high. SDIO direction is changed by rewriting the CRL nibble for PB4. The bit delay is a 5-iteration busy loop |
 | SPI NAND | CS PB8, CLK PB14, MOSI/IO0 PB15, MISO/IO1 PA15 | **Same as the 868.** Mode 0, MSB first. PB15's CRH nibble is rewritten between output and pull-up input, so reads can take two bits per clock on PA15 and PB15. The flat byte-address read and write API splits at 2048-byte boundaries, so the page size is 2048 bytes |
@@ -173,7 +178,7 @@ parallel transport serves both radios.
 | --- | --- |
 | PA4 | DAC channel 1 (analog mode): **TX power level**. The value is an 8-bit number shifted left by 4 and written 12-bit right-aligned, so only the top 8 bits of the DAC are used. Same as the 868 |
 | PA5 | DAC channel 2 (analog mode), enabled and written from three call sites; what it drives is not identified |
-| PA6 | TIM3 channel 1 PWM, period 4095, AF push-pull. The duty comes from a 16-bit calibration table indexed by (frequency − 40 MHz) / 1 MHz with interpolation at 100 kHz steps — a **frequency-dependent analog control voltage** (VCO or front-end tracking; which is not identified). The 868 page guesses PA6 or PB0 is a tuning voltage; on this radio it is PA6 |
+| PA6 | TIM3 channel 1 PWM, period 4095, AF push-pull: a **frequency-dependent analog control voltage** (VCO or front-end tracking; which is not identified). The duty comes from two 16-bit tables held in RAM. At or below 174 MHz, a 39-entry table on a 1 MHz grid from 136 MHz, interpolated at 100 kHz steps and clamped to its last entry. Above 174 MHz, a 6-entry table on a 1 MHz grid from 220 MHz — which clamps to its last entry for anything past 225 MHz, so the duty is one constant across the whole UHF band. Two other operating modes load a fixed entry instead. The 868 page guesses PA6 or PB0 is a tuning voltage; on this radio it is PA6 |
 | PA7 | **Speaker amplifier enable**, active high, left low at boot. Set in three places, cleared on nearly every state change |
 | PE0 | A second audio-path switch, driven opposite to PA7 in the receive path. Not identified |
 | PB0 | **LCD backlight**: TIM8 channel 2 complementary output (CH2N), AF push-pull, period 4095, prescaler 3, PWM mode 2 with both polarities low. A separate call reconfigures PB0 as a plain push-pull output driven low to kill the backlight. The 868 page guesses TIMER2 channel 2 here; on this radio it is TIM8 |
@@ -183,15 +188,41 @@ parallel transport serves both radios.
 | PC4, PE6 | **The PA gate**, driven together. PA on: PE6 high, PC4 high, then the power ramp. PA off: the ramp down, then PC4 low, PE6 low. Same two pins as the 868 |
 | TX power ramp | Two 124-entry 16-bit envelope tables, one rising (0 → 511) and one falling (511 → 0), applied as (entry × target) >> 9 to the TX power DAC with a per-step delay. The step delays default to 500 and 210 loop counts. The ramp runs only in two of the four modulation modes; in the others the DAC is set straight to the target or to 0 |
 | PA0 | **Power key**, input with pull-up, read with a 10 ms debounce; the shutdown chain runs while it reads high |
+| PA10 | **PTT**, input with pull-up, active low. It is read on its own with every keypad drive line high, so it is wired to ground and is not a matrix position. The scanner confirms a press with a second read 10 ms later and turns it into one key code; a separate predicate that the transmit paths use calls PTT released only when the pin reads high twice 100 ms apart. Every one of those reads is OR-ed with a software PTT flag held in RAM, so a port has to honor both sources |
+| PA13, PA14, PE1 | The other three direct key inputs, read the same way with no drive line low. PA13 is read with its ODR cleared, so it uses the internal pull-down and reads high only when something drives it, and it is confirmed by a second read 10 ms later. Which key each one is was not identified |
 | PC3 | **Power hold**, push-pull out. Driven low by the board init, set high once the board is up, and cleared only on the power-off paths. One periodic-timer path clears PC3 when PA0 reads high as a counter expires, which forces the radio off |
 | PA1 | **Bluetooth/APRS board reset** (4.4). Set high 100 ms after the board init, and pulsed low for 5 ms to restart the daughter board |
-| PE3, PE4, PE5 | **Three indicator LED outputs**, push-pull, all low at init, each with its own state byte and all gated by one "LEDs suppressed" flag. PE5 is driven by the battery monitor, PE4 by the Bluetooth path and the power-off path. Which colors they are is not identified |
+| PE3, PE4, PE5 | **Three indicator LED outputs**, push-pull, all low at init, each with its own state byte and all gated by one "LEDs suppressed" flag. **PE5 is turned on where transmit starts and off where receive resumes, so it is the transmit (red) LED**; PE3 is driven from the receive and call paths, so it is the receive (green) LED; PE4 is driven by the Bluetooth path and the power-off path, so it is most likely the Bluetooth indicator. PE5 is also driven by the battery monitor, and one self-test path turns all three on together |
 | PE15 | An output driven by the Bluetooth/APRS module from a state byte, in spite of being configured as a pull-up input by the board init; at power-off it is set to analog. Not identified |
 | PB11 | Besides being the LCD reset, it is briefly reconfigured as a pull-down input and sampled twice 50 ms apart, and the result is latched in a byte. A strap or detect line; not identified |
 | PB2, PE1 | Read together at power-on, before the normal keypad scan starts; if both read low the firmware sets up a state, turns PC13, PE5 and PE3 on, waits 1 s and stops in a loop. A two-key entry path; which one is not identified |
 | PA9 | Input with pull-up, EXTI line 9, **rising edge only**. A wake or detect line; not identified |
-| PA13 | Input with pull-down after SWJ is disabled; read twice in the keypad module |
-| PC13, PE2, PE5, PC7 | Outputs with uses given above or not identified (PC13 is driven low by the board init and high on the power-off path) |
+| PC13 | Push-pull out, low at init. Set high on the power-off path, in the Bluetooth module and in the two-key halt path (together with PE3 and PE5); driven low where transmit starts and on one Bluetooth path. Not identified — but it is **not** a band or antenna control: both of those are on the AT1846S, below |
+| PE2, PC7 | Outputs with uses given above (USB attach, baseband bring-up) |
+
+**Band and front-end switching is not on the MCU.** No MCU pin selects VHF or UHF and none switches the antenna
+path. The AT1846S's own eight GPIO pins do that work: the firmware uses them as plain outputs through the chip's
+register 0x1F, two bits per pin (`00` high impedance, `01` the pin's built-in function, `10` drive low, `11` drive
+high), keeps a shadow copy of the register in RAM and rewrites the whole register for every change. The value
+written when the RF chip is set up is 0x5AE2 — gpio0 low, gpio1 built-in function, gpio2 low, gpio3 high, gpio4
+low, gpio5 low, gpio6 and gpio7 built-in function. Frequencies in the comparisons below are in units of 10 Hz, and
+the thresholds are plain constants in the code, not calibration.
+
+| AT1846S pin | Use |
+| --- | --- |
+| gpio0, gpio4 | **Receive band select**, complementary, from the receive frequency: above 300 MHz gpio0 high and gpio4 low, at or below 300 MHz gpio0 low and gpio4 high. Both are driven low together where transmit starts, by one call that clears both fields of the register at once. So they are the two receive front-end enables, and both are off while transmitting |
+| gpio5 | **Transmit band select**, from the frequency about to be keyed: high above 300 MHz, low at or below. Set in both transmit paths |
+| gpio7 | **A second transmit-path enable**, high only while the transmit frequency is between 165 MHz and 300 MHz inclusive, low outside that window and forced low in the receive path. The stock radio will not key that range, so this is most likely a VHF-high path the board can carry but the firmware does not offer (unverified) |
+| gpio2 | **GPS module enable**: driven high immediately before USART2's receive interrupt is enabled and the first command goes out to the receiver, and driven low when the GPS is turned off and on both shutdown paths |
+| gpio3 | High at init and in both transmit paths. It goes low only when one settings byte is set and the audio state byte is clear, and it is released through a three-state shadow (on, off, off-pending) whose pending state is cleared by a periodic task in the Bluetooth module, so it is held for a hang time instead of switching at once. Audio routing to the Bluetooth/APRS board is the likeliest use; not identified |
+| gpio1 | Driven low from seven places and high from one (entering a menu mode). Not identified |
+| gpio6 | Left at its built-in function; never written |
+
+**So receive and transmit at the front end are switched in three groups, not by one line:** the two receive band
+enables (gpio0, gpio4) go low where transmit starts; the PA gate (PC4 with PE6) comes up there and is then keyed
+per TDMA slot from PD0; and the transmit band select (gpio5, with gpio7 for 165–300 MHz) picks which transmit path
+the power goes into. A port therefore needs the AT1846S GPIO register in its band-change path, not just the chip's
+band and bandwidth tables.
 
 ### 4.4 Bluetooth/APRS board link
 
@@ -217,7 +248,10 @@ reach the USB endpoint registers at offset 0xC00; that is USB glue, not UART5.
 | SCT3258 host port, control, boot block | section 4.1 | the same, plus PD1, PD7 and PC7 driven low during reset and power-down |
 | LCD transport | data PE7–PE14, DC PB10, CS PB12, WR PB13, RD PE15 held high, RESET PB11 | the same **without RD**; PE15 has another use |
 | LCD controller and panel | ST7735S-class, 128×160, MADCTL 0x88 | identical, value for value |
-| Keypad, knob | PE7–PE14 drive; PA10, PA14, PE1, PB1, PB2, PC5 sense; PC8/PC9 knob | identical |
+| Keypad, knob | PE7–PE14 drive; PA10, PA14, PE1, PB1, PB2, PC5 sense; PC8/PC9 knob | same pins, but only PB1, PB2 and PC5 are matrix sense lines. PA10 (PTT), PA13, PA14 and PE1 are direct inputs read with no row driven |
+| PTT | not recorded | PA10, active low, direct; OR-ed with a software PTT flag |
+| Band and front-end switching | not recorded | AT1846S GPIO pins through register 0x1F; no MCU pin is involved (4.3) |
+| LEDs | PE3–PE5, function not identified | PE5 transmit, PE3 receive, PE4 most likely Bluetooth |
 | AT1846S, SPI NAND | PB3/PB4/PB5; PB8/PB14/PB15/PA15 | identical |
 | NAND part | 1 Gbit, manufacturer 0xC8 or 0x98 accepted | 2 Gbit required: manufacturer 0x98, device 0xCB or 0xEB |
 | I2C | the page says SCL PB6, SDA PB7 | SDA PB6, SCL PB7; same two devices (0x10, 0x1D) |
@@ -279,13 +313,16 @@ A port must read this calibration from the radio's own NAND and never overwrite 
 
 1. Everything on this page, on a radio.
 2. What PA5 (DAC channel 2) drives, and whether PA6's tuning voltage goes to the VCO or a tracking filter.
-3. Which LED is which color (PE3, PE4, PE5), and what PE0, PE15, PB11, PA9 and PC13 do.
+3. What PE0, PE15, PB11, PA9 and PC13 do, and whether PE4 is the Bluetooth indicator.
 4. What ADC channel 10 (PC0) measures: its samples go into a ring buffer, but the consumer was not traced.
 5. The two-key power-on path on PB2 + PE1.
 6. The Bluetooth/APRS board's own protocol over UART4, and whether the 9600 path is its firmware update.
 7. Whether the NAND identity check can be relaxed: the firmware probes GigaDevice style but accepts only
    manufacturer 0x98 with device 0xCB or 0xEB.
 8. The remaining fields of the calibration block (the records at +0x0100, +0x0140…+0x01A0, +0x0520…+0x0600).
+9. What AT1846S gpio1 and gpio3 switch, and whether gpio7's 165–300 MHz window is a real path on this board.
+10. Which key PA13, PA14 and PE1 each are, and whether the 868 really scans six keypad sense lines
+    ([hardware-anytone.md](hardware-anytone.md) 4.1): on this radio only PB1, PB2 and PC5 are matrix sense lines.
 
 ## Sources
 

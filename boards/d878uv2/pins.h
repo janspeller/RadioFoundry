@@ -5,8 +5,8 @@
 // Read from the radio's stock firmware, not from a radio: every pin here is unverified until the bench confirms it
 // (docs/testing/d878uv2-bringup.md, "Confirming the pin map"). It is the AT-D868UV's map everywhere except the LCD
 // read strobe (absent here), the backlight and tuning PWMs, I2C's two lines and the daughter board's UART
-// (hardware-d878uv2.md 4.5). It is NOT the AT-D578UV's map: that radio wires the LCD control lines and the NAND
-// clock and data differently, so nothing here may be copied from boards/d578uv/pins.h.
+// (hardware-d878uv2.md 4.5). It is NOT the family's mobile's map: that board wires the LCD control lines and the
+// NAND clock and data differently, so no other board's pins.h may be copied here.
 #ifndef D878UV2_PINS_H
 #define D878UV2_PINS_H
 
@@ -26,12 +26,19 @@
 // low. The scan has to leave the data bus as the LCD left it (hardware-d878uv2.md 4.1)
 #define KEY_DRIVE_PORT		LCD_DATA_PORT
 #define KEY_DRIVE_SHIFT		LCD_DATA_SHIFT
-#define PIN_KEY_SENSE0		GPIOA, MCU_PIN(10)
-#define PIN_KEY_SENSE1		GPIOA, MCU_PIN(14)
-#define PIN_KEY_SENSE2		GPIOB, MCU_PIN(1)
-#define PIN_KEY_SENSE3		GPIOB, MCU_PIN(2)
-#define PIN_KEY_SENSE4		GPIOC, MCU_PIN(5)
-#define PIN_KEY_SENSE5		GPIOE, MCU_PIN(1)
+// Only three of the inputs are matrix senses (hardware-d878uv2.md 4.3). The 868 page lists six, which is wrong
+// here and probably there too
+#define PIN_KEY_SENSE0		GPIOB, MCU_PIN(1)
+#define PIN_KEY_SENSE1		GPIOB, MCU_PIN(2)
+#define PIN_KEY_SENSE2		GPIOC, MCU_PIN(5)
+
+// The direct key inputs, read with every drive line high: they are wired to ground, not to a matrix position.
+// PTT is PA10, active low. PA13 is the odd one out: it is read with its output register cleared, so it uses the
+// internal pull-down and reads HIGH when pressed (hardware-d878uv2.md 4.3)
+#define PIN_PTT			GPIOA, MCU_PIN(10)
+#define PIN_DIRECT_PULLDOWN	GPIOA, MCU_PIN(13)
+#define PIN_DIRECT_A		GPIOA, MCU_PIN(14)
+#define PIN_DIRECT_B		GPIOE, MCU_PIN(1)
 
 // Channel knob: quadrature on pull-up inputs, EXTI on PC8 (both edges)
 #define PIN_KNOB_A		GPIOC, MCU_PIN(8)
@@ -85,9 +92,9 @@
 #define PIN_AUDIO_SW		GPIOE, MCU_PIN(0)	// driven opposite PIN_SPK_EN on receive; not identified
 #define PIN_TONE_PWM		GPIOB, MCU_PIN(9)	// TIM4 channel 4 while sounding, analog when idle
 #define PIN_BACKLIGHT		GPIOB, MCU_PIN(0)	// TIM8 channel 2 complementary output (CH2N)
-#define PIN_LED0		GPIOE, MCU_PIN(3)
-#define PIN_LED1		GPIOE, MCU_PIN(4)
-#define PIN_LED2		GPIOE, MCU_PIN(5)	// the battery monitor drives this one
+#define PIN_LED_RX		GPIOE, MCU_PIN(3)	// green: the receive and call paths
+#define PIN_LED_BT		GPIOE, MCU_PIN(4)	// most likely the Bluetooth indicator, driven by that path
+#define PIN_LED_TX		GPIOE, MCU_PIN(5)	// red: transmit, and the battery monitor
 
 // Power
 #define PIN_POWER_KEY		GPIOA, MCU_PIN(0)	// pull-up input, 10 ms debounce; high while held

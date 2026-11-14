@@ -3,7 +3,7 @@
 // AT-D878UVII PLUS display: an ST7735S-class 128x160 TFT on an 8-bit 8080 bus driven by GPIO
 // (docs/spec/hardware-d878uv2.md 4.2): data on PE7-PE14, D/C, reset, chip select and the write strobe on PB10-PB13.
 //
-// Two things differ from the AT-D578UV, which drives the same controller class:
+// Two things to watch, both recorded in hardware-d878uv2.md 4.2 and 4.5:
 //   - this board has no read strobe at all, so the data bus is never turned around for the panel;
 //   - the panel is used in portrait, 128 wide by 160 tall, as the stock firmware does. The stock MADCTL is 0x88
 //     (vertical flip, BGR), which is the driver's type 0 base (0xA0) corrected by 0x28.

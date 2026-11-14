@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 The RadioFoundry Authors
 # AnyTone AT-D878UVII PLUS (handheld), GD32F303VG + SCT3258 DMR baseband + one AT1846S + ST7735S 128x160 on an 8080
-# bus (docs/spec/hardware-d878uv2.md). The AT-D578UV runs the same baseband and platform; this radio differs in
-# having one receiver instead of four, a battery, a key matrix on the LCD data lines, and a Bluetooth/APRS daughter
+# bus (docs/spec/hardware-d878uv2.md). It shares the platform and the baseband driver with the family's mobile and
+# differs in having one receiver, a battery, a key matrix on the LCD data lines, and a Bluetooth/APRS daughter
 # board on UART4 (hardware-d878uv2.md 4.5).
 #
 # WORK IN PROGRESS: the board's interface files are not written yet, so this board does not build. Do not commit it
