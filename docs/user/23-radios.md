@@ -16,6 +16,7 @@ and what has been checked on it.
 | [TYT MD-380](#tyt-md-380) | TYT MD-390, Retevis RT3 | FM with CTCSS both ways, DMR voice and SMS in simplex and through a repeater or hotspot on either slot, and codeplug and ID database programming work on a UHF radio. Open: DCS, the tone deviation and the untested VHF image. |
 | [TYT MD-UV380](#tyt-md-uv380) | TYT MD-UV390, Retevis RT3S, TYT MD-UV390 Plus 10 W | Built on the UV380 family code, with the MD-UV380's keys, display, power tables and GPS. Run on radios by community testers. |
 | [TYT MD-9600](#tyt-md-9600) | Retevis RT90 | One image serves every board revision. On a V1-V3 radio, FM and DMR on both bands, DMR voice and data, text messages, roaming, scan, dual watch, APRS, the hotspot, each split duplex half and the USB network services work on air, with every power level checked on a wattmeter on both bands. V4A/V5 boards are detected; on older boards the radio asks for the revision once. Open: V4 and V4A/V5 boards have not run on a radio, and SFR loses inbound voice frames. |
+| [Radtel RT-4D](#radtel-rt-4d) | iRadio DM-4R | FM receive and transmit on the BK4819, the keypad, the display, the data flash and the cable link are written and build; nothing has run on a radio yet. DMR on the HF6853 is built: calls both ways, the caller on the screen and the chip's encryption. SMS and RX group lists are open. |
 | [Retevis RT10](#retevis-rt10) |  | Boots from the boot ROM with the host link, stub entry, the watchdog and the crash log. FM receive with CTCSS/DCS decode, FM transmit, DMR transmit and receive with the radio's own codec, P25 (conventional, and trunked transmit) and NXDN at 4800 bit/s on stored channels, and APRS transmit work on the radio. |
 <!-- end generated -->
 
@@ -25,23 +26,23 @@ and what has been checked on it.
 
 The manual names keys by the job they do. Each radio puts those jobs on its own keys:
 
-| Name in this manual | Job (press / hold) | DM-1701 | MD-380 | MD-UV380 | DM-32UV | DB25-D PRO | DM-1801 Pro |
-|---|---|---|---|---|---|---|---|
-| **OK** | Open or choose / save, make permanent | Green Menu key | Green Menu key | Green Menu key | Green Menu / OK key | Menu / OK key, or push the knob | Menu key |
-| **Back** | Back one level / Home | Red Back key | Red Back key | Red Back key | Red Back key | B/E key | Back key |
-| **Up**, **Down** | Move the focus / repeat | Arrow keys | Arrow keys | Arrow keys | Up and Down keys | None: turn the knob | Up and Down keys |
-| **\*** | Quick settings / lock or unlock the keys | **\*** | **\*** | **\*** | **\*** | P1 | **\*** |
-| **#** | Actions / Recent | **#** | **#** | **#** | **#** | P2 | **#** |
-| **0** to **9** | Number keys | Number keys | Number keys | Number keys | Number keys | None | Number keys |
-| **Monitor** | FM: squelch open while held. DMR: digital monitor on / off | SK1 | SK1 | SK1 | SK1 | P3 | SK1 |
-| **Talk target** | Talk target picker | Hold **#** | Hold **#** | Hold **#** | Hold **#** | Hold **P2** | Hold **#** |
-| **A/B** | Dual watch: the other channel / dual watch on or off | SK2 | SK2 | SK2 | SK2 | TONE/T.SEL | A/B key, SK2 |
-| **Power level** | Next power level / emergency (held 1.5 s) | SK3 | None | None | None | None | None |
-| **Previous zone**, **Next zone** | Step the zone on Home | P1, P2 | None | None | P1, P2 | None | Left, Right |
-| **VFO** | Between the channel and the VFO / copy the channel to the VFO | None | None | None | None | None | VFO/MR key |
-| **Volume** | Open the volume editor. Radios without a volume knob only | None: the knob | None: the knob | None: the knob | None: the knob | VOL/SQL | None: the knob |
-| **PTT** | Transmit | PTT | PTT | PTT | PTT | PTT on the microphone | PTT |
-| Channel knob | One step per click | Channel knob | Channel switch (16 positions) | Channel knob | Channel knob | Front knob | None: Up and Down |
+| Name in this manual | Job (press / hold) | DM-1701 | MD-380 | MD-UV380 | DM-32UV | DB25-D PRO | DM-1801 Pro | RT-4D |
+|---|---|---|---|---|---|---|---|---|
+| **OK** | Open or choose / save, make permanent | Green Menu key | Green Menu key | Green Menu key | Green Menu / OK key | Menu / OK key, or push the knob | Menu key | F key |
+| **Back** | Back one level / Home | Red Back key | Red Back key | Red Back key | Red Back key | B/E key | Back key | EXT key |
+| **Up**, **Down** | Move the focus / repeat | Arrow keys | Arrow keys | Arrow keys | Up and Down keys | None: turn the knob | Up and Down keys | Up and Down keys |
+| **\*** | Quick settings / lock or unlock the keys | **\*** | **\*** | **\*** | **\*** | P1 | **\*** | **\*** |
+| **#** | Actions / Recent | **#** | **#** | **#** | **#** | P2 | **#** | **#** |
+| **0** to **9** | Number keys | Number keys | Number keys | Number keys | Number keys | None | Number keys | Number keys |
+| **Monitor** | FM: squelch open while held. DMR: digital monitor on / off | SK1 | SK1 | SK1 | SK1 | P3 | SK1 | SK1 |
+| **Talk target** | Talk target picker | Hold **#** | Hold **#** | Hold **#** | Hold **#** | Hold **P2** | Hold **#** | Hold **#** |
+| **A/B** | Dual watch: the other channel / dual watch on or off | SK2 | SK2 | SK2 | SK2 | TONE/T.SEL | A/B key, SK2 | A/B key |
+| **Power level** | Next power level / emergency (held 1.5 s) | SK3 | None | None | None | None | None | None |
+| **Previous zone**, **Next zone** | Step the zone on Home | P1, P2 | None | None | Left, Right | None | Left, Right | None |
+| **VFO** | Between the channel and the VFO / copy the channel to the VFO | None | None | None | None | None | VFO/MR key | SK2 |
+| **Volume** | Open the volume editor. Radios without a volume knob only | None: the knob | None: the knob | None: the knob | None: the knob | VOL/SQL | None: the knob | None: the knob |
+| **PTT** | Transmit | PTT | PTT | PTT | PTT | PTT on the microphone | PTT | PTT |
+| Channel knob | One step per click | Channel knob | Channel switch (16 positions) | Channel knob | Channel knob | Front knob | None: Up and Down | None: Up and Down |
 
 These are the defaults. **Settings > Keys** can give other jobs to every key the menus don't need
 ([Settings](17-settings.md#keys-key-8)):
@@ -54,6 +55,7 @@ These are the defaults. **Settings > Keys** can give other jobs to every key the
 | DM-32UV | SK1, SK2, and P1, P2 on Home |
 | DB25-D PRO | P3, TONE/T.SEL, the microphone's P4 and P5 |
 | DM-1801 Pro | SK1, SK2, SOS, A/B, VFO/MR |
+| RT-4D | SK1, SK2, A/B |
 
 OK, Back, the arrows, the number keys, **\***, **#**, PTT and the volume stay as they are. Where the arrows are
 printed P1 and P2 (DM-32UV), what you set for them works on Home only: in the menus they stay left and right. On the DB25-D PRO that
@@ -87,6 +89,7 @@ yet, and the core doesn't use them.
 | DM-32UV | Pseudo, one receiver. Not checked on air (scan isn't checked on this radio yet) | **\***, **7**, or hold **SK2** | **SK2** (a press), **Left** / **Right** |
 | DB25-D PRO | Pseudo, one receiver. Not checked on air. Its second BK4819 chip is a local oscillator for the receive chain, not a second receiver | Hold the **TONE/T.SEL** key | A press of **TONE/T.SEL** |
 | DM-1801 Pro | Pseudo, one receiver. Not checked on air | Hold the **A/B** key, **\***, **7**, or hold **SK2** | The **A/B** key or **SK2** (a press), **Left** / **Right** |
+| RT-4D | Pseudo, one receiver. Not checked on a radio | Hold the **A/B** key, or **\***, **7** | The **A/B** key (a press) |
 
 Holding **SK2** is dual watch on every radio that has an SK2, and on the DB25-D PRO holding the tone key is. A press of
 **SK2** (the tone key on the DB25-D PRO) switches A / B, and with dual watch off says "Turn on dual watch first". The
@@ -781,6 +784,57 @@ A 128 x 64 monochrome screen.
 - No hotspot, DTMF, USB network or IP services: they all need the transmitter.
 - No APRS: the radio doesn't pass its received audio to the decoder yet.
 - No air band or broadcast receiver, and no vibration motor.
+
+## Radtel RT-4D
+
+Covers the Radtel RT-4D and the iRadio DM-4R. **In bring-up: nothing has run on a radio yet**
+([bring-up checklist](../testing/rt4d-bringup.md)). The radio's DMR chip runs DMR itself. RadioFoundry sets it up on a
+DMR channel (frequency, color code, slot, the encryption key stored with the stock CPS). The chip receives and plays
+calls, and the caller shows on the screen and in Recent; PTT calls the channel's contact. The speaker plays a call
+while it is heard and stays silent between calls. Digital monitor (**Monitor** on a DMR channel) plays every call on
+the slot and color code. The signal strength shows in dBm during a call, on a scale not yet checked against a meter.
+Not yet: text messages, RX group lists (the chip uses its own). Untested on a radio.
+
+### Installing on the RT-4D
+
+The web flasher and rfoundry don't install it yet. `tools/block_loader.py` writes the image through the radio's own
+bootloader over the programming cable.
+
+| Item | RT-4D |
+|---|---|
+| Cable | The K1 (Kenwood two-pin) USB-serial programming cable. The radio has no USB of its own |
+| Bootloader keys | Hold **PTT** while you turn the radio on |
+| Command | `tools/block_loader.py --model rt4d rfoundry_rt4d.bin` |
+| Going back | Write the stock firmware with the manufacturer's updater, in the same bootloader mode |
+| Board name | `rt4d` |
+
+### RT-4D keys
+
+| Key | Role |
+|---|---|
+| F key | **OK** |
+| EXT key | **Back** |
+| Up and Down keys | **Up**, **Down** |
+| A/B key | **A/B** (a press), dual watch on or off (a hold) |
+| SK1 (side key) | **Monitor** |
+| SK2 (side key) | **VFO** |
+| **PTT** | **PTT** |
+
+Which side key is SK1 isn't checked on a radio yet.
+
+### RT-4D power levels
+
+Two levels, **L** and **H**, from the radio's factory calibration. The radio refuses to transmit without it.
+
+### RT-4D battery
+
+A 2-cell Li-ion pack: low below 6.0 V, critical below 5.8 V, as the stock firmware. The voltage scale is unchecked
+on a radio.
+
+### What the RT-4D lacks
+
+- On DMR: no text messages and no RX group lists yet.
+- No key beeps, no VOX, no broadcast FM and no air band receive. The 1750 Hz tone, the roger beep and DTMF transmit are in, untested on a radio.
 
 ## Planned radios
 

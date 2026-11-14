@@ -6,7 +6,7 @@ Status: research, 2026-10-10. This page collects the main chips of every radio R
 close relatives, from public sources only. It also says which RadioFoundry platforms and drivers each radio could reuse and
 suggests an order for the ports. Register-level facts live in the per-radio specs
 ([hardware-dm1701.md](hardware-dm1701.md), [hardware-dm32.md](hardware-dm32.md),
-[hardware-md380.md](hardware-md380.md), [hardware-mduv380.md](hardware-mduv380.md), [hardware-gd88.md](hardware-gd88.md), [hardware-db25d.md](hardware-db25d.md), [hardware-dm1801pro.md](hardware-dm1801pro.md), [hardware-anytone.md](hardware-anytone.md)). This page is the overview.
+[hardware-md380.md](hardware-md380.md), [hardware-mduv380.md](hardware-mduv380.md), [hardware-gd88.md](hardware-gd88.md), [hardware-db25d.md](hardware-db25d.md), [hardware-dm1801pro.md](hardware-dm1801pro.md), [hardware-anytone.md](hardware-anytone.md), [hardware-rt4d.md](hardware-rt4d.md)). This page is the overview.
 
 Facts are not copyrightable. Claims come from public sources (manufacturer pages, FCC filings, datasheets, retailer
 listings) or from measurements on the radio. A value marked `(unverified)` is reported by a retailer, review or forum
@@ -340,6 +340,22 @@ The Retevis RT73 is reported as the same radio (unverified) ([kydera-ham forum](
   the dual-SoC core support, the 2.4" panel, two PA power tables and fan control. Effort: months. Blockers: the two
   chips' identity, the A↔B protocol and hardware.
 
+### Radtel RT-4D / iRadio DM-4R
+
+- Bands 136-174 / 400-470 MHz TX, wide receive, two power levels, 1.44" 128x64 mono LCD, USB-C charging, no GPS
+  ([miklor](https://miklor.com/COM/Review_RT4D.php)). FCC ID 2AZSA-RT4D, granted 2024-12-04 to Xiamen Radtel; the
+  filing has external photos only ([fccid.io](https://fccid.io/2AZSA-RT4D)).
+- AT32F423CCT7 MCU, BK4819, HF6853 DMR chip, BK1080 broadcast FM, PY25Q128HA 16 MB flash: from Radtel's schematic
+  (V2.1, 2024-06-04). Facts, pin map and the update protocol are in [hardware-rt4d.md](hardware-rt4d.md).
+- The HF6853 is a DMR terminal, not a modem: it runs the air interface, vocoder and calls itself and drives the BK4819
+  in DMR mode. The MCU talks to it over a UART protocol that NiceRF documents for its DMR818 / DMR858 modules.
+- Update: Radtel's PC updater over the K1 cable, PTT held at power-on, a plain 246 KB image behind a 10 KB vendor
+  bootloader.
+- **RadioFoundry:** new are the AT32F423 platform, the HF6853 driver with a call-level DMR interface (the core's DMR
+  stack doesn't apply), a BK1080 driver and the update protocol. The BK4819, ST7567, key matrix, shared PTT and SPI NOR
+  drivers carry over. The tight part is RAM: 48 KB against about 77 KB for today's FM-only build. Effort: weeks.
+  Blockers: the RAM budget, the call-level interface design, a radio.
+
 ## Relatives worth supporting
 
 | Radio | Chips | Reuse | Notes |
@@ -353,9 +369,9 @@ The Retevis RT73 is reported as the same radio (unverified) ([kydera-ham forum](
 | Anytone AT-D578UV (mobile) | GD32F303VKT6, AT32F435/437 after 2022-07 (separate firmware per MCU), SCT3258, 4x QA4818N (AT1846S-compatible), true dual receive (unverified) | as the 878 | MCU change mid-run: two platforms. [hardware-anytone.md](hardware-anytone.md) |
 
 Not DMR candidates: the BK4819 and BK4829 are analog FM transceivers, and the BK4829 adds only an FSK modem
-([datasheet listing](https://www.alldatasheet.net/datasheet-pdf/pdf/2171272/BEKEN/BK4829.html)). The Radtel RT-4D does
-DMR through a BK4819 plus an HF6853 vocoder module (unverified), a
-different architecture from anything in RadioFoundry. The Retevis C62 and Quansheng-style radios are FM only.
+([datasheet listing](https://www.alldatasheet.net/datasheet-pdf/pdf/2171272/BEKEN/BK4829.html)). The Retevis C62 and
+Quansheng-style radios are FM only. The Radtel RT-4D pairs a BK4819 with an HF6853 DMR chip and has its own section
+above.
 
 ## What exists and what's new
 
@@ -380,6 +396,7 @@ different architecture from anything in RadioFoundry. The Retevis C62 and Quansh
 | `drivers/bcast/rda5807m` | yes | DM-32UV; the RDA5802 in the DB25-D and DB40-D is a close relative (register compatibility ?) |
 | Dual-SoC (A/B) core support | **new** | GD-88, DB40-D |
 | GD32F30x platform + SCT3258 modem | **new** | Anytone family |
+| AT32F423 platform, HF6853 driver, call-level DMR interface, BK1080 driver | **new** | RT-4D |
 
 ## Suggested port order
 

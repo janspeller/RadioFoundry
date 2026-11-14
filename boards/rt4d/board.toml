@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The RadioFoundry Authors
+# The RT-4D's registry entry (tools/boards.py, docs/dev/adding-a-radio.md): everything the tools, CI, the docs and the
+# web site know about this radio. Build facts stay in board.mk and config.mk, the memory layout in boards/rt4d/memory.ld.
+
+id = "rt4d"
+name = "Radtel RT-4D"
+maker = "Radtel"
+model = "RT-4D"
+also = ["iRadio DM-4R"]
+kind = "handheld"
+# where the radio appears in the site's lists (the lowest: the home page's radio)
+order = 8
+# the sixth character of the APRS tocall, APRDFD (docs/spec/aprs.md 4.2): one per radio, never reused
+aprs_tocall = "D"
+
+[docs]
+hardware = "docs/spec/hardware-rt4d.md"
+bringup = "docs/testing/rt4d-bringup.md"
+
+# One-line summaries for the site and the generated tables; the facts are in docs.hardware
+[hardware]
+cpu = "AT32F423"
+bands = "136-174 / 400-470 MHz"
+power = "L / H"
+display = "monochrome, 128 × 64"
+gallery = "128x64"
+clock = { rtc = "unknown", note = "the MCU's RTC; whether a crystal and a backup supply keep it through power-off is not known (docs/spec/hardware-rt4d.md)" }
+
+[status]
+level = "bring-up"
+summary = """\
+FM receive and transmit on the BK4819, the keypad, the display, the data flash and the cable link are written and \
+build; nothing has run on a radio yet. DMR on the HF6853 is built: calls both ways, the caller on the screen and \
+the chip's encryption. SMS and RX group lists are open."""
+release = "testing"
+
+# The vendor bootloader at 0x08000000-0x080027FF is never written; it takes the whole application region over the cable
+# in its own block protocol (hardware-rt4d.md 6.1, tools/block_loader.py). No codec: the HF6853 carries its own vocoder
+[flash]
+family = "serial-block"
+keep_codec = false
+stock_versions = []
+backup = { stock = "none", rfoundry = "none", spi_size = 0x1000000 }
+
+# Flash no tool erases or writes (docs/dev/board-registry.md, "Protected regions"): mem, start and end (exclusive)
+# as offsets in that memory, what with the spec section that establishes it
+[[flash.protect]]
+mem = "data"
+start = 0x0
+end = 0x1000
+what = "factory calibration: the band records at 0x20-0x4EF of the first sector (hardware-rt4d.md 3.2, 3.3)"
+
+[[flash.protect]]
+mem = "progmem"
+start = 0x0
+end = 0x2800
+what = "the vendor bootloader (hardware-rt4d.md 1, 6.1)"
+
+[flash.bootloader]
+keys = "PTT"
+hold = ["ptt"]
+steps = [
+	"Turn the radio off and connect the programming cable.",
+	"Hold PTT.",
+	"Turn the radio on while you hold PTT.",
+	"Release PTT.",
+]
+
+# How the site draws the radio
+[frame]
+shape = "handheld-tall"
+body = "#1d1f22"
+accent = "#d9822b"
+lens = [24, 34]
+
+# tests/hil: what the health checks expect. Nothing has run on the radio, so no JEDEC ID or calibration claim yet
+[hil]
+display = "128x64x1"
+features = ["HOSTLINK", "DEBUGLINK"]
+no_features = ["USB", "DMR"]
+battery_mv = [5500, 8800]
