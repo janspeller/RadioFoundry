@@ -613,6 +613,42 @@ static void test_gpio(void)
 	CHECK(c->protocol_errors == 0);
 }
 
+// A board's audio words (bk4819_t.af_mute, af_gain_analog): the analog mode set writes the board's mute word and then
+// its AF gain to 0x48; the end of a transmission mutes with the board's word; without them the driver's defaults stay
+static void test_board_audio(void)
+{
+	bk4819_t m;
+	reset_chips();
+	bk4819_attach(&m, main_bus());
+	const chip_t *c = &chips[0];
+	CHECK(m.af_mute == BK4819_AF_MUTE && m.af_gain_analog == 0);
+	chips[0].n = 0;
+	bk4819_analog_mode(&m);
+	CHECK(c->n == 6 && c->log[2].reg == 0x47 && c->log[2].val == BK4819_AF_MUTE);	// no 0x48 by default
+
+	m.af_mute = 0x6040;
+	m.af_gain_analog = 0xB32A;
+	chips[0].n = 0;
+	bk4819_analog_mode(&m);
+	CHECK(c->n == 7 && c->log[2].reg == 0x47 && c->log[2].val == 0x6040);
+	CHECK(c->log[6].reg == 0x48 && c->log[6].val == 0xB32A && m.af_gain == 0xB32A);
+	chips[0].n = 0;
+	bk4819_set_bandwidth(&m, BK4819_BW_12K5);	// the channel set leaves 0x48 alone
+	for (int i = 0; i < c->n; i++) {
+		CHECK(c->log[i].reg != 0x48);
+	}
+	chips[0].n = 0;
+	bk4819_tx_end(&m);
+	bool muted = false;
+	for (int i = 0; i < c->n; i++) {
+		CHECK(c->log[i].reg != 0x48);
+		muted |= c->log[i].reg == 0x47 && c->log[i].val == 0x6040;
+		CHECK(!(c->log[i].reg == 0x47 && c->log[i].val == BK4819_AF_MUTE));
+	}
+	CHECK(muted);
+	CHECK(c->protocol_errors == 0);
+}
+
 int main(void)
 {
 	test_helpers();
@@ -622,6 +658,7 @@ int main(void)
 	test_dmr_rx();
 	test_dmr_tx();
 	test_gpio();
+	test_board_audio();
 	if (failures) {
 		printf("bk4819Test: %d failures\n", failures);
 		return 1;

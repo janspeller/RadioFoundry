@@ -62,6 +62,8 @@ void bk4819_attach(bk4819_t *dev, rfbus_t *bus)
 	dev->freq_10hz = 0;
 	dev->state = 0;
 	dev->af_gain = 0xB3B3u;
+	dev->af_mute = BK4819_AF_MUTE;
+	dev->af_gain_analog = 0;
 	dev->gpio = 0;
 	dev->digital = false;
 	dev->saved_27 = 0;
@@ -160,10 +162,13 @@ void bk4819_analog_mode(bk4819_t *dev)
 {
 	bk4819_write(dev, 0x2A, 0x4F18);
 	bk4819_write(dev, BK4819_REG_AFC, (uint16_t)(bk4819_read(dev, BK4819_REG_AFC) & ~BK4819_AFC_OFF));
-	bk4819_write(dev, BK4819_REG_AF, BK4819_AF_MUTE);
+	bk4819_write(dev, BK4819_REG_AF, dev->af_mute);
 	bk4819_write(dev, BK4819_REG_AGC_DC, 0x302E);
 	bk4819_write(dev, BK4819_REG_AF_FILTER, 0xC000);
 	bk4819_write(dev, BK4819_REG_TX_AUDIO, BK4819_TX_AUDIO_LIVE);
+	if (dev->af_gain_analog != 0u) {
+		bk4819_write(dev, BK4819_REG_AF_GAIN, dev->af_gain_analog);
+	}
 }
 
 void bk4819_set_af(bk4819_t *dev, uint16_t af)
@@ -404,7 +409,7 @@ void bk4819_tone_stop(bk4819_t *dev)
 	if (dev->tone_hz == 0) {
 		return;
 	}
-	bk4819_write(dev, BK4819_REG_AF, BK4819_AF_MUTE);
+	bk4819_write(dev, BK4819_REG_AF, dev->af_mute);
 	bk4819_write(dev, BK4819_REG_TX_AUDIO, BK4819_TX_AUDIO_LIVE);
 	bk4819_write(dev, BK4819_REG_TONE_CTRL, 0x0000);
 	bk4819_write(dev, BK4819_REG_POWER, BK4819_POWER_ON);
@@ -424,7 +429,7 @@ void bk4819_tx_end(bk4819_t *dev)
 		bk4819_tx_tail_end(dev);
 	}
 	dev->tx_dcs = false;
-	bk4819_write(dev, BK4819_REG_AF, BK4819_AF_MUTE);
+	bk4819_write(dev, BK4819_REG_AF, dev->af_mute);
 	bk4819_write(dev, BK4819_REG_TX_AUDIO, BK4819_TX_AUDIO_LIVE);
 	bk4819_write(dev, BK4819_REG_TONE_CTRL, 0x0000);
 	bk4819_write(dev, BK4819_REG_POWER, BK4819_POWER_ON);
@@ -472,4 +477,24 @@ void bk4819_lo_resume(bk4819_t *dev)
 	bk4819_write(dev, BK4819_REG_POWER, BK4819_POWER_ON);
 	bk4819_write(dev, BK4819_REG_ENABLES, dev->idle);
 	bk4819_write(dev, BK4819_REG_ENABLES, BK4819_STATE_TX);
+}
+
+void bk4819_freq_scan_start(bk4819_t *dev)
+{
+	bk4819_write(dev, BK4819_REG_FREQ_SCAN, BK4819_FREQ_SCAN_ON);
+}
+
+bool bk4819_freq_scan_poll(bk4819_t *dev, uint32_t *raw_10hz)
+{
+	uint16_t hi = bk4819_read(dev, BK4819_REG_SCAN_HI);
+	if (hi & BK4819_SCAN_BUSY) {
+		return false;
+	}
+	*raw_10hz = (uint32_t)(hi & 0x07FFu) << 16 | bk4819_read(dev, BK4819_REG_SCAN_LO);
+	return true;
+}
+
+void bk4819_freq_scan_stop(bk4819_t *dev)
+{
+	bk4819_write(dev, BK4819_REG_FREQ_SCAN, 0x0000);
 }

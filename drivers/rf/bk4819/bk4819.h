@@ -21,6 +21,10 @@ typedef struct {
 	uint32_t freq_10hz;	// last frequency written, 10 Hz units (0 = none)
 	uint16_t state;		// last 0x30 value
 	uint16_t af_gain;	// last 0x48 value
+	// Board settings, after bk4819_attach(): the 0x47 word for a muted output (BK4819_AF_MUTE unless the board's stock
+	// firmware uses another), and the analog AF gain word bk4819_analog_mode() writes to 0x48 (0: 0x48 left as it is)
+	uint16_t af_mute;
+	uint16_t af_gain_analog;
 	uint16_t gpio;		// last 0x33 value
 	bool digital;		// bk4819_dmr_rx_enter() is in effect
 	uint16_t saved_27, saved_48;	// what it replaced, for bk4819_dmr_rx_end()
@@ -141,7 +145,8 @@ void bk4819_init_main(bk4819_t *dev);
 // LO chip: soft reset, the power-on table and synthesizer set-up with output level pa (0x36); ends off
 void bk4819_init_lo(bk4819_t *dev, uint16_t pa);
 // Analog mode set of the main chip, as the stock firmware on entering an analog channel: 0x2A, AFC on (0x73 bit 4
-// clear), AF select 0, 0x7E, 0x2B, 0x50 live microphone. Task level, idle chip
+// clear), AF select 0 (af_mute), 0x7E, 0x2B, 0x50 live microphone, then 0x48 = af_gain_analog when the board set one.
+// Task level, idle chip
 void bk4819_analog_mode(bk4819_t *dev);
 // Idle, then the frequency. The state stays idle: set_state next
 void bk4819_set_freq(bk4819_t *dev, uint32_t hz);
@@ -221,5 +226,17 @@ bool bk4819_tone_found(uint16_t r0c, bk4819_tone_t type);
 // The same for the channel's tone as sent on air: DCS polarity swapped when dev->rx_inverted
 bool bk4819_heard(const bk4819_t *dev, uint16_t r0c, bk4819_tone_t type);
 bool bk4819_rx_tone_ok(bk4819_t *dev, bk4819_tone_t type);
+
+// Frequency scan (docs/spec/freq-detect.md): the chip measures the frequency of a strong carrier at its input. Start:
+// 0x32 = 0x0B01. Poll: 0x0D bit 15 set while there is no reading; else the raw reading, 10 Hz units, is
+// (0x0D bits 10:0) << 16 | 0x0E, before the board's own corrections. Stop: 0x32 = 0. The caller sets the receive path
+#define BK4819_REG_FREQ_SCAN	0x32
+#define BK4819_FREQ_SCAN_ON	0x0B01u
+#define BK4819_REG_SCAN_HI	0x0D
+#define BK4819_REG_SCAN_LO	0x0E
+#define BK4819_SCAN_BUSY	0x8000u
+void bk4819_freq_scan_start(bk4819_t *dev);
+bool bk4819_freq_scan_poll(bk4819_t *dev, uint32_t *raw_10hz);
+void bk4819_freq_scan_stop(bk4819_t *dev);
 
 #endif

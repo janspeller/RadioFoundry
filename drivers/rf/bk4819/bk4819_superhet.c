@@ -22,7 +22,8 @@ static void rx_tone(void *c, superhet_tone_t t, uint16_t v) { bk4819_set_rx_tone
 
 static void af(void *c, superhet_af_t a)
 {
-	bk4819_set_af(c, a == SUPERHET_AF_FM ? BK4819_AF_FM : a == SUPERHET_AF_DMR ? BK4819_AF_DMR : BK4819_AF_MUTE);
+	bk4819_t *dev = c;
+	bk4819_set_af(dev, a == SUPERHET_AF_FM ? BK4819_AF_FM : a == SUPERHET_AF_DMR ? BK4819_AF_DMR : dev->af_mute);
 }
 
 static void af_gain(void *c, uint8_t g) { bk4819_set_af_gain(c, g); }
