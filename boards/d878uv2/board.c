@@ -15,6 +15,9 @@
 #if CONFIG_USB
 #include "usb/usb_device.h"
 #endif
+#if CONFIG_DMR
+#include "modem/sct/sct_dmr.h"
+#endif
 
 static const band_t bands[] = {
 	{ 136000000, 174000000, true },
@@ -37,7 +40,14 @@ static const keymap_entry_t keymap[] = {
 
 const board_t board = {
 	.name = BOARD_T_NAME,
+#if CONFIG_DMR
+	.caps = CAP_KEYPAD | CAP_ENCODER | CAP_DMR | CAP_MODEM_VOICE | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
+	.dmr = &sct_dmr_modem,	// start() fails until the baseband has booted: FM only without the boot block
+	.modem_codec = d878uv2_modem_codec,
+	.boot_busy = d878uv2_modem_booting,
+#else
 	.caps = CAP_KEYPAD | CAP_ENCODER | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
+#endif
 	.bands = bands,
 	.band_count = sizeof(bands) / sizeof(bands[0]),
 	.power_count = sizeof(power_names) / sizeof(power_names[0]),
@@ -85,5 +95,8 @@ void board_init(void)
 #if CONFIG_NAND_STORAGE
 	// The core's storage, mounted before storage_init reads it. Without it the radio runs on the default settings
 	d878uv2_flash_init();
+#endif
+#if CONFIG_DMR
+	d878uv2_modem_init();
 #endif
 }

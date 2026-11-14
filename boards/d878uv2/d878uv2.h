@@ -70,6 +70,16 @@ void d878uv2_flash_stats(nand_sectors_stats_t *st);
 void d878uv2_flash_ext_stats(nand_blocks_stats_t *st);
 #endif
 
+#if CONFIG_DMR
+// --- The DMR baseband (modem_d878uv2.c, docs/spec/modem-sct.md) ---
+#include "modem/sct/sct_host.h"
+bool d878uv2_modem_init(void);
+const char *d878uv2_modem_codec(void);
+bool d878uv2_modem_booting(void);
+void d878uv2_modem_carrier(bool carrier);
+sct_boot_result_t d878uv2_modem_boot_result(void);
+#endif
+
 // LCD backlight, 0..100 %: TIM8 channel 2's complementary output on PB0 (power_d878uv2.c, hardware-d878uv2.md 4.3)
 void d878uv2_backlight(uint8_t percent);
 
