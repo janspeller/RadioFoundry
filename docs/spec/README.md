@@ -15,6 +15,7 @@ Past bugs, by subsystem: [gotchas.md](gotchas.md). Contributors read [docs/dev](
 | [capabilities.md](capabilities.md) | What a radio can do, by area, with the switch and spec behind each |
 | [radio-features.md](radio-features.md) | Scan, the FM transmit extras (tones, burst, roger beep), beeps, battery and power management |
 | [airband-and-broadcast.md](airband-and-broadcast.md) | Air band AM receive and broadcast FM receive, chosen by the frequency |
+| [freq-detect.md](freq-detect.md) | Frequency detect: a nearby transmitter's frequency from the RF chip's frequency scan, tuned into the VFO |
 | [aprs.md](aprs.md) | APRS on FM and over DMR |
 | [position.md](position.md) | The radio's position: sources, settings, who reads it |
 | [ui.md](ui.md) | The user interface as built: screens, keys, the drawing layer ([docs/ux](../ux/) has the design) |
@@ -24,6 +25,7 @@ Past bugs, by subsystem: [gotchas.md](gotchas.md). Contributors read [docs/dev](
 | Spec | Covers |
 |---|---|
 | [dmr-voice.md](dmr-voice.md) | DMR voice calls |
+| [dmr-call-level.md](dmr-call-level.md) | Draft: DMR on a chip that runs calls itself (the call-level interface, encryption keys) |
 | [dmr-data.md](dmr-data.md) | DMR data services: text messages, ARS, LRRP, call alert, radio check |
 | [zone-share.md](zone-share.md) | Zone and channel sharing over DMR data: the record, fragments, offers, the import |
 | [dmr-emergency.md](dmr-emergency.md) | DMR emergency |

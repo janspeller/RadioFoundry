@@ -50,7 +50,7 @@ void ui_crit_exit(void);
 ui_state_t ui_st;
 ui_target_t ui_target;
 static const radio_view_t *view;
-static const radio_view_t view_none;	// until the first tick (const: flash, not RAM)
+static const radio_view_t view_none;	// until the first tick (const: in flash, not RAM)
 static ui_frame_t stack[UI_STACK_MAX];
 static uint8_t sp;			// stack[sp] is on screen; stack[0] is Home
 static uint32_t toast_until, entry_last, last_refresh, now;
@@ -356,7 +356,7 @@ static bool recent_tx;
 uint8_t ui_recent_count(void) { return recent_n; }
 const ui_recent_t *ui_recent_get(uint8_t i) { return i < recent_n ? &recent[i] : NULL; }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static void recent_add(const ui_recent_t *r)
 {
 	// The same station and destination again: move it to the top instead of repeating it
@@ -389,7 +389,7 @@ void ui_recent_target(const ui_recent_t *r, ui_target_t *t)
 	t->saved = t->name[0] != 0;
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // The caller's position (ETSI GPS Info) stays with its Recent entry; a later call without one keeps the last
 static void recent_gps(ui_recent_t *r, const radio_dmr_call_t *c)
 {
@@ -441,7 +441,7 @@ static void recent_update(const radio_view_t *v)
 bool ui_contact_name(uint32_t id, bool group, char *out)
 {
 	out[0] = 0;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	contact_t c;
 	if (codeplug_contact_find(id, group, &c)) {
 		strcpy(out, c.name);
@@ -521,7 +521,7 @@ void ui_open_actions(const ui_target_t *t)
 // The station Home's CONTEXT acts on: the current caller, else the last one heard
 static bool caller_target(ui_target_t *t)
 {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	const radio_dmr_view_t *d = &view->dmr;
 	if (view->state == RS_RX && d->active && d->state != RDMR_IDLE && d->call.src != 0) {
 		memset(t, 0, sizeof *t);
@@ -968,7 +968,7 @@ bool ui_try_save_channel(void)
 
 static bool target_manual(void)
 {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	return view->dmr.target_manual;
 #else
 	return false;
@@ -1062,7 +1062,7 @@ void ui_scan_toggle(void)
 		TR(SCAN_TOAST_SCANNING_BAND, "Scanning the band") : TR(SCAN_TOAST_SCANNING_ZONE, "Scanning this zone"));
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // Up / Down on Home set to "Talk target" (Settings > Keys): the channel's default talkgroup, then its listen list,
 // each a temporary talk target (the default ends it). False when there is nothing to step through
 static bool talk_step(int dir)
@@ -1128,7 +1128,7 @@ bool ui_home_key(const input_event_t *ev)
 			zone_step(nav_dir(ev));
 			return true;
 		}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		if (arrows && !view->vfo && ui_st.updown == 2 && view->ch.mode == RADIO_MODE_DMR && talk_step(nav_dir(ev)))
 			return true;
 #endif
@@ -1194,7 +1194,7 @@ bool ui_home_key(const input_event_t *ev)
 			ui_svc_scan(false);
 			ui_st.scanning = false;
 			ui_toast(TR(SCAN_TOAST_STOPPED, "Scan stopped"));
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		} else if (view->ch.mode == RADIO_MODE_DMR && view->dmr.reply_active) {
 			radio_req_reply_cancel();
 			ui_toast(TR(HOME_TOAST_REPLY_ENDED, "Reply ended"));
@@ -1203,7 +1203,7 @@ bool ui_home_key(const input_event_t *ev)
 			ui_st.hear_all = false;
 			ui_toast(dmon_text(false));
 #endif
-		} else if (view->temporary || ui_st.privacy || (CONFIG_DMR && target_manual())) {
+		} else if (view->temporary || ui_st.privacy || (CONFIG_DMR_ANY && target_manual())) {
 			radio_req_clear_temporary();
 			ui_svc_talk_to(0, false, UI_TALK_DEFAULT);
 			if (ui_st.privacy && ui_svc_privacy(false))
@@ -1462,7 +1462,7 @@ static void quick_activate(int tile)
 		ui_scan_toggle();
 #endif
 		break;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case QT_TIMESLOT: {
 		uint8_t ts = view->dmr.ts ? view->dmr.ts : view->ch.timeslot;
 		if (ui_svc_dmr_timeslot(ts == 2 ? 1 : 2))
@@ -1492,7 +1492,8 @@ static void quick_activate(int tile)
 			ui_toast(ui_st.privacy ? TR(QUICK_TOAST_PRIVACY_ON_FOR_NOW, "Privacy on for now") :
 				TR(QUICK_TOAST_PRIVACY_OFF, "Privacy off"));
 		} else {
-			ui_toast(TR(QUICK_WHY_NO_PRIVACY_KEY, "No privacy key: set one in Settings > Privacy"));
+			ui_toast(CONFIG_DMR_PRIVACY ? TR(QUICK_WHY_NO_PRIVACY_KEY, "No privacy key: set one in Settings > Privacy") :
+				 TR(QUICK_WHY_NO_ENC_KEY, "No encryption key in the radio"));
 		}
 		break;
 	case QT_TALK_TO:
@@ -2046,7 +2047,7 @@ static void call_back_key(void)
 		const ui_recent_t *r = ui_recent_get(i);
 		if (r->out)
 			continue;
-		if (!CONFIG_DMR || view->ch.mode != RADIO_MODE_DMR) {
+		if (!CONFIG_DMR_ANY || view->ch.mode != RADIO_MODE_DMR) {
 			ui_toast(TR(HOME_WHY_CALL_BACK_DMR_ONLY, "Call back: DMR only"));
 			return;
 		}
@@ -2090,7 +2091,7 @@ void ui_app_key(const input_event_t *ev)
 	// view follows). Its hold function (value 1 on the long press) runs on DMR only: on FM holding the key is the
 	// squelch break (#19). The radio task outranks this one and gets the edge first, so the view at the release
 	// may already be toggled: the toast inverts the latch as it was at the press, when the core leaves it alone
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (ev->action == ACT_MONITOR && ev->gesture == GESTURE_DOWN)
 		dmon_at_press = view->dmr.hear_all_latch;
 	if (ev->action == ACT_MONITOR && ev->gesture == GESTURE_UP && ev->value == 0 &&
@@ -2149,14 +2150,14 @@ void ui_app_key(const input_event_t *ev)
 		return;
 	}
 	if (ev->action == ACT_CONTEXT && ev->gesture == GESTURE_LONG) {
-		if (!CONFIG_DMR || view->ch.mode != RADIO_MODE_DMR)
+		if (!CONFIG_DMR_ANY || view->ch.mode != RADIO_MODE_DMR)
 			ui_toast(TR(TALK_WHY_DMR_CHANNELS_ONLY, "Talk target: DMR channels only"));
 		else if (stack[sp].scr != SCR_PICKER)
 			ui_push(SCR_PICKER, 0);
 		return;
 	}
 	if (ev->action == ACT_TALK_TARGET && (ev->gesture == GESTURE_PRESS || ev->gesture == GESTURE_LONG)) {
-		if (CONFIG_DMR && view->ch.mode == RADIO_MODE_DMR)
+		if (CONFIG_DMR_ANY && view->ch.mode == RADIO_MODE_DMR)
 			ui_push(SCR_PICKER, 0);
 		else
 			ui_toast(TR(TALK_WHY_DMR_CHANNELS_ONLY, "Talk target: DMR channels only"));
@@ -2321,7 +2322,7 @@ static void battery_tick(const radio_view_t *v)
 		ui_svc_beep(UI_BEEP_BATTERY_LOW);
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // Hear all by default (Settings > Talk & listen): latched on each time a DMR channel is selected (not by a scan
 // passing through); BACK on Home still turns it off until the next channel
 static void hear_all_tick(const radio_view_t *v)
@@ -2411,6 +2412,17 @@ bool ui_app_tick(const radio_view_t *v, uint32_t now_ms)
 #if CONFIG_ZONE_EDIT
 	ui_svc_zone_poll();
 #endif
+#if CONFIG_FREQ_DETECT
+	// A search runs only while its screen is on top: one left any other way (Home, a timeout) stops it, once
+	static bool fd_stop_sent;
+	if (v->fd_on && ui_frame()->scr != SCR_FREQ_DETECT) {
+		if (!fd_stop_sent)
+			(void)ui_svc_freq_detect(false, 0);
+		fd_stop_sent = true;
+	} else {
+		fd_stop_sent = false;
+	}
+#endif
 #if CONFIG_CRASH_SCREEN
 	ui_crash_tick(now_ms);
 #endif
@@ -2494,7 +2506,7 @@ bool ui_app_tick(const radio_view_t *v, uint32_t now_ms)
 	}
 	zone_queued = queued;
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	recent_update(v);
 	// "DMR modem off" only once it's been off a while: a channel or mode change (APRS on FM and back, a retune)
 	// turns the modem off for a moment, and a warning that flashes up for a few frames only worries
@@ -2569,7 +2581,7 @@ bool ui_app_tick(const radio_view_t *v, uint32_t now_ms)
 	roams_seen = v->roam.roams;
 	roams_known = true;
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	// The latches the radio keeps (it may drop them itself: hear all ends with the channel)
 	if ((ui_svc_features() & UI_FEAT_HEAR_ALL) && view->dmr.hear_all_latch != ui_st.hear_all) {
 		ui_st.hear_all = view->dmr.hear_all_latch;
@@ -2591,7 +2603,7 @@ bool ui_app_tick(const radio_view_t *v, uint32_t now_ms)
 		set_locked(true);
 	}
 	use_tick(v);
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	hear_all_tick(v);
 #endif
 	// The hint names the last caller: "OK Menu  * Quick  # Joe"

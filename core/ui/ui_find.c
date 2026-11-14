@@ -61,7 +61,7 @@ static char query[FIND_KEYS + 1];
 static find_result_t results[FIND_MAX];
 static uint8_t n_results;
 static zone_t zone;		// the current zone's channels, for the search and the rows (one copy: RAM is short)
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static uint16_t priv_index;	// the private contact whose ID is the digits (its name on that row), 0 for none
 #endif
 
@@ -139,7 +139,7 @@ static uint32_t query_number(void)
 	return n;
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static bool id_prefix(uint32_t id, const char *keys)
 {
 	char buf[12];
@@ -150,7 +150,7 @@ static bool id_prefix(uint32_t id, const char *keys)
 }
 #endif
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 typedef struct {
 	uint32_t num;
 	size_t len;
@@ -208,7 +208,7 @@ void ui_find_run(void)
 			found++;
 		}
 	}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	// Contacts and talkgroups: by name, or by ID for 3 digits and more. One scan, many records per flash read
 	// (codeplug_contacts_each): read one at a time, 1024 slots kept the UI and the idle task busy for 0.7 s a key
 	contact_scan_t cs = { .num = num, .len = len, .number = num >= 1 && num <= 0xFFFFFEu };
@@ -245,7 +245,7 @@ void ui_find_run(void)
 			}
 		}
 	}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	// 3. The number itself
 	if (num >= 1 && num <= 0xFFFFFEu) {
 		add(FR_TG, num);
@@ -286,7 +286,7 @@ static bool find_target(uint16_t i, ui_target_t *t)
 	memset(t, 0, sizeof *t);
 	const find_result_t *r = &results[i];
 	switch (r->kind) {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case FR_CONTACT: {
 		contact_t c;
 		if (!codeplug_contact((uint16_t)r->ref, &c))
@@ -313,7 +313,7 @@ static bool find_target(uint16_t i, ui_target_t *t)
 #endif
 	case FR_PRIVATE: {
 		t->id = r->ref;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		// The contact the search found (no scan here: the row is drawn every frame)
 		contact_t c;
 		if (priv_index != 0 && codeplug_contact(priv_index, &c) && c.id == r->ref && c.type == CONTACT_PRIVATE) {

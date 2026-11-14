@@ -24,6 +24,7 @@ in `BOARD_DIRS`. The board then keeps only its wiring and what its chips leave t
 | `platform/stm32f4/spi_flash` | the data flash on SPI NOR, with its security registers. A flash that shares its bus with another device takes the board's bus lock (`bus_take`, `bus_give`) instead of the driver's own mutex |
 | `platform/stm32f4/fsmc_keypad` | a key matrix on the LCD data lines |
 | `platform/stm32f4/gps_uart` | a GPS module on a USART |
+| `platform/at32f423/spi_flash` | the data flash on SPI NOR, with a GPIO chip select and a write floor below the factory data |
 
 The board's own files:
 
@@ -63,7 +64,7 @@ Look at the boards on your platform for a model (`tools/boards.py list --platfor
 | Field | Fill with |
 |---|---|
 | `name` | The model as shown in About and the hotspot's description |
-| `caps` | `CAP_KEYPAD`, `CAP_ENCODER`, `CAP_GPS`, `CAP_DMR`, `CAP_VOLUME_POT`, `CAP_AM_RX`, `CAP_BCAST_FM`, `CAP_NO_BATTERY` (a mobile on a fixed supply: no battery UI, no battery monitor; leave `battery_mv` and `battery_pct` NULL, and set `hal_power_t.supply_mv` if the radio measures its DC input: [radio-features.md](../spec/radio-features.md), battery) |
+| `caps` | `CAP_KEYPAD`, `CAP_ENCODER`, `CAP_GPS`, `CAP_DMR`, `CAP_VOLUME_POT`, `CAP_AM_RX`, `CAP_BCAST_FM`, `CAP_FREQ_DETECT` (the RF chip's frequency counter scan, with the `hal_radio_t.fd_*` hooks: [freq-detect.md](../spec/freq-detect.md)), `CAP_NO_BATTERY` (a mobile on a fixed supply: no battery UI, no battery monitor; leave `battery_mv` and `battery_pct` NULL, and set `hal_power_t.supply_mv` if the radio measures its DC input: [radio-features.md](../spec/radio-features.md), battery) |
 | `bands`, `band_count` | Receive ranges, each with `tx` true where transmit is allowed |
 | `power_count`, `power_names`, `power_default` | Power levels as short labels, lowest first, and the default index |
 | `power_bands`, `power_band_count` | Optional: the labels per band, where a level gives a different power on each band (a top level of 45 W on one band, 50 W on the other). Same `power_count` on every band; a frequency in no entry uses `power_names` |

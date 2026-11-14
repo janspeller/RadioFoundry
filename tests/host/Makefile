@@ -273,7 +273,7 @@ T3RADIO := $(CORE)/radio/radio_trunk.c $(CORE)/radio/radio_trunk_cp.c $(CORE)/co
 RFEAT   := $(CORE)/radio/scan.c $(CORE)/radio/beep.c $(CORE)/radio/sigtone.c $(CORE)/radio/battery.c $(CORE)/radio/roam.c $(CORE)/radio/radio_am.c $(CORE)/radio/radio_bcast.c \
            $(CORE)/radio/vibe.c $(CORE)/radio/mic_gain.c $(CORE)/radio/ref_trim.c $(CORE)/radio/pa_keyup.c $(CORE)/codeplug/codeplug_talk.c $(CORE)/codeplug/zone_shift.c \
            $(CORE)/codeplug/zone_settle.c \
-           $(CORE)/radio/radio_sfr.c $(CORE)/radio/radio_cwid.c $(CORE)/radio/tx_limit.c $(T3RADIO)
+           $(CORE)/radio/radio_sfr.c $(CORE)/radio/radio_cwid.c $(CORE)/radio/tx_limit.c $(CORE)/radio/freq_detect.c $(T3RADIO)
 RCORE   := radioCoreTest.c $(CORE)/radio/radio_sm.c $(CORE)/codeplug/codeplug_keys.c $(CORE)/radio/tones.c $(RFEAT) $(CORE)/dmr/call/dmr_call.c $(CORE)/dmr/fec/dmrCach.c \
            $(CORE)/dmr/call/dmr_lc.c $(CORE)/dmr/fec/dmrFec.c $(CORE)/dmr/ambe/ambeVoice.c $(CORE)/dmr/ambe/ambeFec.c \
            $(CORE)/dmr/dmrPrivacy.c sim/dmr_sim_modem.c $(CORE)/dmr/dmrData.c $(CORE)/dmr/dmrDataService.c \
@@ -364,7 +364,7 @@ RFTEST  := radioFeaturesTest.c $(CORE)/radio/radio_sm.c $(CORE)/codeplug/codeplu
 # the network half is usrpNetTest
 radioFeaturesTest: $(RFTEST) $(wildcard $(CORE)/radio/*.h) $(wildcard $(CORE)/dmr/call/*.h) $(wildcard $(CORE)/usbaudio/*.h)
 	$(CC) $(CFLAGS) $(CORE_HAL) -I. -DDMR_RX_TRACE=0 -DCONFIG_DMR_IP_GATEWAY=0 -DCONFIG_HOTSPOT=0 -DCONFIG_APRS=0 \
-		-DCONFIG_NET_USRP=1 -o $@ $(RFTEST) -lm
+		-DCONFIG_NET_USRP=1 -DCONFIG_FREQ_DETECT=1 -o $@ $(RFTEST) -lm
 
 # The same without CONFIG_DUAL_WATCH: only the debug link's dual watch, two channels of one zone, ended by PTT
 TESTS   += radioFeaturesTestNoDual
@@ -661,7 +661,7 @@ UIAPP   := $(UI) $(CORE)/ui/ui_app.c $(CORE)/ui/ui_menus.c $(CORE)/ui/ui_find.c 
 ABOUT_H := out/gen/rfoundry_about.h
 $(shell python3 $(ROOT)/tools/gen_about.py $(ROOT)/AUTHORS $(ROOT)/platform/stm32f4/THIRD_PARTY $(ABOUT_H) >/dev/null)
 UIFLAGS := -std=gnu99 -Wall -Wextra -Wno-unused-parameter -Wshadow -g $(COVFLAGS) $(SANFLAGS) -I$(CORE) -I$(ROOT)/hal -I. -Iout/gen \
-           '-DGFX_FB_BYTES=(320u*320u*2u)' -DGFX_MAX_ROWS=320 -DCONFIG_FONT_XL=1 -DFONT_BOTH -DGFX_INDEXED=1 -DGFX_FIT_TRACE
+           '-DGFX_FB_BYTES=(320u*320u*2u)' -DGFX_MAX_ROWS=320 -DCONFIG_FONT_XL=1 -DFONT_BOTH -DGFX_INDEXED=1 -DGFX_FIT_TRACE -DCONFIG_FREQ_DETECT=1
 UIDEPS  := $(UIAPP) $(ABOUT_H) $(LANG_H) $(wildcard $(CORE)/ui/*.h $(CORE)/ui/fonts/*.inc sim/ui_sim.h)
 TESTS   += uiFlowTest uiFlowTestNoColor uiSim
 
@@ -863,6 +863,28 @@ run-modem: hrc6000DmrTest hrc6000ToneTest
 	./hrc6000DmrTest
 	./hrc6000ToneTest
 .PHONY: run-modem
+
+# Call-level DMR (docs/spec/dmr-call-level.md): the HF6853 driver's frames and engine against a fake chip, and the
+# core's backend against a fake hal_dmr_call_t, built as a call-level radio builds it (no burst-level stack)
+TESTS   += hf6853Test dmrCallLevelTest
+HF6853  := $(ROOT)/drivers/dmr/hf6853
+HF6853_SRC := hf6853Test.c $(HF6853)/hf6853.c $(HF6853)/hf6853_cmd.c $(HF6853)/hf6853_frame.c $(CORE)/debuglink/dl_fmt.c
+CALL_LEVEL_DEFS := -DCONFIG_DMR=0 -DCONFIG_DMR_CALL=1 -DCONFIG_DMR_PRIVACY=0 -DCONFIG_DMR_TALKER_ALIAS=0 \
+	-DCONFIG_DMR_GPS=0 -DCONFIG_DMR_DATA_CORE=0 -DCONFIG_DMR_ROAMING=0 -DCONFIG_SFR=0 -DCONFIG_HOTSPOT=0 \
+	-DCONFIG_DMR_UDP_COMPRESS=0 -DCONFIG_ZONE_SHARE=0
+
+hf6853Test: $(HF6853_SRC) $(HF6853)/hf6853.h $(HF6853)/hf6853_frame.h $(ROOT)/hal/hal_dmr_call.h
+	$(CC) $(CFLAGS) -I$(ROOT)/hal -Wshadow -o $@ $(HF6853_SRC)
+
+dmrCallLevelTest: dmrCallLevelTest.c $(CORE)/dmr/call_level/dmr_call_level.c $(CORE)/dmr/call_level/dmr_call_level.h \
+		$(ROOT)/hal/hal_dmr_call.h $(CORE)/dmr/call/dmr_call.h
+	$(CC) $(CFLAGS) -I$(ROOT)/hal -Wshadow $(CALL_LEVEL_DEFS) -o $@ dmrCallLevelTest.c $(CORE)/dmr/call_level/dmr_call_level.c
+
+run: run-call-level
+run-call-level: hf6853Test dmrCallLevelTest
+	./hf6853Test
+	./dmrCallLevelTest
+.PHONY: run-call-level
 
 # The DMR receive chain: a model of the HR_C6000's reports through the slot engine, a batching board task and the call
 # stack to the voice sink (every burst on air out once, in order, nothing concealed)
@@ -1397,8 +1419,8 @@ nandSectorsTest: nandSectorsTest.c $(NSECT) $(ROOT)/drivers/flash/nand_sectors/n
 CPEDIT  := $(CORE)/codeplug/codeplug.c $(CORE)/codeplug/codeplug_kv.c $(CORE)/codeplug/codeplug_tag.c $(CORE)/storage/storage.c sim/sim_flash.c
 TESTS   += codeplugEditTest
 
-codeplugEditTest: codeplugEditTest.c $(CPEDIT) $(wildcard $(CORE)/codeplug/*.h $(CORE)/storage/*.h sim/sim_flash.h)
-	$(CC) $(CFLAGS) -I$(ROOT)/hal -I. -Wshadow -o $@ codeplugEditTest.c $(CPEDIT)
+codeplugEditTest: codeplugEditTest.c $(CPEDIT) $(CORE)/codeplug/codeplug_talk.c $(wildcard $(CORE)/codeplug/*.h $(CORE)/storage/*.h sim/sim_flash.h)
+	$(CC) $(CFLAGS) -I$(ROOT)/hal -I. -Wshadow -o $@ codeplugEditTest.c $(CPEDIT) $(CORE)/codeplug/codeplug_talk.c
 
 run: run-cpedit
 run-cpedit: codeplugEditTest

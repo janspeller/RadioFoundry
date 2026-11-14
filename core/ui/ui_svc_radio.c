@@ -24,7 +24,7 @@
 #if CONFIG_DMR_PRIVACY
 #include "dmr/dmrPrivacy.h"
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #include "dmr/ambe/ambeVoice.h"
 #endif
 #if CONFIG_NXDN
@@ -33,7 +33,11 @@
 #if CONFIG_P25
 #include "radio/radio_p25.h"
 #endif
-
+#if CONFIG_FREQ_DETECT
+#define FD_CAPABLE	radio_fd_capable()
+#else
+#define FD_CAPABLE	false
+#endif
 
 uint32_t ui_svc_feat_voice(void)
 {
@@ -41,12 +45,21 @@ uint32_t ui_svc_feat_voice(void)
 	if (CONFIG_VOX) {
 		f |= UI_FEAT_VOX;
 	}
-	if (CONFIG_DMR) {
-		f |= UI_FEAT_TALK_TARGET | UI_FEAT_TIMESLOT | UI_FEAT_COLOR_CODE | UI_FEAT_HEAR_ALL;
+	if (CONFIG_DMR_ANY) {
+		f |= UI_FEAT_TALK_TARGET | UI_FEAT_TIMESLOT | UI_FEAT_COLOR_CODE;
 		if (CONFIG_FM) {
 			f |= UI_FEAT_MODE;
 		}
 		if (CONFIG_DMR_PRIVACY) {
+			f |= UI_FEAT_PRIVACY;
+		}
+		// A call-level chip: what its caps offer (docs/spec/dmr-call-level.md 3)
+		uint32_t dc = board.dmr_call != NULL ? board.dmr_call->caps : 0;
+		if (CONFIG_DMR || (dc & DMRC_CAP_HEAR_ALL) != 0) {
+			f |= UI_FEAT_HEAR_ALL;
+		}
+		if (CONFIG_DMR_AES && board.dmr_call != NULL && board.dmr_call->key_get != NULL &&
+		    (dc & (DMRC_CAP_ENC_ARC | DMRC_CAP_ENC_AES128 | DMRC_CAP_ENC_AES256)) != 0) {
 			f |= UI_FEAT_PRIVACY;
 		}
 	}
@@ -109,7 +122,7 @@ uint8_t ui_svc_vfo_copy(const radio_view_t *v)
 	return (uint8_t)r;
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // Only changes go to the radio core (the UI calls this on every redraw of a list's focus)
 void ui_svc_focus_target(uint32_t id, bool private_call)
 {
@@ -198,6 +211,32 @@ bool ui_svc_privacy(bool on)
 	}
 	return false;
 }
+#elif CONFIG_DMR_AES
+// A call-level chip's key (dmr-call-level.md 6): the radio core takes the key number in use, else the first one the key
+// store holds (radio_req_dmr_key 0). On is false when the store holds none
+bool ui_svc_privacy(bool on)
+{
+	const hal_dmr_call_t *h = board.dmr_call;
+	if (h == NULL || h->key_get == NULL) {
+		return false;
+	}
+	if (on) {
+		dmrc_key_t k;
+		bool found = false;
+		for (uint8_t i = 1; i <= h->key_count && !found; i++) {
+			found = h->key_get(i, &k) && k.type != DMRC_KEY_OFF;
+		}
+		volatile uint8_t *b = (volatile uint8_t *)&k;	// the bytes were read only to see a key is there
+		for (size_t j = 0; j < sizeof(k); j++) {
+			b[j] = 0;
+		}
+		if (!found) {
+			return false;
+		}
+	}
+	radio_req_dmr_key(0, on);
+	return true;
+}
 #endif
 #endif
 
@@ -217,7 +256,7 @@ uint32_t ui_svc_feat_radio(void)
 	       (motor ? UI_FEAT_VIBRATE : 0) | (radio_volume_soft() ? UI_FEAT_VOLUME : 0) |
 	       (knob ? UI_FEAT_VOLUME_KNOB : 0) |
 	       (radio_bcast_capable() ? UI_FEAT_BCAST : 0) | (CONFIG_POSITION && board_has_gps() ? UI_FEAT_GPS : 0) |
-	       (ref_trim_available() ? UI_FEAT_REF_TRIM : 0) |
+	       (ref_trim_available() ? UI_FEAT_REF_TRIM : 0) | (FD_CAPABLE ? UI_FEAT_FREQ_DETECT : 0) |
 #if CONFIG_P25
 	       (radio_p25_fits() ? UI_FEAT_P25 : 0) |
 #endif
@@ -227,7 +266,31 @@ uint32_t ui_svc_feat_radio(void)
 	       0;
 }
 
-#if CONFIG_DMR
+#if CONFIG_FREQ_DETECT
+uint8_t ui_svc_fd_range_count(void)
+{
+	return radio_fd_capable() ? board.radio->fd_range_count : 0;
+}
+
+bool ui_svc_fd_range(uint8_t i, uint32_t *lo_hz, uint32_t *hi_hz)
+{
+	if (i >= ui_svc_fd_range_count())
+		return false;
+	*lo_hz = board.radio->fd_ranges[i].lo_hz;
+	*hi_hz = board.radio->fd_ranges[i].hi_hz;
+	return true;
+}
+
+bool ui_svc_freq_detect(bool on, uint8_t range)
+{
+	if (on && range >= ui_svc_fd_range_count())
+		return false;
+	radio_req_freq_detect(on, range);
+	return true;
+}
+#endif
+
+#if CONFIG_DMR_ANY
 bool ui_svc_talk_to(uint32_t id, bool private_call, uint8_t life)
 {
 	switch (life) {
@@ -330,7 +393,7 @@ bool ui_svc_dual_rx(uint8_t pane, ui_dual_rx_t *out)
 		out->active = out->heard = v->state == RS_RX;
 		out->rssi_dbm = v->rssi_dbm;
 		out->dmr = v->ch.mode == RADIO_MODE_DMR;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		if (out->dmr) {
 			out->active = out->heard = v->state == RS_RX && v->dmr.state == RDMR_RX;
 			out->src = v->dmr.call.src;
@@ -404,7 +467,7 @@ int32_t ui_svc_reply_shown(const radio_settings_t *s)
 	if (s->reply_s <= 30u) {
 		return s->reply_s;
 	}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	codeplug_dmr_settings_t gs;
 	if (codeplug_dmr_settings(&gs) && gs.group_hang_ms != 0) {
 		int32_t sec = (int32_t)((gs.group_hang_ms + 999u) / 1000u);
@@ -418,7 +481,7 @@ int32_t ui_svc_reply_shown(const radio_settings_t *s)
 // dimmed)
 static void apply_mic_gain(int32_t step, bool agc)
 {
-	if (CONFIG_DMR && agc) {
+	if (CONFIG_DMR_ANY && agc) {
 		step = (int32_t)MIC_GAIN_UNITY;
 	} else if (step < 0) {
 		step = 0;

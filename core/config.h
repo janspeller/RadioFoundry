@@ -14,6 +14,15 @@
 #ifndef CONFIG_DMR
 #define CONFIG_DMR			1
 #endif
+#ifndef CONFIG_DMR_CALL
+#define CONFIG_DMR_CALL			0
+#endif
+#ifndef CONFIG_DMR_AES
+#define CONFIG_DMR_AES			CONFIG_DMR_CALL
+#endif
+// Either DMR backend (docs/spec/dmr-call-level.md 4): the UI's DMR screens, the DMR view, the talk target logic. Derived,
+// never set by hand
+#define CONFIG_DMR_ANY			(CONFIG_DMR || CONFIG_DMR_CALL)
 #ifndef CONFIG_DMR_PRIVACY
 #define CONFIG_DMR_PRIVACY		1
 #endif
@@ -155,7 +164,7 @@
 #define CONFIG_VFO_FM			(CONFIG_VFO && CONFIG_FM)
 #endif
 #ifndef CONFIG_VFO_DMR
-#define CONFIG_VFO_DMR			(CONFIG_VFO && CONFIG_DMR)
+#define CONFIG_VFO_DMR			(CONFIG_VFO && CONFIG_DMR_ANY)
 #endif
 #ifndef CONFIG_DIAG
 #define CONFIG_DIAG			1
@@ -230,7 +239,7 @@
 #define CONFIG_ZONE_EDIT		CONFIG_CHANNEL_EDIT
 #endif
 #ifndef CONFIG_CONTACT_EDIT
-#define CONFIG_CONTACT_EDIT		(CONFIG_CHANNEL_EDIT && CONFIG_DMR)
+#define CONFIG_CONTACT_EDIT		(CONFIG_CHANNEL_EDIT && CONFIG_DMR_ANY)
 #endif
 // Zone writes that move zone indexes (core/codeplug/zone_edit.h): the zone editor's, and zone sharing's import of a
 // new zone. Whoever keeps a zone index (the radio core, dual watch, the open zone screens) follows them
@@ -294,6 +303,9 @@
 #endif
 #ifndef CONFIG_BCAST_FM
 #define CONFIG_BCAST_FM			1
+#endif
+#ifndef CONFIG_FREQ_DETECT
+#define CONFIG_FREQ_DETECT		0
 #endif
 #ifndef CONFIG_RX_EXT
 #define CONFIG_RX_EXT			1
@@ -500,10 +512,10 @@
 #if CONFIG_USB_NETWORK && !CONFIG_USB
 #error "CONFIG_USB_NETWORK needs CONFIG_USB"
 #endif
-#if (CONFIG_VFO_FM && !(CONFIG_VFO && CONFIG_FM)) || (CONFIG_VFO_DMR && !(CONFIG_VFO && CONFIG_DMR))
+#if (CONFIG_VFO_FM && !(CONFIG_VFO && CONFIG_FM)) || (CONFIG_VFO_DMR && !(CONFIG_VFO && CONFIG_DMR_ANY))
 #error "a VFO kind is on without CONFIG_VFO or its mode"
 #endif
-#if (CONFIG_FM_TX_TONES || CONFIG_DTMF || CONFIG_VOX || CONFIG_BATTERY_SAVE || CONFIG_AM_RX) && !CONFIG_FM
+#if (CONFIG_FM_TX_TONES || CONFIG_DTMF || CONFIG_VOX || CONFIG_BATTERY_SAVE || CONFIG_AM_RX || CONFIG_FREQ_DETECT) && !CONFIG_FM
 #error "an FM feature is on without CONFIG_FM"
 #endif
 #if CONFIG_AUDIO_PROBE && !(CONFIG_DEBUGLINK && CONFIG_DMR)
@@ -536,7 +548,13 @@
 #if (CONFIG_APRS_RX && !CONFIG_APRS_AFSK) || (CONFIG_APRS_IGATE && !(CONFIG_APRS_RX && CONFIG_HOSTLINK))
 #error "an APRS sub-feature is on without its parent (APRS_RX needs APRS_AFSK; APRS_IGATE needs APRS_RX and HOSTLINK)"
 #endif
-#if !CONFIG_FM && !CONFIG_DMR
+#if CONFIG_DMR && CONFIG_DMR_CALL
+#error "CONFIG_DMR and CONFIG_DMR_CALL: one DMR backend"
+#endif
+#if CONFIG_DMR_AES && !CONFIG_DMR_CALL
+#error "CONFIG_DMR_AES needs CONFIG_DMR_CALL"
+#endif
+#if !CONFIG_FM && !CONFIG_DMR_ANY
 #error "at least one of CONFIG_FM and CONFIG_DMR"
 #endif
 

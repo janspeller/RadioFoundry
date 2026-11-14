@@ -51,6 +51,8 @@ BOARD_UNSUPPORTED += BCAST_FM	# no broadcast receiver (docs/spec/airband-and-bro
 BOARD_UNSUPPORTED += VIBRATE	# no vibration motor
 BOARD_UNSUPPORTED += NAND_STORAGE	# the data flash is SPI NOR
 BOARD_UNSUPPORTED += FAULT_TRACE	# needs a host UART: the host port is USB, and the one UART is the GPS receive line
+BOARD_UNSUPPORTED += DMR_CALL	# the DMR chip is a burst-level modem (CONFIG_DMR), not one that runs calls itself (docs/spec/dmr-call-level.md 4)
+BOARD_UNSUPPORTED += DMR_AES	# a call-level DMR chip's own encryption: no such chip (docs/spec/dmr-call-level.md 6)
 # FM receive is the checked path: the matrix has no FM-less configuration
 BOARD_REQUIRED := FM
 # CONFIG_STUB_ENTRY is on with the host link (config/features.mk): the STM32F4 flash stub serves this radio through its

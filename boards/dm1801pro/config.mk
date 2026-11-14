@@ -21,6 +21,8 @@ BOARD_UNSUPPORTED += NAND_STORAGE	# the data flash is SPI NOR: 4 KB erase (docs/
 CONFIG_GPS ?= n
 BOARD_UNSUPPORTED += GPS	# no GPS receiver, and no room inside for one (owner, 2026-10-22)
 BOARD_UNSUPPORTED += GPS_SKY	# needs the GPS receiver (above)
+BOARD_UNSUPPORTED += DMR_CALL	# the DMR chip is a burst-level modem (CONFIG_DMR), not one that runs calls itself (docs/spec/dmr-call-level.md 4)
+BOARD_UNSUPPORTED += DMR_AES	# a call-level DMR chip's own encryption: no such chip (docs/spec/dmr-call-level.md 6)
 # What the hardware can do but this radio's driver or glue doesn't yet, the same way: off by default, and off in ci's
 # maximal configuration too
 BOARD_NOT_WRITTEN += AUDIO_PROBE	# the probe's audio tap (board.audio_tap) isn't written for this radio

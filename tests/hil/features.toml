@@ -70,6 +70,11 @@ switch = "BCAST_FM"
 hardware = "a broadcast FM receiver"
 spec = "docs/spec/airband-and-broadcast.md"
 
+[feature.freq_detect]
+switch = "FREQ_DETECT"
+hardware = "an RF chip with a frequency counter scan (CAP_FREQ_DETECT)"
+spec = "docs/spec/freq-detect.md"
+
 [feature.rx_ext]
 switch = "RX_EXT"
 hardware = "a receiver chip whose documents give a range past the rated bands"
@@ -97,6 +102,17 @@ source = ["core/nxdn", "core/air", "core/fec", "core/radio/radio_nxdn.c", "core/
 switch = "DMR"
 spec = "docs/spec/dmr-voice.md"
 source = ["core/dmr/call", "core/dmr/ambe", "core/dmr/fec", "drivers/modem", "hal/hal_dmr_modem.h", "hal/hal_vocoder.h"]
+
+[feature.dmr_call]
+switch = "DMR_CALL"
+hardware = "a DMR chip that runs calls itself (board.dmr_call)"
+spec = "docs/spec/dmr-call-level.md"
+source = ["core/dmr/call_level", "drivers/dmr", "hal/hal_dmr_call.h"]
+
+[feature.dmr_aes]
+switch = "DMR_AES"
+hardware = "a call-level DMR chip with its own encryption (DMRC_CAP_ENC_*)"
+spec = "docs/spec/dmr-call-level.md"
 
 [feature.dmr_privacy]
 switch = "DMR_PRIVACY"

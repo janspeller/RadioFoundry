@@ -53,6 +53,9 @@ WEAK bool ui_svc_zone_pending(void) { return false; }
 WEAK bool ui_svc_save_talk_target(uint32_t id, bool private_call) { (void)id; (void)private_call; return false; }
 
 WEAK bool ui_svc_scan(bool on) { (void)on; return false; }
+WEAK uint8_t ui_svc_fd_range_count(void) { return 0; }
+WEAK bool ui_svc_fd_range(uint8_t i, uint32_t *lo_hz, uint32_t *hi_hz) { (void)i; (void)lo_hz; (void)hi_hz; return false; }
+WEAK bool ui_svc_freq_detect(bool on, uint8_t range) { (void)on; (void)range; return false; }
 WEAK bool ui_svc_roam(uint8_t cmd) { (void)cmd; return false; }
 #if CONFIG_DMR_TRUNK
 WEAK int ui_svc_t3_channel(uint16_t num, const channel_t *ch, bool *usable) { (void)num; (void)ch; (void)usable; return -1; }

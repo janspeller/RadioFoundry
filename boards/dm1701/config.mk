@@ -26,6 +26,8 @@ BOARD_UNSUPPORTED += BCAST_FM	# no broadcast receiver (docs/spec/airband-and-bro
 BOARD_UNSUPPORTED += NAND_STORAGE	# the data flash is a 16 MB SPI NOR (docs/spec/hardware-dm1701.md, the overview)
 BOARD_UNSUPPORTED += VIBRATE	# no vibration motor (docs/user/23-radios.md, What the DM-1701 lacks)
 BOARD_UNSUPPORTED += FAULT_TRACE	# needs a host UART: the host port is USB, and the one UART is the GPS line
+BOARD_UNSUPPORTED += DMR_CALL	# the DMR chip is a burst-level modem (CONFIG_DMR), not one that runs calls itself (docs/spec/dmr-call-level.md 4)
+BOARD_UNSUPPORTED += DMR_AES	# a call-level DMR chip's own encryption: no such chip (docs/spec/dmr-call-level.md 6)
 # GPS stays on: no module from the factory, but owners fit one on PA10 / PA9 (hardware-dm1701.md 14.2). Detected at run
 # time in the background: a radio without one stops listening after 5 s of silence
 

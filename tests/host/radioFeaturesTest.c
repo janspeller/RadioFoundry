@@ -4597,6 +4597,126 @@ static void test_host_audio(void)
 	run(500);
 }
 
+#if CONFIG_FREQ_DETECT
+// ---- frequency detect (docs/spec/freq-detect.md) ----
+static struct {
+	bool on, refuse;
+	uint32_t lo, hi;
+	int starts, stops, polls;
+	uint32_t found, found_at;	// the chip has a reading of found from found_at on (0: none)
+} fd;
+static bool fd_start(uint32_t lo, uint32_t hi)
+{
+	if (fd.refuse)
+		return false;
+	fd.on = true;
+	fd.lo = lo;
+	fd.hi = hi;
+	fd.starts++;
+	return true;
+}
+static bool fd_poll(uint32_t *hz)
+{
+	fd.polls++;
+	if (!fd.on || fd.found == 0 || now < fd.found_at)
+		return false;
+	*hz = fd.found;
+	return true;
+}
+static void fd_stop(void) { fd.on = false; fd.stops++; }
+static const fd_range_t fd_ranges[] = { { 136000000, 174000000 }, { 400000000, 480000000 } };
+
+// The state machine alone: give up and start again, drop a reading outside the range, keep one inside it
+static void test_freq_detect_engine(void)
+{
+	fdet_t d;
+	const fdet_ops_t ops = { fd_start, fd_poll, fd_stop };
+	memset(&fd, 0, sizeof fd);
+	now = 0;
+	fdet_init(&d);
+	CHECK(fdet_start(&d, &ops, 1, 400000000, 480000000, now) && fd.on && fd.starts == 1 && d.state == FDET_SEARCH);
+	bool got = false;
+	for (uint32_t t = 0; t <= FDET_POLL_MS * FDET_GIVE_UP_POLLS; t += 25) {
+		now = t;
+		got |= fdet_step(&d, &ops, now);
+	}
+	CHECK(!got && d.restarts == 1 && fd.stops == 1 && fd.starts == 2 && fd.polls == (int)FDET_GIVE_UP_POLLS);
+	fd.found = 145000000;		// outside: dropped
+	fd.found_at = now;
+	for (int i = 0; i < 4; i++) {
+		now += 25;
+		got |= fdet_step(&d, &ops, now);
+	}
+	CHECK(!got && d.drops >= 1 && d.hz == 0 && fd.on);
+	fd.found = 433011870;
+	for (int i = 0; i < 4; i++) {
+		now += 25;
+		got |= fdet_step(&d, &ops, now);
+	}
+	CHECK(got && d.hz == 433011870 && d.hits >= 1 && fd.on);	// the scan goes on for the next reading
+	fdet_stop(&d, &ops);
+	CHECK(!fd.on && d.state == FDET_OFF && d.hz == 433011870);
+	CHECK(!fdet_step(&d, &ops, now + 1000));
+	fd.refuse = true;
+	CHECK(!fdet_start(&d, &ops, 0, 136000000, 174000000, now) && d.state == FDET_OFF);
+	CHECK(fdet_round(433011870, 12500) == 433012500 && fdet_round(145501230, 12500) == 145500000 &&
+	      fdet_round(7, 0) == 7);
+}
+
+// In the radio core: refusals, the result in the view with the speaker muted, the end by a stop, PTT or the VFO
+static void test_freq_detect(void)
+{
+	hal_radio_t fdr = fake_radio;
+	fdr.fd_ranges = fd_ranges;
+	fdr.fd_range_count = 2;
+	fdr.fd_start = fd_start;
+	fdr.fd_poll = fd_poll;
+	fdr.fd_stop = fd_stop;
+	start();
+	memset(&fd, 0, sizeof fd);
+	req(RREQ_ZONE_POS, 6);		// FM
+	run(100);
+	req2(RREQ_FREQ_DETECT, 1, 1);
+	CHECK(!sm.view.fd_on && sm.view.fd_refused == RFD_NO_HW);	// no CAP_FREQ_DETECT
+	board.radio = &fdr;
+	board.caps |= CAP_FREQ_DETECT;
+	req2(RREQ_FREQ_DETECT, 1, 5);
+	CHECK(!sm.view.fd_on && sm.view.fd_refused == RFD_RANGE);
+	req2(RREQ_FREQ_DETECT, 1, 1);
+	CHECK(sm.view.fd_on && sm.view.fd_refused == RFD_OK && fd.on && fd.lo == 400000000 && fd.hi == 480000000);
+	int rx = hw.rx_calls;
+	fd.found = 433011870;
+	fd.found_at = now + 300;
+	run(500);
+	CHECK(sm.view.fd_on && sm.view.fd_hz == 433011870 && sm.view.fd_hits >= 1 && sm.view.fd_range == 1);
+	CHECK(hw.rx_calls == rx && !hw.audio);		// off the channel, muted
+	req2(RREQ_FREQ_DETECT, 0, 0);
+	CHECK(!sm.view.fd_on && !fd.on && hw.rx_calls == rx + 1);	// back on the channel
+	// PTT ends a search first
+	req2(RREQ_FREQ_DETECT, 1, 0);
+	CHECK(sm.view.fd_on && fd.on && fd.lo == 136000000);
+	req(RREQ_PTT, 1);
+	run(50);
+	CHECK(!sm.view.fd_on && !fd.on);
+	req2(RREQ_FREQ_DETECT, 1, 0);	// and none starts while PTT is held
+	CHECK(!sm.view.fd_on && sm.view.fd_refused == RFD_BUSY);
+	req(RREQ_PTT, 0);
+	run(200);
+	// Tuning the VFO to the result (the screen's OK) ends it there
+	req2(RREQ_FREQ_DETECT, 1, 1);
+	run(400);
+	req(RREQ_VFO_SET, 433012500);
+	run(50);
+	CHECK(!sm.view.fd_on && !fd.on && sm.view.vfo && hw.rx_hz == 433012500);
+	// A board that refuses to start
+	fd.refuse = true;
+	req2(RREQ_FREQ_DETECT, 1, 1);
+	CHECK(!sm.view.fd_on && sm.view.fd_refused == RFD_BOARD);
+	board.radio = &fake_radio;
+	board.caps &= ~(uint32_t)CAP_FREQ_DETECT;
+}
+#endif
+
 int main(void)
 {
 	test_scan_engine();
@@ -4654,6 +4774,10 @@ int main(void)
 	test_dmr_short_press_wake();
 	test_vibrate();
 	test_host_audio();
+#if CONFIG_FREQ_DETECT
+	test_freq_detect_engine();
+	test_freq_detect();
+#endif
 	printf("# radioFeaturesTest: %d checks, %s\n", checks, failures ? "FAILED" : "PASSED");
 	return failures != 0;
 }

@@ -1551,6 +1551,9 @@ static void retune(void)
 		sim_tune(sim_sel);
 		view.scan = 0;
 	}
+#if CONFIG_FREQ_DETECT
+	view.fd_on = false;	// a request that retunes ends a frequency search, as in the radio core
+#endif
 }
 void radio_req_bandwidth(radio_bw_t bw) { retune(); view.ch.bw = bw; if (!view.vfo) set_temp(RADIO_TEMP_BW); changed(); }
 void radio_req_tone(uint8_t which, subtone_t tone)
@@ -1926,6 +1929,34 @@ bool ui_svc_save_channel(void)
 	changed();
 	return true;
 }
+#if CONFIG_FREQ_DETECT
+// Frequency detect as the radio core does it, with a transmitter heard at once: a search finds one in its range (an
+// off-grid reading, so the screen shows it rounded to the VFO step)
+static const fd_range_t sim_fd_ranges[] = { { 136000000, 174000000 }, { 400000000, 480000000 } };
+uint8_t ui_svc_fd_range_count(void) { return (uint8_t)(sizeof sim_fd_ranges / sizeof sim_fd_ranges[0]); }
+bool ui_svc_fd_range(uint8_t i, uint32_t *lo_hz, uint32_t *hi_hz)
+{
+	if (i >= ui_svc_fd_range_count())
+		return false;
+	*lo_hz = sim_fd_ranges[i].lo_hz;
+	*hi_hz = sim_fd_ranges[i].hi_hz;
+	return true;
+}
+bool ui_svc_freq_detect(bool on, uint8_t range)
+{
+	if (on && range >= ui_svc_fd_range_count())
+		return false;
+	view.fd_on = on;
+	view.fd_refused = 0;
+	if (on) {
+		view.fd_range = range;
+		view.fd_hz = range == 0 ? 145501230u : 433011870u;
+		view.fd_hits = 1;
+	}
+	changed();
+	return true;
+}
+#endif
 bool ui_svc_scan(bool on)
 {
 	view.scan = on ? (view.vfo ? 2 : 1) : 0;	// scan_kind_t: zone, VFO
@@ -2640,6 +2671,10 @@ static bool check(const char *kv, char *err, size_t len)
 	else if (strcmp(key, "aprs_to") == 0) snprintf(got, sizeof got, "%s", sim_rec.last_aprs_to);
 	else if (strcmp(key, "aprs_flags") == 0) snprintf(got, sizeof got, "%u", sim_rec.last_aprs_flags);
 	else if (strcmp(key, "scanning") == 0) snprintf(got, sizeof got, "%u", view.scan != 0 && view.scan != 3);
+#if CONFIG_FREQ_DETECT
+	else if (strcmp(key, "fdet") == 0) snprintf(got, sizeof got, "%u", view.fd_on);
+	else if (strcmp(key, "fdrange") == 0) snprintf(got, sizeof got, "%u", view.fd_range);
+#endif
 #if CONFIG_DUAL_WATCH
 	else if (strcmp(key, "dual") == 0) snprintf(got, sizeof got, "%u", ui_st.dual.on && view.scan == 3);
 	else if (strcmp(key, "azone") == 0) snprintf(got, sizeof got, "%u", sim_dual[0].zone);

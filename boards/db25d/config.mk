@@ -75,6 +75,8 @@ BOARD_UNSUPPORTED += FONT_XL	# the 160x128 panel is too small for the large font
 BOARD_UNSUPPORTED += FONT_BIG	# the 9x18 font is drawn only on panels 220 px and wider; this one is 160x128
 BOARD_UNSUPPORTED += VIBRATE	# no vibration motor (owner, 2026-10-22)
 BOARD_UNSUPPORTED += AM_RX	# no air band receive (owner, 2026-10-22)
+BOARD_UNSUPPORTED += DMR_CALL	# the DMR chip is a burst-level modem (CONFIG_DMR), not one that runs calls itself (docs/spec/dmr-call-level.md 4)
+BOARD_UNSUPPORTED += DMR_AES	# a call-level DMR chip's own encryption: no such chip (docs/spec/dmr-call-level.md 6)
 # What the hardware can do but this radio's driver or glue doesn't yet, the same way: off by default, and off in ci's
 # maximal configuration too
 BOARD_NOT_WRITTEN += NET_USRP	# the host link stalls under USRP's PCM; another HR_C7000 board carries it at the same 115200 baud
@@ -83,6 +85,7 @@ BOARD_NOT_WRITTEN += APRS_RX	# FM receive audio isn't taken from the modem's AF 
 BOARD_NOT_WRITTEN += APRS_IGATE	# needs APRS receive (above)
 BOARD_NOT_WRITTEN += BCAST_FM	# the RDA5802N broadcast receiver is fitted, its glue isn't written
 BOARD_NOT_WRITTEN += VOX	# no hal_power_t.mic_level hook yet
+BOARD_NOT_WRITTEN += FREQ_DETECT	# the PRO's BK4819 has the frequency scan (docs/spec/freq-detect.md), the board's fd_* hooks aren't written
 BOARD_NOT_WRITTEN += AUDIO_PROBE	# the probe's audio tap (board.audio_tap) isn't written for this radio
 # DMR needs the codec merged for voice, so FM stays the one mode every configuration needs
 BOARD_REQUIRED := FM

@@ -235,6 +235,13 @@ static const flow_t flows[] = {
 	{ "11 scan start (Tools > Scan)", "", "ok 6 1", "scanning=1", 3, false },
 	{ "11 nuisance skip", "ok 6 1", "ctx 1", "pos=4 scanning=1", 2, false },
 	{ "11 scan stop", "ok 6 1", "back", "scanning=0", 1, false },
+	// Tools > Freq detect (the last row, no number; docs/spec/freq-detect.md 4): it searches at once, the sim's chip
+	// answers off the grid and the screen shows it on the VFO step; OK tunes the VFO there, Back stops
+	{ "11 freq detect opens and searches", "", "ok 6 up ok", "screen=freq-detect fdet=1 shows=Searching...", 4, false },
+	{ "11 freq detect: another range", "ok 6 up ok", "down", "fdet=1 fdrange=0 shows=145.500", 1, false },
+	{ "11 freq detect: OK tunes the VFO", "ok 6 up ok down", "ok", "vfo=1 freq=145500000 fdet=0 screen=home", 1,
+	  false },
+	{ "11 freq detect: Back stops it", "ok 6 up ok", "back", "fdet=0 screen=tools", 1, false },
 	// Dual watch (docs/ux/dual-watch.md): on in a few presses, PTT on the selected channel, the other one press away
 	{ "11 dual watch: start, B the next channel", "", "quick 7", "dual=1 sel=A pos=3 bpos=4 screen=home", 2, false },
 	{ "11 dual watch: start, then B by number", "", "quick 7 ctx 3 5 ok", "dual=1 sel=A pos=3 bpos=5 screen=home", 6, false },

@@ -251,7 +251,11 @@ typedef struct {
 	// copy 60 bytes
 	uint8_t sig_dmr[3];
 	uint8_t sig_fm[3];
-	uint8_t reserved11[2];		// 0
+	// The encryption key a call-level DMR chip uses (CONFIG_DMR_AES, docs/spec/dmr-call-level.md 6): the key number in
+	// the radio's key store, bit 7 set = encryption off with that key kept; 0 = none (was reserved11[0]: an older
+	// record reads none)
+	uint8_t dmrc_key;
+	uint8_t reserved11;		// 0
 } settings_t;
 
 // Pages: settings_t is stored as records of SETTINGS_PAGE_BYTES each (settings-store.md 2.1). Only the pages its size

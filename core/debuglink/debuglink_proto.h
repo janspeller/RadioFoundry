@@ -172,6 +172,8 @@ enum {
 					// inside the three ranges
 	DL_STORAGE_OP_CLAIM,		// token u32 (the chip UID's low word) -> reason u8 (as REBOOT's); the erase follows in
 					// the housekeeping task: poll the view's storage.region
+	DL_STORAGE_OP_DMR_KEY,		// token u32, key number u8, type u8 (dmrc_key_type_t), the key bytes -> reason u8:
+					// into the call-level chip's key store (CONFIG_DMR_AES), write only
 };
 
 // DL_CMD_APRS operations (first payload byte; docs/spec/debuglink.md 3.16)

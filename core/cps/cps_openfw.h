@@ -13,7 +13,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define CPS_REQUEST_MAX		2048	// the request buffer (open-firmware-cps.md 1.1)
+#ifndef CPS_REQUEST_MAX
+#define CPS_REQUEST_MAX		2048	// the request buffer (open-firmware-cps.md 1.1; a board short of RAM: 1536, as the MK22's)
+#endif
 #define CPS_REPLY_MAX		32768	// longest read reply payload: streamed, so not bound by a buffer (open-firmware-cps.md 2.1)
 #define CPS_GAP_MS		3	// quiet that ends a request whose length the header doesn't give
 #define CPS_STALL_MS		50	// quiet that ends one still short of the length its header gives

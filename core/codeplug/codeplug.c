@@ -1438,7 +1438,7 @@ bool codeplug_set_boot_text(const char *line1, const char *line2)
 	return ok;
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // DMR ID or talkgroup: 8 BCD digits, bytes in reading order; 0 if malformed or out of the 24-bit range
 static uint32_t bcd_id(const uint8_t *p)
 {

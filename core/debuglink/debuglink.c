@@ -141,7 +141,7 @@ static bool summary_line(uint8_t i, char *buf, uint8_t len)
 	}
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #define DMR_LINES	DL_DMR_DIAG_LINES
 #else
 #define DMR_LINES	0
@@ -153,7 +153,7 @@ static bool diag_line(uint8_t i, char *buf, uint8_t len)
 		return summary_line(i, buf, len);
 	}
 	i -= SUMMARY_LINES;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (i < DMR_LINES) {
 		if (debuglink_dmr_diag_line(i, buf, len)) {
 			return true;
@@ -199,7 +199,7 @@ static size_t cmd_reset(uint8_t *out)
 	if (board.diag_reset != NULL) {
 		board.diag_reset();
 	}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	debuglink_dmr_reset();
 #endif
 #if CONFIG_BEEP
@@ -527,7 +527,7 @@ static size_t cmd_radio(const uint8_t *req, uint16_t len, uint8_t *out)
 		radio_req_clear_temporary();
 		break;
 	case OP_REPLY_CANCEL:
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		radio_req_reply_cancel();
 		break;
 #else
@@ -536,7 +536,7 @@ static size_t cmd_radio(const uint8_t *req, uint16_t len, uint8_t *out)
 	case OP_HOTSPOT_EXIT:
 		hostlink_hotspot_exit();
 		break;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case OP_DMR_TARGET:	// u32 LE: ID in bits 23:0, bit 24 private
 		radio_req_dmr_target(get32(a) & 0xFFFFFFu, (get32(a) >> 24) & 1u);
 		break;
@@ -788,6 +788,42 @@ static size_t cmd_storage(const uint8_t *req, uint16_t len, uint8_t *out, size_t
 		out[1] = DL_REBOOT_OK;
 		return 2;
 	}
+#if CONFIG_DMR_AES
+	case DL_STORAGE_OP_DMR_KEY: {
+		// A key into the call-level chip's key store and in use (dmr-call-level.md 6). Write only: no op reads a key
+		// back, and the log names the number and type, never the bytes
+		const hal_dmr_call_t *h = board.dmr_call;
+		if (h == NULL || h->key_put == NULL) {
+			return status_only(out, DL_ST_UNAVAILABLE);
+		}
+		if (len < 7 || req[5] == 0 || req[5] > h->key_count || req[6] > DMRC_KEY_AES256 ||
+		    len != 7u + dmrc_key_len(req[6])) {
+			return status_only(out, DL_ST_BAD_ARG);
+		}
+		hal_chip_t c;
+		bool have = read_chip(&c);
+		uint8_t why = dl_reboot_check(HAL_REBOOT_NORMAL, get32(req + 1), have ? &c : NULL, false);
+		if (why != DL_REBOOT_OK) {
+			out[0] = DL_ST_REFUSED;
+			out[1] = why;
+			return 2;
+		}
+		dmrc_key_t k = { .number = req[5], .type = req[6] };
+		memcpy(k.bytes, req + 7, dmrc_key_len(k.type));
+		bool ok = h->key_put(&k);
+		for (volatile uint8_t *b = (volatile uint8_t *)&k; b < (volatile uint8_t *)(&k + 1); b++) {
+			*b = 0;
+		}
+		dlog("debuglink: DMR key %u type %u %s", req[5], req[6], ok ? "stored" : "not stored");
+		if (!ok) {
+			return status_only(out, DL_ST_UNAVAILABLE);
+		}
+		radio_req_dmr_key(req[5], req[6] != DMRC_KEY_OFF);	// in use now: the chip gets it at once
+		out[0] = DL_ST_OK;
+		out[1] = DL_REBOOT_OK;
+		return 2;
+	}
+#endif
 	default:
 		return status_only(out, DL_ST_BAD_ARG);
 	}

@@ -19,6 +19,12 @@ CONFIG_FM ?= y
 CONFIG_SUBTONE ?= $(CONFIG_FM)
 # DMR Tier II voice: modem driver, call stack, AMBE FEC, vocoder hosting
 CONFIG_DMR ?= y
+# call-level DMR: a DMR chip that runs the air interface, the vocoder and calls itself (board.dmr_call, never with
+# DMR; core/dmr/call_level, docs/spec/dmr-call-level.md)
+CONFIG_DMR_CALL ?= n
+# encryption on a call-level chip: ARC, AES-128 and AES-256 keys from the radio's key store, loaded on each channel
+# change (needs DMR_CALL; docs/spec/dmr-call-level.md 6)
+CONFIG_DMR_AES ?= $(CONFIG_DMR_CALL)
 # basic privacy (Motorola / Anytone BP) on the voice path (needs DMR)
 CONFIG_DMR_PRIVACY ?= $(CONFIG_DMR)
 # talker alias decode and TX of our radio name (needs DMR)
@@ -138,7 +144,7 @@ CONFIG_VFO ?= y
 # analog FM VFO (needs VFO and FM)
 CONFIG_VFO_FM ?= $(if $(and $(filter y,$(CONFIG_VFO)),$(filter y,$(CONFIG_FM))),y,n)
 # digital DMR VFO: color code, timeslot and talk target typed in, the Mode tile switches it FM / DMR (needs VFO and DMR)
-CONFIG_VFO_DMR ?= $(if $(and $(filter y,$(CONFIG_VFO)),$(filter y,$(CONFIG_DMR))),y,n)
+CONFIG_VFO_DMR ?= $(if $(and $(filter y,$(CONFIG_VFO)),$(filter y,$(CONFIG_DMR) $(CONFIG_DMR_CALL))),y,n)
 # the debug link: framed commands on the host port for bench automation (docs/spec/debuglink.md; needs HOSTLINK)
 CONFIG_DEBUGLINK ?= $(CONFIG_HOSTLINK)
 # every task's least free stack in the debug link's tasks view: the kernel's task create / delete trace hooks keep a
@@ -213,7 +219,7 @@ CONFIG_ZONE_EDIT ?= $(CONFIG_CHANNEL_EDIT)
 CONFIG_VOLUME_BAR ?= y
 # the contact editor: a new contact from Find, a call's actions or a typed number, its name, ID, type and timeslot
 # (docs/spec/ui.md 2.4): with the channel editor (its text entry) and DMR
-CONFIG_CONTACT_EDIT ?= $(if $(and $(filter y,$(CONFIG_CHANNEL_EDIT)),$(filter y,$(CONFIG_DMR))),y,n)
+CONFIG_CONTACT_EDIT ?= $(if $(and $(filter y,$(CONFIG_CHANNEL_EDIT)),$(filter y,$(CONFIG_DMR) $(CONFIG_DMR_CALL))),y,n)
 # beeps and alert tones as PCM through the speaker (needs the board's PCM audio, which some radios have only with DMR)
 CONFIG_BEEP ?= y
 # signaling tones: Settings > Signaling tones, a chain of up to ten tones for the start of a transmission, its end and a
@@ -244,6 +250,10 @@ CONFIG_AM_RX ?= $(CONFIG_FM)
 # broadcast FM receive: FM channels and the VFO in the broadcast receiver's range play on that second receiver
 # chip, receive only (board.bcast, CAP_BCAST_FM; docs/spec/airband-and-broadcast.md). Off where there is none
 CONFIG_BCAST_FM ?= y
+# frequency detect: find a nearby transmitter's frequency with the RF chip's frequency counter scan, Tools > Freq
+# detect, and tune the VFO to it (CAP_FREQ_DETECT, hal_radio_t.fd_*; needs FM; docs/spec/freq-detect.md). On for
+# radios whose chip has the scan (their config.mk)
+CONFIG_FREQ_DETECT ?= n
 # receive past the band table: a range in board.bands (rx_ext_count) that receives only while Settings > Advanced says
 # so, off by default, never transmit (docs/spec/radio-features.md). Off where the chip documents give no range
 CONFIG_RX_EXT ?= y
@@ -326,9 +336,9 @@ CONFIG_P25_TRUNK ?= $(CONFIG_P25)
 CONFIG_GPS_SKY ?= $(CONFIG_GPS)
 
 
-FEATURES := USB_SERIAL_REQUEST FM SUBTONE DMR DMR_PRIVACY DMR_TALKER_ALIAS DMR_GPS DMR_SMS DMR_TMS DMR_ARS DMR_LRRP DMR_SIGNALING DMR_EMERGENCY DMR_ROAMING DMR_TRUNK DMR_TRUNK_TX DMR_TRUNK_SUPL DMR_TRUNK_GW VOICE_CAPTURE DMR_IP_GATEWAY ZONE_SHARE DMR_UDP_COMPRESS NET_TCP NET_KISS NET_HTTP NET_HTTP_GZIP NET_WEBCTL NET_RIGCTL NET_APRSIS NET_USRP MDNS TFTP TFTP_IDDB IDDB_COMPACT DMR_CONTROL_STATION SNMP SFR SFR_DUALPATH_RX SFR_CWID TASK_STACKS \
+FEATURES := USB_SERIAL_REQUEST FM SUBTONE DMR DMR_CALL DMR_AES DMR_PRIVACY DMR_TALKER_ALIAS DMR_GPS DMR_SMS DMR_TMS DMR_ARS DMR_LRRP DMR_SIGNALING DMR_EMERGENCY DMR_ROAMING DMR_TRUNK DMR_TRUNK_TX DMR_TRUNK_SUPL DMR_TRUNK_GW VOICE_CAPTURE DMR_IP_GATEWAY ZONE_SHARE DMR_UDP_COMPRESS NET_TCP NET_KISS NET_HTTP NET_HTTP_GZIP NET_WEBCTL NET_RIGCTL NET_APRSIS NET_USRP MDNS TFTP TFTP_IDDB IDDB_COMPACT DMR_CONTROL_STATION SNMP SFR SFR_DUALPATH_RX SFR_CWID TASK_STACKS \
 	USB HOSTLINK USB_NETWORK NET_PPP HOTSPOT HOTSPOT_SPLIT DEBUGLINK CPS_OPENFW CPS_FAST VFO VFO_FM VFO_DMR DIAG BACKLIGHT_TEST FONT_XL FONT_AA FONT_BIG LANG_ES LANG_IT LANG_FR LANG_ZH LANG_DEFAULT_ES LANG_DEFAULT_IT LANG_DEFAULT_FR LANG_DEFAULT_ZH UI_COLOR UI_SETTINGS SCAN DUAL_WATCH BEEP SIG_TONES FM_TX_TONES DTMF \
-	RX_EXT VOX REF_TRIM BATTERY_SAVE VIBRATE GPS AUDIO_PROBE STUB_ENTRY NAND_STORAGE CRASH_LOG CRASH_SCREEN CRASH_REPORT WATCHDOG FAULT_TRACE AM_RX BCAST_FM APRS APRS_AFSK APRS_DMR APRS_RX APRS_IGATE GPS_SKY KEY_ASSIGN CHANNEL_LIST CHANNEL_EDIT ZONE_EDIT CONTACT_EDIT VOLUME_BAR P25 P25_TRUNK NXDN AIR_RAW
+	RX_EXT VOX REF_TRIM BATTERY_SAVE VIBRATE GPS AUDIO_PROBE STUB_ENTRY NAND_STORAGE CRASH_LOG CRASH_SCREEN CRASH_REPORT WATCHDOG FAULT_TRACE AM_RX BCAST_FM FREQ_DETECT APRS APRS_AFSK APRS_DMR APRS_RX APRS_IGATE GPS_SKY KEY_ASSIGN CHANNEL_LIST CHANNEL_EDIT ZONE_EDIT CONTACT_EDIT VOLUME_BAR P25 P25_TRUNK NXDN AIR_RAW
 
 # The panel's width in pixels: the display class the board's board.toml names (hardware.gallery = "160x128", the width
 # first). Empty when it names none, which counts as a narrow panel
@@ -366,8 +376,8 @@ ifneq ($(call feature_on,ZONE_EDIT),)
   endif
 endif
 ifneq ($(call feature_on,CONTACT_EDIT),)
-  ifeq ($(and $(call feature_on,CHANNEL_EDIT),$(call feature_on,DMR)),)
-    $(error CONFIG_CONTACT_EDIT=y needs CONFIG_CHANNEL_EDIT=y and CONFIG_DMR=y)
+  ifeq ($(and $(call feature_on,CHANNEL_EDIT),$(call feature_on,DMR)$(call feature_on,DMR_CALL)),)
+    $(error CONFIG_CONTACT_EDIT=y needs CONFIG_CHANNEL_EDIT=y and CONFIG_DMR=y or CONFIG_DMR_CALL=y)
   endif
 endif
 ifneq ($(call feature_on,DUAL_WATCH),)
@@ -473,8 +483,16 @@ ifneq ($(call feature_on,VFO_DMR),)
   ifeq ($(call feature_on,VFO),)
     $(error CONFIG_VFO_DMR=y needs CONFIG_VFO=y)
   endif
-  ifeq ($(call feature_on,DMR),)
-    $(error CONFIG_VFO_DMR=y needs CONFIG_DMR=y)
+  ifeq ($(call feature_on,DMR)$(call feature_on,DMR_CALL),)
+    $(error CONFIG_VFO_DMR=y needs CONFIG_DMR=y or CONFIG_DMR_CALL=y)
+  endif
+endif
+ifeq ($(call feature_on,DMR)$(call feature_on,DMR_CALL),yy)
+  $(error CONFIG_DMR=y and CONFIG_DMR_CALL=y: a radio builds one DMR backend)
+endif
+ifneq ($(call feature_on,DMR_AES),)
+  ifeq ($(call feature_on,DMR_CALL),)
+    $(error CONFIG_DMR_AES=y needs CONFIG_DMR_CALL=y)
   endif
 endif
 ifneq ($(call feature_on,SIG_TONES),)

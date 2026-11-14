@@ -132,6 +132,11 @@ typedef struct {
 	// Receive both slots through a repeater (rmo): a trunked control channel (CONFIG_DMR_TRUNK). The stack still
 	// takes calls on ts only; the other slot reaches the RX tap (dmr_call_set_rx_tap)
 	bool both_slots;
+	// A call-level backend (core/dmr/call_level, docs/spec/dmr-call-level.md) tunes the chip itself: the channel's
+	// frequencies and power level, and its encryption key number (0 = none). The burst-level stack ignores them
+	uint32_t rx_hz, tx_hz;
+	uint8_t power;
+	uint8_t key_number;
 } dmr_call_config_t;
 
 // Caller info for the UI

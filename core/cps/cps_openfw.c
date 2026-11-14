@@ -329,6 +329,11 @@ static void cmd_read(void)
 			refuse();
 			return;
 		}
+		if (m != NULL && m->secret_size != 0 && addr < m->secret_addr + m->secret_size &&
+		    addr + len > m->secret_addr) {
+			refuse();	// keys (hal_flash_map_t.secret_*): a backup reads around them
+			return;
+		}
 		read_flash(addr, len);
 		return;
 	case 5:

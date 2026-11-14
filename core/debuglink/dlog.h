@@ -13,7 +13,10 @@
 #include "config.h"
 
 #define DLOG_LINE_MAX	80	// characters per line, longer lines are cut
+// The log's RAM: a board short of RAM sets a smaller ring in its MCU_DEFS (the oldest lines go first). At most 64 KB
+#ifndef DLOG_RING_BYTES
 #define DLOG_RING_BYTES	2048
+#endif
 
 #if CONFIG_DEBUGLINK
 void dlog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));

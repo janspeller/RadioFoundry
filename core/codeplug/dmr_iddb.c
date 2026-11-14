@@ -10,7 +10,7 @@
 #include "codeplug/codeplug.h"
 #include "board.h"
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 
 // Flash image addresses (7.5) from where the flash image sits in the data flash: the board's map
 // (hal_flash_map_t.openfw_flash), as codeplug.c reads the codeplug. Without a map (a driver drops one its chip is too

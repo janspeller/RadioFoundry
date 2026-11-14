@@ -5,7 +5,7 @@
 #include "config.h"
 #include "codeplug/codeplug.h"
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 
 uint16_t codeplug_channel_talk_contact(const channel_t *ch)
 {

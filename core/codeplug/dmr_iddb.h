@@ -10,7 +10,7 @@
 #include <stddef.h>
 #include "config.h"
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #define DMR_IDDB_TEXT_MAX	48	// longest record text kept ("callsign name ..."), characters
 #define DMR_IDDB_RECORD_MAX	(4u + 3u * DMR_IDDB_TEXT_MAX / 4u + 8u)	// longest record read (others: no database)
 

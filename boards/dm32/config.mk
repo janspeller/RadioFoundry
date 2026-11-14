@@ -26,6 +26,8 @@ CONFIG_VOX ?= n
 # every switch but USB and USB_NETWORK (platform/hrc7000/config.mk), and NAND_STORAGE (below), and keeps about
 # 2 KB free
 BOARD_UNSUPPORTED += NAND_STORAGE	# the data flash is SPI NOR, GD25Q128 class (docs/spec/hardware-dm32.md 10)
+BOARD_UNSUPPORTED += DMR_CALL	# the DMR chip is a burst-level modem (CONFIG_DMR), not one that runs calls itself (docs/spec/dmr-call-level.md 4)
+BOARD_UNSUPPORTED += DMR_AES	# a call-level DMR chip's own encryption: no such chip (docs/spec/dmr-call-level.md 6)
 # What the hardware can do but this radio's driver or glue doesn't yet (docs/build-config.md, "Unsupported, not
 # written, unconfirmed"): off by default, and off in ci's maximal configuration too
 BOARD_NOT_WRITTEN += VOX	# no hal_power_t.mic_level hook yet

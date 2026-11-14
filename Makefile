@@ -87,6 +87,9 @@ endif
 ifeq ($(CONFIG_DMR_TRUNK),y)
 CORE_DIRS += core/dmr/trunk
 endif
+ifeq ($(CONFIG_DMR_CALL),y)
+CORE_DIRS += core/dmr/call_level $(BOARD_DMR_CALL_DIRS)
+endif
 ifeq ($(CONFIG_HOSTLINK),y)
 CORE_DIRS += core/hostlink
 endif

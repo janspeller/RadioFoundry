@@ -7,13 +7,13 @@
 #include "config.h"
 #include "debuglink/debuglink.h"
 #include "debuglink/debuglink_proto.h"
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #include "codeplug/dmr_iddb.h"
 #endif
 
 size_t debuglink_cmd_iddb(const uint8_t *req, uint16_t len, uint8_t *out, size_t cap)
 {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (len != 4u || cap < 7u + DMR_IDDB_TEXT_MAX) {
 		out[0] = DL_ST_BAD_ARG;
 		return 1;

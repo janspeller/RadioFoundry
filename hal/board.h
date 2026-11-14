@@ -13,6 +13,7 @@
 #include "hal_power.h"
 #include "hal_flash.h"
 #include "hal_dmr_modem.h"
+#include "hal_dmr_call.h"
 #include "hal_audio.h"
 #include "hal_audio_tap.h"
 #include "hal_vocoder.h"
@@ -52,6 +53,9 @@ enum {
 	// talk permit then plays before the first burst: DMR voice keys after a short hold in which the radio still
 	// receives and the tone sounds (dmr_call_config_t.permit_hold_ms)
 	CAP_BEEP_NOT_ON_AIR = 1u << 8,
+	// The RF chip finds the frequency of a nearby transmitter (a frequency counter scan): board.radio's fd_* hooks
+	// and fd_ranges (hal_radio.h; radio/freq_detect.h, CONFIG_FREQ_DETECT)
+	CAP_FREQ_DETECT	= 1u << 9,
 };
 
 // One band's power level names, where a board's levels give different powers per band (board_t.power_bands)
@@ -103,6 +107,8 @@ typedef struct {
 	const hal_power_t *power;
 	const hal_flash_t *flash;
 	const hal_dmr_modem_t *dmr;	// NULL on FM-only radios
+	// A DMR chip that runs calls itself (docs/spec/dmr-call-level.md); NULL on every other radio. Never with dmr
+	const hal_dmr_call_t *dmr_call;
 	const hal_audio_t *audio;
 	const hal_vocoder_t *vocoder;
 	const hal_stream_t *host_port;	// the link to a host computer (MMDVM hotspot, CPS); NULL if none

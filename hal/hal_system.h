@@ -9,9 +9,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Which chip the fields describe. Only the STM32F4 has the ID, flash size and option byte registers; the others fill in
+// Which chip the fields describe. Only the STM32F4 has the option byte registers decoded; the others fill in
 // the UID and leave the rest 0
-enum { HAL_CHIP_STM32F4 = 0, HAL_CHIP_HRC7000 = 1 };
+enum { HAL_CHIP_STM32F4 = 0, HAL_CHIP_HRC7000 = 1, HAL_CHIP_AT32F4 = 2 };
 
 typedef struct {
 	uint32_t idcode;	// DBGMCU IDCODE (may read 0 without a debugger on some STM32F40x revisions)

@@ -194,7 +194,7 @@ codeplug_source_t codeplug_written(void);
 bool codeplug_openfw_decode(const uint8_t *rec, channel_t *out);
 void codeplug_openfw_encode(const channel_t *ch, uint8_t *rec);
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #define CODEPLUG_CONTACTS_MAX	1024
 #define CODEPLUG_LISTS_MAX	76	// RX group lists (listen lists)
 #define CODEPLUG_LIST_LEN	32	// contacts per list

@@ -27,6 +27,7 @@ power = "1 / 2 / 5 W (Plus: 10 W)"
 display = "1.77\" color, 160 × 128"
 gallery = "160x128"
 clock = { rtc = "unknown", note = "STM32 RTC on a 32.768 kHz crystal, as on the UV380 family; no backup supply known (docs/spec/hardware-mduv380.md)" }
+unconfirmed = { FREQ_DETECT = "no frequency counter scan is documented for the AT1846S (docs/spec/hardware-mduv380.md)" }
 
 [status]
 level = "supported"

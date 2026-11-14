@@ -51,6 +51,7 @@ extern radio_view_t ui_svc_view;
 #define UI_FEAT_REF_TRIM	(1u << 20)	// a reference trim (hal_radio_t.ref_trim, radio/ref_trim.h): Freq trim setting
 #define UI_FEAT_P25		(1u << 22)	// P25 on this board (CONFIG_P25, radio_p25_fits): the VFO's mode tile offers it
 #define UI_FEAT_NXDN		(1u << 23)	// NXDN on this board (CONFIG_NXDN, radio_nxdn_fits): the same
+#define UI_FEAT_FREQ_DETECT	(1u << 24)	// ui_svc_freq_detect (CAP_FREQ_DETECT, CONFIG_FREQ_DETECT): Tools > Freq detect
 uint32_t ui_svc_features(void);
 // The parts of it each package reports (ui_svc_features ORs them): dmr-voice / radio core, dmr-data, storage-cps,
 // radio-features
@@ -127,6 +128,12 @@ void ui_svc_zone_poll(void);
 bool ui_svc_zone_pending(void);
 // Write the talk target into the channel (UI_TALK_PERMANENT): false if it isn't a stored contact or can't be written
 bool ui_svc_save_talk_target(uint32_t id, bool private_call);
+
+// --- Frequency detect (radio-features; docs/spec/freq-detect.md). The search and its result are radio_view_t.fd_*
+// (CONFIG_FREQ_DETECT) ---
+uint8_t ui_svc_fd_range_count(void);			// the ranges the radio searches, 0 = none (no UI_FEAT_FREQ_DETECT)
+bool ui_svc_fd_range(uint8_t i, uint32_t *lo_hz, uint32_t *hi_hz);
+bool ui_svc_freq_detect(bool on, uint8_t range);	// search range, or stop (and back on the channel)
 
 // --- Scan (radio-features). Whether a scan runs is radio_view_t.scan ---
 bool ui_svc_scan(bool on);			// on: the zone (in the VFO: the band); off: stop where it is

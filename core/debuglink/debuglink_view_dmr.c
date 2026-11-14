@@ -6,12 +6,17 @@
 #include "config.h"
 #include "board.h"
 #include "debuglink/debuglink.h"
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #include "dmr/call/dmr_call.h"
+#if CONFIG_DMR
 #include "dmr/ambe/ambeVoice.h"
 #endif
+#if CONFIG_DMR_CALL
+#include "dmr/call_level/dmr_call_level.h"
+#endif
+#endif
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 
 static const char *dmr_state_key(uint8_t s)
 {
@@ -59,6 +64,31 @@ static void call(dl_text_t *t, const char *p, const radio_dmr_call_t *c)
 	}
 }
 
+#if CONFIG_DMR_CALL
+static const char *const key_names[] = { "off", "arc", "aes128", "aes256" };
+
+// The call-level chip (docs/spec/dmr-call-level.md 6): its state and the key in use, never the key's bytes
+static void call_level(dl_text_t *t)
+{
+	const dmrcl_info_t *i = dmrcl_info();
+	dl_text(t, "dmrc.running=%u\ndmrc.ready=%u\ndmrc.version=%u\n", i->running, i->ready, (unsigned)i->version);
+	dl_text(t, "dmrc.fault=%u\ndmrc.faults=%u\ndmrc.push_fails=%u\ndmrc.ber=%u\n", i->fault, (unsigned)i->faults,
+		(unsigned)i->push_fails, i->ber_pct);
+	dl_text(t, "dmr.enc=%s\ndmr.key_id=%u\ndmr.key_loaded=%u\n",
+		key_names[i->key_type < 4u ? i->key_type : 0u], i->key_number, i->key_loaded);
+}
+
+// The chip driver's own keys (hal_dmr_call_t.view_line), in dmr_stats: the dmr section is near the reply size
+static void call_level_driver(dl_text_t *t)
+{
+	const hal_dmr_call_t *h = board.dmr_call;
+	char line[48];
+	for (uint8_t n = 0; h != NULL && h->view_line != NULL && n < 16u && h->view_line(n, line, sizeof(line)); n++) {
+		dl_text(t, "dmrc.%s\n", line);
+	}
+}
+#endif
+
 void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 {
 	const radio_dmr_view_t *d = &v->dmr;
@@ -68,6 +98,7 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 	case 0:
 		dl_text(t, "dmr.built=1\n");
 		dl_text(t, "dmr.active=%u\ndmr.codec=%u\ndmr.killed=%u\n", d->active, d->codec, d->killed);
+#if CONFIG_DMR
 		// The vocoder's TX state: here, as dmr_stats (the counters) fills most of a reply
 		{
 			ambe_voice_stats_t a;
@@ -81,6 +112,10 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 		if (board.vocoder != NULL && board.vocoder->encode_flags != NULL) {
 			dl_text(t, "voice.enc_flags=0x%X\n", (unsigned)board.vocoder->encode_flags());
 		}
+#endif
+#if CONFIG_DMR_CALL
+		call_level(t);
+#endif
 		dl_text(t, "dmr.state=%s\n", dmr_state_key(d->state));
 		dl_text(t, "dmr.phase=%s\n", phase_key(cv->phase));
 		dl_text(t, "dmr.tx_error=%s\n", tx_error_key(cv->tx_error));
@@ -122,6 +157,7 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 					(unsigned)h.first_regs[3]);
 			}
 		}
+#if CONFIG_DMR
 		// The mic content of the latest transmission: here, not in dmr_stats, which is near the reply size
 		{
 			ambe_voice_stats_t a;
@@ -130,6 +166,7 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 				"voice.tx_mic_blocks=%u\n", (unsigned)a.tx_mic_level_db, (unsigned)a.tx_mic_spread_db,
 				(unsigned)a.tx_mic_zc, (unsigned)a.tx_mic_blocks);
 		}
+#endif
 		break;
 	case 1:
 		call(t, "call", &d->call);
@@ -156,10 +193,8 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 		break;
 	case 2: {
 		dmr_call_stats_t c;
-		ambe_voice_stats_t a;
 
 		dmr_call_get_stats(&c);
-		ambeVoiceGetStats(&a);
 		dl_text(t, "call.rx_calls=%u\ncall.rx_calls_played=%u\ncall.rx_late_entries=%u\n", (unsigned)c.rx_calls,
 			(unsigned)c.rx_calls_played, (unsigned)c.rx_late_entries);
 		dl_text(t, "call.rx_calls_resumed=%u\n", (unsigned)c.rx_calls_resumed);
@@ -179,6 +214,9 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 		dl_text(t, "call.rx_gps=%u\ncall.tx_gps_lcs=%u\n", (unsigned)c.rx_gps, (unsigned)c.tx_gps_lcs);
 		dl_text(t, "call.rx_in_tx=%u\ncall.rx_bs_in_tx=%u\ncall.tx_rpt_drops=%u\ncall.tx_wake_lost=%u\n",
 			(unsigned)c.rx_in_tx, (unsigned)c.rx_bs_in_tx, (unsigned)c.tx_rpt_drops, (unsigned)c.tx_wake_lost);
+#if CONFIG_DMR
+		ambe_voice_stats_t a;
+		ambeVoiceGetStats(&a);
 		dl_text(t, "voice.rx_in=%u\nvoice.rx_frames=%u\nvoice.rx_concealed=%u\nvoice.rx_silence=%u\n",
 			(unsigned)a.rx_in, (unsigned)a.rx_frames, (unsigned)a.rx_concealed, (unsigned)a.rx_silence);
 		dl_text(t, "voice.rx_calls=%u\nvoice.rx_queue_max=%u\nvoice.rx_bad=%u\nvoice.rx_lost=%u\n",
@@ -190,6 +228,10 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 		dl_text(t, "voice.tx_frames=%u\nvoice.tx_overflows=%u\nvoice.rx_peak=%u\n", (unsigned)a.tx_frames,
 			(unsigned)a.tx_overflows, (unsigned)a.rx_peak);
 		dl_text(t, "voice.rx_repeats=%u\nvoice.tx_repeats=%u\n", (unsigned)a.rx_repeats, (unsigned)a.tx_repeats);
+#endif
+#if CONFIG_DMR_CALL
+		call_level_driver(t);
+#endif
 		break;
 	}
 	default:
@@ -200,10 +242,12 @@ void debuglink_view_dmr(uint8_t part, const radio_view_t *v, dl_text_t *t)
 bool debuglink_dmr_diag_line(uint8_t i, char *buf, uint8_t len)
 {
 	dmr_call_stats_t c;
-	ambe_voice_stats_t a;
 
 	dmr_call_get_stats(&c);
+#if CONFIG_DMR
+	ambe_voice_stats_t a;
 	ambeVoiceGetStats(&a);
+#endif
 	switch (i) {
 	case 0:
 		dl_fmt(buf, len, "call rx=%u play=%u late=%u tx=%u deny=%u", (unsigned)c.rx_calls,
@@ -214,6 +258,7 @@ bool debuglink_dmr_diag_line(uint8_t i, char *buf, uint8_t len)
 		       (unsigned)c.rx_lost_frames, (unsigned)c.rx_dup_dropped, (unsigned)c.rx_enc_dropped,
 		       (unsigned)c.tx_underruns, (unsigned)c.evq_overflows);
 		return true;
+#if CONFIG_DMR
 	case 2:
 		dl_fmt(buf, len, "voice in=%u play=%u conc=%u sil=%u und=%u", (unsigned)a.rx_in, (unsigned)a.rx_frames,
 		       (unsigned)a.rx_concealed, (unsigned)a.rx_silence, (unsigned)a.rx_underruns);
@@ -223,6 +268,7 @@ bool debuglink_dmr_diag_line(uint8_t i, char *buf, uint8_t len)
 		       (unsigned)a.rx_bad, (unsigned)a.rx_lost, (unsigned)a.rx_bit_errors, (unsigned)a.rx_queue_max,
 		       (unsigned)a.rx_calls);
 		return true;
+#endif
 	default:
 		return false;
 	}
@@ -231,7 +277,9 @@ bool debuglink_dmr_diag_line(uint8_t i, char *buf, uint8_t len)
 void debuglink_dmr_reset(void)
 {
 	dmr_call_reset_stats();
+#if CONFIG_DMR
 	ambeVoiceResetStats();
+#endif
 }
 
 #else	// built without DMR

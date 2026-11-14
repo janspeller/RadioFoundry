@@ -901,7 +901,7 @@ static void home_entry_text(const ui_state_t *s, char *buf, size_t len)
 	}
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static void draw_talk_dmr(const radio_view_t *v, bool label_first);
 static void draw_chips_dmr(const radio_view_t *v, const ui_state_t *s);
 #endif
@@ -994,7 +994,7 @@ static void draw_place(const radio_view_t *v, const ui_state_t *s)
 
 static void draw_talk(const radio_view_t *v, bool label_first)
 {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (v->ch.mode == RADIO_MODE_DMR) {
 		draw_talk_dmr(v, label_first);
 		return;
@@ -1103,7 +1103,7 @@ static void draw_chips(const radio_view_t *v, const ui_state_t *s)
 		return;
 	}
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (v->ch.mode == RADIO_MODE_DMR) {
 		draw_chips_dmr(v, s);
 		return;
@@ -1309,7 +1309,7 @@ static const char *deny_action(const radio_view_t *v)
 // On the air without PTT: the DMR stack sends a data burst list (ARS, SMS, a position, the IP gateway, a roaming probe)
 static bool sending_data(const radio_view_t *v)
 {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	return v->state == RS_TX && v->ch.mode == RADIO_MODE_DMR && v->dmr.state == RDMR_TX_DATA;
 #else
 	(void)v;
@@ -1334,7 +1334,7 @@ bool ui_sb_gw_caller(sbuf_t *b, uint32_t src)
 }
 
 // --- DMR (docs/ux/wireframes: Home DMR, Receiving, Transmitting) ---
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // "TG 123 Main Ops", "Joe 9991234", "All call"; a private call without a name shows the ID only
 // A contact name that only repeats the ID ("TG 123", "TG123", "123" for talkgroup 123; "9996543" for that radio):
 // codeplugs often name talkgroups that way, and Home would read "TG 123 TG 123"
@@ -2039,7 +2039,7 @@ static void draw_activity(const radio_view_t *v, const ui_state_t *s)
 			}
 			break;
 		}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		if (v->ch.mode == RADIO_MODE_DMR && v->dmr.active) {
 			draw_last_heard(v, s, y);	// hear all shows as "All" in the chips and in the hint
 			break;
@@ -2074,7 +2074,7 @@ static const char *home_hint(const radio_view_t *v, const ui_state_t *s)
 		return TR(HOME_HINT_SCANNING, "# skip  Back stop scan");
 	if (board_hwopt_pending() != NULL)
 		return hwopt_action();
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (v->ch.mode == RADIO_MODE_DMR) {
 		if (v->dmr.reply_active)
 			return TR(HOME_HINT_REPLY, "# caller  Back end reply");
@@ -2086,7 +2086,7 @@ static const char *home_hint(const radio_view_t *v, const ui_state_t *s)
 #endif
 	if (v->temporary)
 		return TR(HOME_HINT_UNSAVED, "Back undo  Hold OK save");
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (v->ch.mode == RADIO_MODE_DMR && v->dmr.target_manual)
 		return v->vfo ?
 			TR(HOME_HINT_TALK_TARGET_VFO, TEXT_ALT_OPEN "Back: VFO's talk target"
@@ -2136,7 +2136,7 @@ static void draw_home_large(const radio_view_t *v, const ui_state_t *s)
 	gfx_text(f, 0, y, fit, tx ? ui_col.tx : ui_col.fg);
 	y += room;
 	sb_init(&b, buf, sizeof buf);
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (v->ch.mode == RADIO_MODE_DMR && v->dmr.active) {
 		// The target with its name, or its short form when the whole doesn't fit even the medium font
 		bool named = v->dmr.target_name[0] != '\0' && v->dmr.target_id != 0xFFFFFFu;
@@ -2169,7 +2169,7 @@ void ui_draw_home(const radio_view_t *v, const ui_state_t *s)
 		return;
 	}
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	ui_st_dmr_off = s->dmr_off;
 	if (dmr_call_screen(v)) {
 		draw_dmr_call(v, s);
@@ -3463,7 +3463,7 @@ bool ui_quick_tile(int tile, const radio_view_t *v, const ui_state_t *s, char *l
 		sb_u32(&b, s->brightness, 1);
 		sb_chr(&b, '%');
 		return true;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case QT_TIMESLOT:
 		sb_str(&b, "TS");
 		sb_u32(&b, v->dmr.ts ? v->dmr.ts : v->ch.timeslot, 1);
@@ -3477,7 +3477,7 @@ bool ui_quick_tile(int tile, const radio_view_t *v, const ui_state_t *s, char *l
 		return feat(UI_FEAT_HEAR_ALL);
 	case QT_PRIVACY:
 		sb_str(&b, s->privacy ? TR(VALUE_ON, "On") : TR(VALUE_OFF, "Off"));
-		return feat(UI_FEAT_PRIVACY) && CONFIG_DMR_PRIVACY;
+		return feat(UI_FEAT_PRIVACY) && (CONFIG_DMR_PRIVACY || CONFIG_DMR_AES);
 	case QT_TALK_TO:
 		if (v->dmr.target_private)
 			sb_u32(&b, v->dmr.target_id, 1);

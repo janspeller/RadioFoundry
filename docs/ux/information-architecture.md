@@ -295,6 +295,24 @@ text entry), offers canned messages only, and enlarges Home. Voice prompts are o
 
 The layouts are the 128x64 ones of section 7.3. Which matrix position is which key isn't known yet
 ([hardware-dm1801pro.md](../spec/hardware-dm1801pro.md) 9.1).
+
+### 7.7 Radtel RT-4D: keypad with Up / Down, F and EXT, A/B, two side keys, no encoder, 128x64 monochrome
+
+| Physical | Logical (short / long) |
+|---|---|
+| F | `SELECT` / save |
+| EXT | `BACK` / Home |
+| Up / Down | `NAV_UP` / `NAV_DOWN` (repeat) |
+| A/B | `AB` / `DUAL_WATCH` (`ZONE_UP` in a build without dual watch) |
+| `*` | `QUICK` / lock |
+| `#` | `CONTEXT` / Recent |
+| 0-9 | digits / speed dial |
+| SK1 | `MONITOR` (while held) |
+| SK2 | `VFO_TOGGLE` (switch between channel and VFO) / `COPY_VFO` (copy the channel to the VFO) |
+| PTT | `PTT` |
+
+No left and right keys: the zones are in the Zones menu. The layouts are the 128x64 ones of section 7.3. Which side
+key is SK1 isn't checked on a radio ([hardware-rt4d.md](../spec/hardware-rt4d.md) 4).
 ---
 
 ## 8. Screen inventory

@@ -156,7 +156,9 @@ APRS_FIELDS = {name: i for i, name in enumerate(
 APRS_REGIONS = {"na": 0, "eu": 1, "au": 2, "nz": 3, "jp": 4, "cn": 5, "custom": 6}
 APRS_POS_SRCS = {"auto": 0, "gps": 1, "host": 2, "fixed": 3}
 APRS_VIAS = {"rf": 0, "dmr": 1, "both": 2}
-STORAGE_OP_INFO, STORAGE_OP_READ, STORAGE_OP_CLAIM = range(3)
+STORAGE_OP_INFO, STORAGE_OP_READ, STORAGE_OP_CLAIM, STORAGE_OP_DMR_KEY = range(4)
+# A call-level DMR chip's key types (hal_dmr_call.h dmrc_key_type_t) and their key lengths in bytes
+DMR_KEY_TYPES = {"off": (0, 0), "arc": (1, 5), "aes128": (2, 16), "aes256": (3, 32)}
 AUDIO_PROBE = 0x10
 (PROBE_STATUS, PROBE_REG_READ, PROBE_REG_WRITE, PROBE_START, PROBE_STOP, PROBE_SAMPLES, PROBE_RAM_READ,
  PROBE_RAM_WRITE, PROBE_WATCH, PROBE_MUSIC, PROBE_MOD, PROBE_RAMFEED, PROBE_PIN_TONE, PROBE_PIN_SCAN, PROBE_PIN_PWM) = range(15)
@@ -651,6 +653,14 @@ class DebugLink:
     def storage_claim(self, token):
         """Raises DebugLinkError (status 7 with the reason, or 4: not foreign) when refused"""
         self.request(STORAGE, struct.pack("<BI", STORAGE_OP_CLAIM, token))
+
+    def storage_dmr_key(self, token, number, kind, key):
+        """STORAGE op 3: a key into a call-level DMR chip's key store, and in use (write only; docs/spec/debuglink.md
+        3.13). kind is a DMR_KEY_TYPES name; key the bytes (none for off)"""
+        code, n = DMR_KEY_TYPES[kind]
+        if len(key) != n:
+            raise DebugLinkError(f"a {kind} key is {n} bytes")
+        self.request(STORAGE, struct.pack("<BIBB", STORAGE_OP_DMR_KEY, token, number, code) + bytes(key))
 
     def dump(self, addr, n, progress=None):
         out = bytearray()
@@ -2172,7 +2182,7 @@ def cmd_data(link, a):
     return 0
 
 
-CHIP_STM32F4, CHIP_HRC7000 = 0, 1   # INFO_CHIP's family byte (debuglink.md 3.9)
+CHIP_STM32F4, CHIP_HRC7000, CHIP_AT32F4 = 0, 1, 2   # INFO_CHIP's family byte (debuglink.md 3.9)
 
 
 def decode_chip(r):
@@ -2384,6 +2394,22 @@ def storage_dump(link, out_dir, info=None):
 
 
 def cmd_storage(link, a):
+    if a.op == "dmr-key":
+        # The key never goes to the screen or a file: only its number and type are printed
+        if len(a.args) not in (2, 3) or a.args[1] not in DMR_KEY_TYPES:
+            print("rfoundry_debug: storage dmr-key NUMBER off|arc|aes128|aes256 [HEX]", file=sys.stderr)
+            return 2
+        number, kind = int(a.args[0], 0), a.args[1]
+        key = bytes.fromhex(a.args[2]) if len(a.args) == 3 else b""
+        try:
+            link.storage_dmr_key(link.chip()["token"], number, kind, key)
+        except DebugLinkError as e:
+            if e.status == ST_REFUSED and e.data:
+                print(f"rfoundry_debug: the radio refused: {REBOOT_REASONS.get(e.data[0], e.data[0])}", file=sys.stderr)
+                return 1
+            raise
+        print(f"key {number} ({kind}) stored and in use")
+        return 0
     if a.op != "info" and not a.out:
         print("rfoundry_debug: storage dump and claim need --out DIR (outside any git tree)", file=sys.stderr)
         return 2
@@ -2989,8 +3015,10 @@ def main(argv=None):
     p = sub.add_parser("split", help="split duplex: view, BS framing experiment variant (docs/spec/split-duplex.md 10.1)")
     p.add_argument("op", choices=["view", "variant"])
     p.add_argument("args", nargs="*", help="variant: N [REG=VAL ...] (hex or decimal)")
-    p = sub.add_parser("storage", help="the settings / journal region: info, dump, claim (docs/spec/settings-store.md 5)")
-    p.add_argument("op", choices=["info", "dump", "claim"])
+    p = sub.add_parser("storage", help="the settings / journal region: info, dump, claim (docs/spec/settings-store.md 5); "
+                                       "dmr-key NUMBER TYPE [HEX]: a call-level DMR chip's key, write only")
+    p.add_argument("op", choices=["info", "dump", "claim", "dmr-key"])
+    p.add_argument("args", nargs="*", help="dmr-key: NUMBER off|arc|aes128|aes256 [HEX]")
     p.add_argument("--out", help="dump directory outside any git tree (required for dump and claim)")
     p = sub.add_parser("aprobe", help="audio probe: chip registers and PCM levels (CONFIG_AUDIO_PROBE builds)")
     p.add_argument("op", choices=["status", "reg", "wreg", "start", "stop", "samples", "ram", "wram", "watch", "music",

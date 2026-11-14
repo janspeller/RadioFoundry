@@ -98,6 +98,14 @@ static void core_section(const radio_view_t *v, dl_text_t *t)
 	}
 	dl_text(t, "mode=%s\n", mode_key(v->ch.mode));
 	dl_text(t, "am=%u\nbcast=%u\nbcast_fault=%u\nbcast_khz=%u\n", v->am, v->bcast, v->bcast_fault, (unsigned)v->bcast_khz);
+#if CONFIG_FREQ_DETECT
+	{
+		static const char *const why[] = { "none", "no_hw", "busy", "mode", "range", "board" };
+		dl_text(t, "fdet=%u\nfdet.range=%u\nfdet.hz=%u\nfdet.hits=%u\nfdet.refused=%s\n", v->fd_on, v->fd_range,
+			(unsigned)v->fd_hz, (unsigned)v->fd_hits,
+			v->fd_refused < sizeof(why) / sizeof(why[0]) ? why[v->fd_refused] : "?");
+	}
+#endif
 	dl_text(t, "vfo=%u\nvfo_index=%u\n", v->vfo, v->vfo_index);
 	dl_text(t, "zone_index=%u\nzone_pos=%u\nzone_size=%u\nzone_count=%u\n", v->zone_index, v->zone_pos, v->zone_size,
 		(unsigned)codeplug_zone_count());

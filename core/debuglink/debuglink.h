@@ -178,7 +178,7 @@ size_t debuglink_cmd_rx2(const uint8_t *req, uint16_t len, uint8_t *out, size_t 
 void debuglink_rx2_service(void);
 
 // The DMR ID database (debuglink_iddb.c, docs/spec/debuglink.md 3.23): DL_CMD_IDDB, id u32 -> format, records, found,
-// text. Without CONFIG_DMR, unavailable
+// text. Without CONFIG_DMR_ANY, unavailable
 size_t debuglink_cmd_iddb(const uint8_t *req, uint16_t len, uint8_t *out, size_t cap);
 
 // A key of the codeplug settings area (debuglink_cpkv.c, docs/spec/debuglink.md 3.27): DL_CMD_CPKV. Unavailable

@@ -16,6 +16,7 @@ areas and says nothing about menus, screens or keys: the UI is designed in `docs
 | 1750 Hz burst, roger beep; DTMF digits from the keys | `FM_TX_TONES`, `DTMF` | [radio-features.md](radio-features.md) |
 | VOX | `VOX` | [radio-features.md](radio-features.md) |
 | Air band AM receive, broadcast FM receive | `AM_RX`, `BCAST_FM` | [airband-and-broadcast.md](airband-and-broadcast.md) |
+| Frequency detect: a nearby transmitter's frequency, tuned into the VFO | `FREQ_DETECT` | [freq-detect.md](freq-detect.md) |
 | APRS: AFSK positions, status, messages, receive, digipeater, iGate, KISS TNC | `APRS`, `APRS_RX`, `APRS_IGATE` | [aprs.md](aprs.md) |
 
 ## DMR

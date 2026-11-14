@@ -54,7 +54,7 @@ typedef struct {
 	char zone_name[CODEPLUG_NAME_LEN + 1];
 	channel_t ch;
 	uint8_t power, temp, squelch;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	bool active, rmo, alias_tx, target_private, target_manual, hear_all_latch;
 	uint8_t cc, ts;
 	uint32_t target_id;
@@ -226,7 +226,7 @@ static void pane_fill(uint8_t i)
 		sb_str(&b, TR(HOME_CHIP_AIR_BAND_AM, "Air Band AM"));	// no tone or width: the receiver is fixed (Home's chip)
 		return;
 	}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (ch.mode == RADIO_MODE_DMR) {
 		static contact_t c;
 		uint16_t talk = codeplug_channel_talk_contact(&ch);
@@ -270,7 +270,7 @@ static void snap_take(uint8_t i, const radio_view_t *v)
 	uint8_t power = s->power;
 	static channel_t ch;
 	ch = s->ch;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	uint32_t target = s->target_id;
 	uint8_t ts = s->ts;
 #endif
@@ -289,7 +289,7 @@ static void snap_take(uint8_t i, const radio_view_t *v)
 	s->power = v->power;
 	s->temp = v->temp;
 	s->squelch = v->squelch;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	s->active = v->dmr.active;
 	s->rmo = v->dmr.rmo;
 	s->alias_tx = v->dmr.alias_tx;
@@ -336,7 +336,7 @@ static void snap_put(uint8_t i, radio_view_t *v)
 	v->power = s->power;
 	v->temp = s->temp;
 	v->squelch = s->squelch;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	v->dmr.active = s->active;
 	v->dmr.rmo = s->rmo;
 	v->dmr.alias_tx = s->alias_tx;
@@ -379,7 +379,7 @@ static void snap_seed(uint8_t i, const radio_view_t *v)
 	s->tot_s = v->tot_s;
 	s->power = s->ch.power != CODEPLUG_POWER_DEFAULT ? s->ch.power : v->power;	// the default level, as on the other
 	s->squelch = v->squelch;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	s->active = s->ch.mode == RADIO_MODE_DMR;
 	s->cc = s->ch.color_code;
 	s->ts = s->ch.timeslot ? s->ch.timeslot : 1u;
@@ -1124,7 +1124,7 @@ __attribute__((noinline)) bool ui_dual_tick(const radio_view_t *v, uint32_t now)
 			x->active = x->heard = true;
 			x->rssi_dbm = v->rssi_dbm;
 			x->dmr = shown_mode(&v->ch) == RADIO_MODE_DMR;	// a P25 or NXDN record keeps DMR
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 			x->src = v->dmr.call.src;
 			x->dst = v->dmr.call.dst;
 			x->group = v->dmr.call.group;

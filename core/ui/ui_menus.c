@@ -507,7 +507,7 @@ static const ui_scr_def_t compose_screen = {
 
 // ======================= Contacts (type to find) =======================
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static uint16_t contacts_raw_count(void) { return CODEPLUG_CONTACTS_MAX; }
 
 static void contact_label(const contact_t *c, char *buf, uint8_t len, bool with_id)
@@ -1334,7 +1334,7 @@ static bool sb_channel_row(sbuf_t *b, uint16_t num, const channel_t *ch)
 	if (ch->kind != CODEPLUG_KIND_NONE && !p25 && !(CONFIG_DMR_TRUNK && ch->kind == CODEPLUG_KIND_DMR_TRUNK)) {
 		sb_str(&wb, codeplug_kind_name(ch->kind));
 	} else
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (p25 || ch->mode == RADIO_MODE_DMR) {
 		// DMR: TG 9 when the contact can't be read; P25: TG 1 with no contact (p25-codeplug.md 2)
 		static contact_t c;
@@ -2787,7 +2787,7 @@ static void ced_build(void)
 {
 	bool listen = radio_listen_band(ced_ch.rx_hz);
 	bool p25 = ced_is_p25(&ced_ch), nxdn = ced_is_nxdn(&ced_ch), air = p25 || nxdn;
-	bool dmr = CONFIG_DMR && ced_ch.mode == RADIO_MODE_DMR && !listen && !air;
+	bool dmr = CONFIG_DMR_ANY && ced_ch.mode == RADIO_MODE_DMR && !listen && !air;
 	bool edit = CONFIG_CHANNEL_EDIT;
 	bool fresh = false, changed = false, into = false;
 #if CONFIG_CHANNEL_EDIT
@@ -2804,11 +2804,11 @@ static void ced_build(void)
 		bool tone = r == CE_RX_TONE || r == CE_TX_TONE;
 		// P25 and NXDN: no sub-audio tones or width; of the digital rows the talk target and unit ID, P25's
 		// talkaround; the NAC or RAN, NXDN's rate
-		bool air_row = air && ((r == CE_CONTACT && CONFIG_DMR) || r == CE_ID || (r == CE_DMO && p25) ||
+		bool air_row = air && ((r == CE_CONTACT && CONFIG_DMR_ANY) || r == CE_ID || (r == CE_DMO && p25) ||
 				       (r == CE_CODE && !into) || (r == CE_RATE && nxdn && !into));
 		if (r == CE_CODE || r == CE_RATE ? !air_row : air && (fm_only || (dmr_only && !air_row)))
 			continue;
-		if (!air_row && ((fm_only && dmr) || (tone && listen) || (dmr_only && !dmr) || (r == CE_MODE && !CONFIG_DMR)))
+		if (!air_row && ((fm_only && dmr) || (tone && listen) || (dmr_only && !dmr) || (r == CE_MODE && !CONFIG_DMR_ANY)))
 			continue;
 		// The radio core skips the burst on a board with no TX tone, so no row for it there (a host board
 		// without a radio keeps the row)
@@ -3132,7 +3132,7 @@ static void chinfo_item(uint16_t i, ui_item_t *it)
 	case CE_TS:
 		sb_u32(&b, ch->timeslot, 1);
 		break;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case CE_CONTACT: {
 		static contact_t c;
 		if (ch->contact != 0 && codeplug_contact(ch->contact, &c))
@@ -3205,11 +3205,11 @@ static const char *ced_problem(void)
 		return TR(CHAN_WHY_RX_OUTSIDE_BANDS, "RX is outside the radio's bands");
 	if (!c->rx_only && !board_in_band(c->tx_hz, true))
 		return TR(CHAN_WHY_TX_NOT_ALLOWED, "TX can't transmit there: set RX only");
-	if (CONFIG_DMR && c->mode == RADIO_MODE_DMR && radio_listen_band(c->rx_hz))
+	if (CONFIG_DMR_ANY && c->mode == RADIO_MODE_DMR && radio_listen_band(c->rx_hz))
 		return TR(CHAN_WHY_RX_ONLY_BAND_SET_FM, "Receive only band: set FM");
 	// The contact is whom PTT calls, so a channel that never transmits needs none
 	// (P25 and NXDN: none is talk group 1)
-	if (CONFIG_DMR && c->mode == RADIO_MODE_DMR && !c->rx_only && c->contact == 0 && !ced_is_p25(c) && !ced_is_nxdn(c))
+	if (CONFIG_DMR_ANY && c->mode == RADIO_MODE_DMR && !c->rx_only && c->contact == 0 && !ced_is_p25(c) && !ced_is_nxdn(c))
 		return TR(CHAN_WHY_PICK_TX_CONTACT, "Pick a TX contact first");
 #if CONFIG_NXDN
 	// A DMR channel's own ID kept when the Mode row made it NXDN: past NXDN's range, as the ID row refuses it
@@ -3648,7 +3648,7 @@ static void chinfo_select(uint16_t i, bool hold)
 #endif
 #endif
 	case CE_TS: c->timeslot = c->timeslot == 2 ? 1 : 2; break;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case CE_CONTACT: ui_push(SCR_CHPICK, 0); break;
 	case CE_LIST: ui_push(SCR_CHPICK, 1); break;
 #endif
@@ -4404,7 +4404,7 @@ static const ui_scr_def_t zdel_screen = {
 #endif
 
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // ======================= A channel's TX contact or RX group list (arg 0 / 1) =======================
 // Raw row 0 is None, raw r the contact or list with index r
 
@@ -4765,13 +4765,13 @@ static const ui_scr_def_t info_screen = {
 };
 
 // ======================= My radio: DMR ID and names (Settings > My radio) =======================
-// The radio's own DMR ID (CONFIG_DMR) and the codeplug's name fields: the radio name and the two boot screen lines,
+// The radio's own DMR ID (CONFIG_DMR_ANY) and the codeplug's name fields: the radio name and the two boot screen lines,
 // all saved in the codeplug (a CPS read shows them). On the ID row digits type a new one, OK writes it. Typed as the
 // channel editor's Own ID (ui.md 2.1): a digit past CODEPLUG_DMR_ID_MAX is refused, BACK takes the last digit back and
 // with none typed leaves the ID unchanged. OK on a name row opens the text entry; keeping it writes the name
 
 enum {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	MY_ID,
 #endif
 	MY_NAME, MY_BOOT1, MY_BOOT2, MY_COUNT };
@@ -4780,7 +4780,7 @@ static char my_text[CODEPLUG_NAME_LEN + 1];	// the name being typed, then shown 
 static uint8_t my_text_row = MY_COUNT;		// the row my_text belongs to (MY_COUNT: none)
 static uint32_t my_text_serial;
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static uint32_t dmr_id_value;
 static uint8_t dmr_id_len;		// digits typed
 static bool dmr_id_editing;
@@ -4798,7 +4798,7 @@ void ui_menus_save_failed(void)
 	zones_new_pending = false;	// nothing to focus
 #endif
 	my_text_row = MY_COUNT;		// the stored name shows again
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	dmr_id_saved = 0;
 #endif
 #if DATA_IDS
@@ -4810,7 +4810,7 @@ static void dmr_id_item(uint16_t i, ui_item_t *it)
 {
 	sbuf_t b;
 	sb_init(&b, it->value, sizeof it->value);
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (i == MY_ID) {
 		str_copy(it->label, sizeof it->label, TR(MYID_LABEL_DMR_ID, "DMR ID"));
 		uint32_t v = dmr_id_editing ? dmr_id_value : dmr_id_saved != 0 && codeplug_serial() == dmr_id_serial ?
@@ -4866,7 +4866,7 @@ static void my_text_kept(void)
 }
 #endif
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static void dmr_id_begin(void)
 {
 	dmr_id_editing = true;
@@ -4900,7 +4900,7 @@ static void dmr_id_save(void)
 static void dmr_id_select(uint16_t i, bool hold)
 {
 	(void)hold;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	if (i == MY_ID) {
 		if (dmr_id_editing)
 			dmr_id_save();
@@ -4924,7 +4924,7 @@ static void dmr_id_select(uint16_t i, bool hold)
 
 static bool dmr_id_key(const input_event_t *ev)
 {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	bool press = ev->gesture == GESTURE_PRESS || ev->gesture == GESTURE_LONG;
 	if (ev->action >= ACT_DIGIT_0 && ev->action <= ACT_DIGIT_9 && press && ui_frame()->focus == MY_ID) {
 		if (!dmr_id_editing)
@@ -4963,7 +4963,7 @@ static bool dmr_id_key(const input_event_t *ev)
 
 static void dmr_id_enter(void)
 {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	dmr_id_editing = false;
 	dmr_id_saved = 0;
 #endif
@@ -4971,7 +4971,7 @@ static void dmr_id_enter(void)
 
 static const ui_scr_def_t dmr_id_screen = {
 	.name = "dmr-id", .flags = SF_LIST | SF_FIELD, .prefix = TRN(SET_TITLE_MY_RADIO, "My Radio"),
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	.hint = TRN(HINT_TYPE_OK_EDIT_SAVE_BACK, "0-9 type  OK edit/save  Back"),
 #else
 	.hint = TRN(HINT_OK_EDIT_BACK, "OK edit  Back"),
@@ -5350,6 +5350,138 @@ static void trim_enter(void)
 
 static const ui_scr_def_t trim_screen = {
 	.name = "freq-trim", .flags = SF_FIELD, .key = trim_key, .draw = trim_draw, .enter = trim_enter,
+};
+#endif
+
+// ======================= Frequency detect (Tools; docs/spec/freq-detect.md 4) =======================
+#if CONFIG_FREQ_DETECT
+static uint8_t fd_range;	// the range searched
+
+// The result rounded to the VFO's step, as it would be tuned
+static uint32_t fd_shown_hz(const radio_view_t *v)
+{
+	uint32_t step = v->vfo_step_hz != 0 ? v->vfo_step_hz : 12500u;	// the radio core's default step
+	return v->fd_hz == 0 ? 0 : (v->fd_hz + step / 2u) / step * step;
+}
+
+static void fd_enter(void)
+{
+	// The range that holds the channel's frequency, else the first
+	uint8_t n = ui_svc_fd_range_count();
+	uint32_t hz = ui_view()->ch.rx_hz, lo, hi;
+	fd_range = 0;
+	for (uint8_t i = 0; i < n; i++) {
+		if (ui_svc_fd_range(i, &lo, &hi) && hz >= lo && hz <= hi) {
+			fd_range = i;
+			break;
+		}
+	}
+	(void)ui_svc_freq_detect(true, fd_range);
+}
+
+static const char *fd_status(const radio_view_t *v)
+{
+	if (v->fd_on)
+		return TR("Searching...");
+	switch (v->fd_refused) {
+	case RFD_OK: return TR("Stopped");
+	case RFD_BUSY: return TR("Radio busy");
+	case RFD_MODE: return TR("FM channels only");
+	case RFD_NO_HW: return TR("Not on this radio");
+	default: return TR("Can't search here");
+	}
+}
+
+static void fd_draw(void)
+{
+	const ui_layout_t *L = &ui_layout;
+	const radio_view_t *v = ui_view();
+	int w = gfx_width();
+	char buf[24];
+	sbuf_t b;
+	gfx_clear(ui_col.bg);
+	int y = ui_draw_top(v, &ui_st, TR("Freq Detect"), NULL) + 2;
+
+	// The range: the label at the left (dim), the MHz at the right
+	uint32_t lo, hi;
+	sb_init(&b, buf, sizeof buf);
+	if (ui_svc_fd_range(fd_range, &lo, &hi)) {
+		sb_u32(&b, lo / 1000000u, 1);
+		sb_chr(&b, '-');
+		sb_u32(&b, hi / 1000000u, 1);
+		sb_str(&b, " MHz");
+	}
+	const font_t *f = L->small;
+	gfx_text(f, 2, y, TR("Range"), ui_col.dim);
+	gfx_text(f, w - 2 - gfx_text_width(f, buf), y, buf, ui_col.fg);
+	y += f->h + 3;
+
+	// The frequency found, large and centered; dashes until one is
+	uint32_t hz = fd_shown_hz(v);
+	sb_init(&b, buf, sizeof buf);
+	if (hz != 0)
+		sb_freq(&b, hz);
+	else
+		sb_str(&b, "---.---");
+	const font_t *big = gfx_text_width(L->large, "999.99999") <= w - 4 ? L->large : L->medium;
+	gfx_text(big, (w - gfx_text_width(big, buf)) / 2, y, buf, hz != 0 ? ui_col.fg : ui_col.dim);
+	y += big->h + 3;
+
+	// What it does now, and how many readings it had
+	const char *st = fd_status(v);
+	if (y + f->h <= L->hint_y) {
+		gfx_text(f, (w - gfx_text_width(f, st)) / 2, y, st, v->fd_on ? ui_col.dim : ui_col.warn);
+		y += f->h + 1;
+	}
+	if (v->fd_hits != 0 && y + f->h <= L->hint_y) {
+		sb_init(&b, buf, sizeof buf);
+		sb_u32(&b, v->fd_hits, 1);
+		sb_chr(&b, 'x');
+		gfx_text(f, (w - gfx_text_width(f, buf)) / 2, y, buf, ui_col.dim);
+	}
+	ui_draw_bottom(&ui_st, CONFIG_VFO && hz != 0 ? TR("Up Down range  OK tune") : TR("Up Down range  Back"));
+}
+
+static bool fd_key(const input_event_t *ev)
+{
+	bool press = ev->gesture == GESTURE_PRESS || ev->gesture == GESTURE_LONG;
+	int dir = ev->action == ACT_NAV_UP || ev->action == ACT_NAV_RIGHT ? 1 :
+		ev->action == ACT_NAV_DOWN || ev->action == ACT_NAV_LEFT ? -1 :
+		ev->action == ACT_ENC_STEP ? (ev->value > 0 ? 1 : -1) : 0;
+	uint8_t n = ui_svc_fd_range_count();
+	if (dir != 0 && (press || ev->gesture == GESTURE_REPEAT || ev->action == ACT_ENC_STEP) && n != 0) {
+		fd_range = (uint8_t)((fd_range + n + dir) % n);
+		(void)ui_svc_freq_detect(true, fd_range);	// a new search on the new range
+		ui_dirty();
+		return true;
+	}
+	if (ev->action == ACT_SELECT && press) {
+		uint32_t hz = fd_shown_hz(ui_view());
+		if (!CONFIG_VFO || hz == 0) {
+			ui_toast(TR("Nothing found yet"));
+			return true;
+		}
+#if CONFIG_VFO
+		radio_req_vfo_set(hz);	// ends the search; the VFO opens on the frequency found
+#endif
+		ui_go_home();
+		return true;
+	}
+	if (ev->action == ACT_CONTEXT && press) {	// #: search again from nothing
+		(void)ui_svc_freq_detect(true, fd_range);
+		ui_dirty();
+		return true;
+	}
+	if (ev->action == ACT_BACK && ev->gesture == GESTURE_PRESS) {
+		(void)ui_svc_freq_detect(false, 0);	// back on the channel
+		ui_pop();
+		return true;
+	}
+	return false;
+}
+
+static const ui_scr_def_t fd_screen = {
+	.name = "freq-detect", .flags = SF_FIELD, .key = fd_key, .draw = fd_draw, .enter = fd_enter,
 };
 #endif
 
@@ -6098,7 +6230,7 @@ static void crash_select(uint16_t i, bool hold)
 		}
 		break;
 	case CR_TO:
-		if (CONFIG_DMR)
+		if (CONFIG_DMR_ANY)
 			ui_push(SCR_CRASH_TO, 0);
 		break;
 	case CR_MODE: {
@@ -6133,7 +6265,7 @@ static const ui_scr_def_t crash_screen = {
 	.count = crash_count, .item = crash_item, .select = crash_select, .body = crash_body, .enter = crash_enter,
 };
 
-#if CONFIG_CRASH_REPORT && CONFIG_DMR
+#if CONFIG_CRASH_REPORT && CONFIG_DMR_ANY
 // Send to: the codeplug's contacts, private or group (type to find, as Contacts); OK keeps the one picked
 static void crash_to_select(uint16_t i, bool hold)
 {
@@ -6220,8 +6352,10 @@ void ui_crash_tick(uint32_t now_ms)
 
 // Every tool keeps its number on every radio and build, so a key path (OK 6 7: Diagnostics; tests/hil/test_ui.py and the
 // user guide) is the same everywhere. The one a radio may not have (Battery) is last, so no radio has a gap; a build
-// without diagnostics skips 7
-enum { T_SCAN, T_POSITION, T_HOTSPOT, T_USB_NET, T_SFR, T_ROAM, T_DIAG, T_APRS, T_BATTERY, T_ZONE_OFFER, T_COUNT };
+// without diagnostics skips 7. Freq detect, only on a radio whose RF chip has the scan, comes after them all, with no
+// number (every key is taken)
+enum { T_SCAN, T_POSITION, T_HOTSPOT, T_USB_NET, T_SFR, T_ROAM, T_DIAG, T_APRS, T_BATTERY, T_ZONE_OFFER, T_FREQ_DETECT,
+       T_COUNT };
 
 // A tool this build or radio doesn't have is left out of the list (Battery, Supply on a radio that measures its DC
 // input instead, is left out where the radio measures neither)
@@ -6231,6 +6365,8 @@ static bool tool_shown(uint16_t i)
 	if (i == T_ZONE_OFFER)
 		return offer_waiting();	// 0 on the keypad: only while another radio's zone waits
 #endif
+	if (i == T_FREQ_DETECT)
+		return CONFIG_FREQ_DETECT && (feats() & UI_FEAT_FREQ_DETECT);
 	return (i != T_DIAG || CONFIG_DIAG) && (i != T_BATTERY || board_volts() != BOARD_VOLTS_NONE) &&
 	       i != T_ZONE_OFFER;
 }
@@ -6279,14 +6415,15 @@ static void tools_item(uint16_t row, ui_item_t *it)
 		TRN(TITLE_HOTSPOT, "Hotspot"), TRN(TOOLS_ROW_USB_NETWORK, "USB network"),
 		TRN(TOOLS_ROW_SFR, "Single-freq repeater"), TRN(TITLE_ROAMING, "Roaming"),
 		TRN(TITLE_DIAGNOSTICS, "Diagnostics"), TRX(WORD_APRS, "APRS"), TRN(TITLE_BATTERY, "Battery"),
-		TRN(TOOLS_ROW_SHARES_RECEIVED, "Zones/Chs Received") };
+		TRN(TOOLS_ROW_SHARES_RECEIVED, "Zones/Chs Received"), TRN(TOOLS_ROW_FREQ_DETECT, "Freq detect") };
 	uint16_t i = tools_row(row);
 	if (i >= T_COUNT)
 		return;
 	str_copy(it->label, sizeof it->label, i == T_BATTERY && board_volts() == BOARD_VOLTS_SUPPLY ?
 		TR(TITLE_SUPPLY, "Supply") :
 		 tr(names[i]));
-	item_num(it, (uint16_t)(i + 1u));	// the tool's own number, not its row (see the enum)
+	if (i != T_FREQ_DETECT)
+		item_num(it, (uint16_t)(i + 1u));	// the tool's own number, not its row (see the enum)
 	sbuf_t b;
 	sb_init(&b, it->value, sizeof it->value);
 	switch (i) {
@@ -6380,6 +6517,9 @@ static void tools_select(uint16_t row, bool hold)
 	case T_ROAM: ui_push(SCR_ROAM, 0); break;
 	case T_APRS: ui_push(SCR_APRS, 0); break;
 	case T_ZONE_OFFER: ui_push(SCR_OFFER, 0); break;
+#if CONFIG_FREQ_DETECT
+	case T_FREQ_DETECT: ui_push(SCR_FREQ_DETECT, 0); break;
+#endif
 	default: break;
 	}
 }
@@ -6480,7 +6620,7 @@ static const int16_t v_keyfn_press[] = { KEYFN_DEFAULT, KEYFN_NONE, KEYFN_MONITO
 #if CONFIG_VFO_FM || CONFIG_VFO_DMR
 					 KEYFN_COPY_VFO, KEYFN_VFO_TOGGLE,
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 					 KEYFN_CALL_BACK, KEYFN_TALK_LABEL,
 #endif
 #if CONFIG_DUAL_WATCH
@@ -6500,7 +6640,7 @@ static const tr_id_t n_keyfn_press[] = { TRN(VALUE_DEFAULT, "Default"), TRN(KEYF
 					     TRN(KEYFN_VALUE_COPY_TO_VFO, "Copy to VFO"),
 					TRN(KEYFN_VALUE_VFO_CHANNEL, "VFO/Channel"),
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 					     TRN(KEYFN_VALUE_CALL_BACK, "Call back"),
 					TRN(KEYFN_VALUE_TG_NAME_NUMBER, "TG name / number"),
 #endif
@@ -6517,7 +6657,7 @@ static const int16_t v_keyfn_hold[] = { KEYFN_DEFAULT, KEYFN_NONE, KEYFN_TALK_TA
 #if CONFIG_VFO_FM || CONFIG_VFO_DMR
 					KEYFN_COPY_VFO, KEYFN_VFO_TOGGLE,
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 					KEYFN_CALL_BACK, KEYFN_TALK_LABEL,
 #endif
 #if CONFIG_DUAL_WATCH
@@ -6536,7 +6676,7 @@ static const tr_id_t n_keyfn_hold[] = { TRN(VALUE_DEFAULT, "Default"), TRN(KEYFN
 					    TRN(KEYFN_VALUE_COPY_TO_VFO, "Copy to VFO"),
 					TRN(KEYFN_VALUE_VFO_CHANNEL, "VFO/Channel"),
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 					    TRN(KEYFN_VALUE_CALL_BACK, "Call back"),
 					TRN(KEYFN_VALUE_TG_NAME_NUMBER, "TG name / number"),
 #endif
@@ -7287,10 +7427,10 @@ static const char *set_why_not(const set_item_t *s)
 	case UI_SET_VOICE_PROMPTS:
 		return TR(WHY_VOICE_PROMPTS_NOT_IN_BUILD, "Voice prompts: not in this build");
 	case UI_SET_TALK_PERMIT:
-		return CONFIG_DMR && CONFIG_BEEP ? NULL :
+		return CONFIG_DMR_ANY && CONFIG_BEEP ? NULL :
 			TR(WHY_PERMIT_TONE_NOT_IN_BUILD, "Talk permit tone: not in this build");
 	case UI_SET_CALL_END_TONE:
-		return CONFIG_DMR && CONFIG_BEEP ? NULL : CONFIG_BEEP ?
+		return CONFIG_DMR_ANY && CONFIG_BEEP ? NULL : CONFIG_BEEP ?
 			TR(WHY_DMR_NOT_IN_BUILD, "DMR: not in this build") :
 			TR(WHY_TONES_NOT_IN_BUILD, "Tones: not in this build");
 	case UI_SET_TOT_WARN_TONE:
@@ -7298,7 +7438,7 @@ static const char *set_why_not(const set_item_t *s)
 	case UI_SET_TX_DENY_TONE:
 		return CONFIG_BEEP ? NULL : TR(WHY_TONES_NOT_IN_BUILD, "Tones: not in this build");
 	case UI_SET_SIG_DMR ... UI_SET_SIG_DMR_LAST:
-		return CONFIG_DMR && CONFIG_BEEP ? NULL : CONFIG_BEEP ? TR(WHY_DMR_NOT_IN_BUILD, "DMR: not in this build") :
+		return CONFIG_DMR_ANY && CONFIG_BEEP ? NULL : CONFIG_BEEP ? TR(WHY_DMR_NOT_IN_BUILD, "DMR: not in this build") :
 			TR(WHY_TONES_NOT_IN_BUILD, "Tones: not in this build");
 	case UI_SET_SIG_FM ... UI_SET_SIG_FM_LAST:
 		return CONFIG_BEEP ? NULL : TR(WHY_TONES_NOT_IN_BUILD, "Tones: not in this build");
@@ -7325,11 +7465,11 @@ static const char *set_why_not(const set_item_t *s)
 			return TR(WHY_MIC_GAIN_NOT_IN_BUILD, "Mic gain: not in this build");
 		return mic_agc_on() ? TR(SET_WHY_MIC_AGC_SETS_LEVEL, "Mic AGC sets the level") : NULL;
 	case UI_SET_NOISE_REDUCTION:
-		if (!CONFIG_DMR)
+		if (!CONFIG_DMR_ANY)
 			return TR(WHY_NOISE_REDUCTION_NOT_IN_BUILD, "Noise reduction: not in this build");
 		return vocoder_has(VOCODER_OPT_NOISE_REDUCTION) ? NULL : TR(WHY_NOT_ON_THIS_RADIO, "Not on this radio");
 	case UI_SET_MIC_AGC:
-		if (!CONFIG_DMR)
+		if (!CONFIG_DMR_ANY)
 			return TR(WHY_MIC_AGC_NOT_IN_BUILD, "Mic AGC: not in this build");
 		return vocoder_has(VOCODER_OPT_AGC) ? NULL : TR(WHY_NOT_ON_THIS_RADIO, "Not on this radio");
 	case UI_SET_HEAR_ALL_DEFAULT:
@@ -7719,7 +7859,7 @@ typedef struct {
 static pick_t picks[PICK_MAX];
 static uint8_t n_picks;
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static void pick_add(const ui_target_t *t, tr_id_t tag)
 {
 	if (n_picks >= PICK_MAX - 1 || t->id == 0)
@@ -7736,7 +7876,7 @@ static void pick_add(const ui_target_t *t, tr_id_t tag)
 static void picker_enter(void)
 {
 	n_picks = 0;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	const radio_view_t *v = ui_view();
 	ui_target_t t;
 	contact_t c;
@@ -7804,7 +7944,7 @@ static void picker_enter(void)
 }
 
 // After the targets: Type a number..., then Select contact... (every contact, as Contacts lists them)
-#define PICK_CONTACTS	(CONFIG_DMR ? 1u : 0u)
+#define PICK_CONTACTS	(CONFIG_DMR_ANY ? 1u : 0u)
 
 static uint16_t picker_count(void) { return (uint16_t)(n_picks + 1u + PICK_CONTACTS); }
 
@@ -8030,6 +8170,9 @@ const ui_scr_def_t *const ui_scr[SCR_COUNT] = {
 #if CONFIG_UI_SETTINGS && CONFIG_SIG_TONES
 	[SCR_SIG_CHAIN] = &sc_screen,
 #endif
+#if CONFIG_FREQ_DETECT
+	[SCR_FREQ_DETECT] = &fd_screen,
+#endif
 #if CONFIG_APRS_AFSK
 	[SCR_APRS_TO] = &aprs_to_screen,
 #endif
@@ -8047,7 +8190,7 @@ const ui_scr_def_t *const ui_scr[SCR_COUNT] = {
 	[SCR_ZCHANNEL] = &zchan_screen, [SCR_ZPICK] = &zpick_screen, [SCR_ZONEEDIT] = &zopt_screen,
 	[SCR_ZONEDEL] = &zdel_screen, [SCR_CHZONES] = &chz_screen,
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	[SCR_CHPICK] = &chpick_screen,
 #endif
 #endif
@@ -8061,7 +8204,7 @@ const ui_scr_def_t *const ui_scr[SCR_COUNT] = {
 #if CONFIG_UI_SETTINGS && RFOUNDRY_HWOPTS
 	[SCR_HWOPT] = &hwopt_screen,
 #endif
-#if CONFIG_CRASH_REPORT && CONFIG_DMR
+#if CONFIG_CRASH_REPORT && CONFIG_DMR_ANY
 	[SCR_CRASH_TO] = &crash_to_screen,
 #endif
 #if CONFIG_ZONE_SHARE && !CONFIG_ZONE_EDIT

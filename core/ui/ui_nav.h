@@ -46,6 +46,7 @@ typedef enum {
 #if CONFIG_BACKLIGHT_TEST
 	SCR_BL_TEST,			// Settings > Advanced > Backlight tests
 #endif
+	SCR_FREQ_DETECT,		// Tools > Freq detect (CONFIG_FREQ_DETECT)
 	SCR_COUNT
 } ui_scr_t;
 

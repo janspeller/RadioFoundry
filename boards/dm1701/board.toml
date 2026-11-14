@@ -26,6 +26,7 @@ power = "1 / 2 / 5 W"
 display = "1.77\" color, 160 × 128"
 gallery = "160x120i5"
 clock = { rtc = "unknown", note = "STM32 RTC on a 32.768 kHz crystal; no backup supply confirmed (docs/spec/hardware-dm1701.md, VBAT unverified)" }
+unconfirmed = { FREQ_DETECT = "no frequency counter scan is documented for the AT1846S (docs/spec/hardware-dm1701.md)" }
 
 [status]
 level = "supported"

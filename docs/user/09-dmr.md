@@ -306,6 +306,19 @@ tools/rfoundry_debug.py radio privacy off
 Without a key, the Privacy tile shows "No privacy key: set one in Settings > Privacy". The keys are stored without
 protection in the radio's flash.
 
+### On a radio whose DMR chip runs calls itself
+
+On some radios the DMR chip handles calls on its own ([Radio reference](23-radios.md) says which). The radio then
+uses that chip's encryption instead of basic privacy:
+
+- The keys are the ones stored with the radio's original programming software. RadioFoundry reads them; it doesn't
+  change them.
+- The channel's key goes to the chip at every channel change. **\***, **6** turns it on or off.
+- Without a key, the Privacy tile shows "No encryption key in the radio".
+
+Calls work as on other radios: the caller shows on the receive screen and in Recent, and PTT calls the talk target.
+Where the chip doesn't say when a call ends, the receive screen keeps the call for a moment after it.
+
 ## Position in calls
 
 Some DMR radios send their position inside a voice call (ETSI GPS Info). When a caller does, the receive screen shows

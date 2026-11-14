@@ -26,7 +26,7 @@
 #include "input/keyassign.h"
 #include "codeplug/codeplug.h"
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #include "dmr/ambe/ambeVoice.h"
 #if CONFIG_ZONE_SHARE
 #include "dmr/zone_share_api.h"
@@ -392,16 +392,16 @@ uint8_t debuglink_radio_feature_op(uint8_t op, const uint8_t *a, uint16_t len)
 		if (len < 3 || (a[0] != 0xFF && a[0] > RADIO_MODE_NXDN) || (a[1] != 0xFF && a[1] > 15) || a[2] > 2) {
 			return DL_ST_BAD_ARG;
 		}
-#if CONFIG_DMR || CONFIG_P25
-		if ((a[0] == RADIO_MODE_DMR && !CONFIG_DMR) || (a[0] == RADIO_MODE_P25 && !CONFIG_P25) ||
+#if CONFIG_DMR_ANY || CONFIG_P25
+		if ((a[0] == RADIO_MODE_DMR && !CONFIG_DMR_ANY) || (a[0] == RADIO_MODE_P25 && !CONFIG_P25) ||
 		    (a[0] == RADIO_MODE_NXDN && !CONFIG_NXDN) ||
-		    ((a[1] != 0xFF || a[2] != 0) && !CONFIG_DMR)) {
+		    ((a[1] != 0xFF || a[2] != 0) && !CONFIG_DMR_ANY)) {
 			return DL_ST_UNAVAILABLE;
 		}
 		if (a[0] != 0xFF) {
 			radio_req_mode(a[0]);
 		}
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		if (a[1] != 0xFF) {
 			radio_req_dmr_color_code(a[1]);
 		}

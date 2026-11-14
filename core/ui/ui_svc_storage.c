@@ -124,7 +124,7 @@ static int32_t key_get(uint8_t id);
 static bool key_set(uint8_t id, int32_t value);
 #endif
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static bool dmr_id_post(uint32_t id);	// a job: the codeplug write is the housekeeping task's
 #endif
 // The settings area's key of a Settings > Sound tone row (radio_keys.h radio_tone_rows)
@@ -344,7 +344,7 @@ static __attribute__((noinline)) int32_t setting_get_flash(uint8_t id)
 		settings_read(&st);
 		return settings_zs_accept(&st);
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case UI_SET_DMR_ID:
 		return (int32_t)codeplug_dmr_id();
 #endif
@@ -638,7 +638,7 @@ bool ui_svc_setting_set(uint8_t id, int32_t value)
 		zone_share_set_offers(value ? ZS_OFFERS_ASK : ZS_OFFERS_OFF);
 		return true;
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	case UI_SET_DMR_ID:
 		return dmr_id_post((uint32_t)value);
 #endif
@@ -785,7 +785,7 @@ static struct {
 		contact_t contact;	// the contact editor's, at index channel (one job at a time: RAM is short)
 #endif
 		char name[CODEPLUG_NAME_LEN + 1];	// a name field's new text, UI_NAME_* in channel
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 		contact_t target;	// save_target_job's search: the stored contact found
 #endif
 	};
@@ -804,7 +804,7 @@ static struct {
 static void save_channel_job(void *ctx);
 static void write_channel_job(void *ctx);
 static void name_job(void *ctx);
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static void dmr_id_job(void *ctx);
 static void save_target_job(void *ctx);
 #endif
@@ -819,7 +819,7 @@ static void key_write_job(void *ctx);
 #endif
 static void (*const cp_jobs[])(void *ctx) = {
 	save_channel_job, write_channel_job, name_job,
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	dmr_id_job, save_target_job,
 #endif
 #if CONFIG_CONTACT_EDIT
@@ -913,7 +913,7 @@ bool ui_svc_codeplug_answer(uint8_t answer)
 	return storage_job_post(cp_answer_job, (void *)(uintptr_t)answer);	// the answer in ctx: no RAM of its own
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // The radio's own DMR ID, written into the codeplug (Settings > My radio): the radio core takes it when
 // codeplug_serial() changes, and a CPS read shows it
 static void dmr_id_job(void *ctx)
@@ -1403,7 +1403,7 @@ bool ui_svc_zone_pending(void)
 }
 #endif
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // The first stored contact with this ID and kind becomes the channel's talk target. Searching the contacts reads up
 // to 1024 records, so it is part of the job too. Until it is done the target is a temporary one (ui_svc_talk_to)
 static void save_target_job(void *ctx)

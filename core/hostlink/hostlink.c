@@ -49,7 +49,9 @@
 #include "task.h"
 
 #define HOSTLINK_TASK_PRIORITY	3	// with input and USB; above the UI (core/app/app.c task table)
-#if CONFIG_DEBUGLINK
+#ifdef HOSTLINK_TASK_STACK
+// the board's (make stack-check)
+#elif CONFIG_DEBUGLINK
 // words: MMDVM frames on the stack; debug link replies format diagnostics lines. The deepest chain (a hotspot frame
 // on air > the radio view copied, with the trunked system's view in it) reads 2608 bytes with the macOS toolchain on
 // the deepest board; the CI's reads up to 16 deeper, and stack-check.md's overhead and margin come on top. Four words

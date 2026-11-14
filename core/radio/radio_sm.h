@@ -14,6 +14,7 @@
 #include "radio/radio_cwid.h"
 #include "radio/beep.h"	// beep_seg_t
 #include "radio/sigtone.h"	// SIG_STEPS
+#include "radio/freq_detect.h"
 #if CONFIG_APRS
 #include "aprs/aprs.h"
 #endif
@@ -145,6 +146,7 @@ typedef enum {
 	RREQ_DMR_CALL_BACK,	// DMR: talk to the last call heard
 	RREQ_DMR_TARGET_CLEAR,	// DMR: back to the channel's talk target
 	RREQ_DMR_PRIVACY,	// DMR: arg = type << 16 | key
+	RREQ_DMR_KEY,		// arg: the key number of a call-level chip (CONFIG_DMR_AES), arg2: 1 on, 0 off
 	RREQ_HS_ENTER,		// hotspot: arg = RX Hz (0 = stay)
 	RREQ_HS_FREQ,		// hotspot: arg = RX Hz, arg2 = TX Hz
 	RREQ_HS_POWER,		// hotspot: arg = MMDVM RF level 0-255
@@ -183,6 +185,7 @@ typedef enum {
 	RREQ_AIR_BENCH,		// the air interface bench (CONFIG_AIR_RAW): arg 1 take the modem, 0 give it back
 	RREQ_AIR_TX,		// ... arg 1 key (arg2: the longest time in ms), 0 unkey
 	RREQ_NXDN_SET,		// radio_task.c: the pending NXDN settings were copied (radio_nxdn_set_settings); applied here
+	RREQ_FREQ_DETECT,	// frequency detect (CONFIG_FREQ_DETECT): arg 1 search, 0 stop; arg2 the range
 } radio_req_type_t;
 
 // RREQ_TONE's argument: which (RADIO_TONE_*) in bits 25:24, the tone type in 23:16, the value in 15:0
@@ -207,8 +210,12 @@ typedef struct {
 	uint32_t arg2;
 } radio_req_t;
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
+// Names cached for the talk target and the listen list's contacts; a name past the cache is looked up again when
+// shown (RADIO_LOOKUPS). A board short of RAM caches fewer
+#ifndef RADIO_NAMES_MAX
 #define RADIO_NAMES_MAX		(1 + CODEPLUG_LIST_LEN)	// talk target and the listen list's contacts
+#endif
 #define RADIO_LOOKUPS		4	// IDs looked up in all contacts / the DMR ID database, most recent kept
 
 // A contact name the screens show for a talkgroup or an ID
@@ -283,13 +290,16 @@ typedef struct {
 	uint32_t host_pushes;		// the host's audio pushes last seen, and when they last moved (the watchdog)
 	uint32_t host_push_ms;
 	bool retune_pending;		// receive settings changed during TX: retune on PTT release
+#if CONFIG_FREQ_DETECT
+	fdet_t fdet;			// frequency detect (RREQ_FREQ_DETECT)
+#endif
 	bool retune_due;		// the reference trim changed: tune at retune_due_ms (RREQ_RETUNE)
 	uint32_t retune_due_ms;
 	uint32_t tx_start_ms;
 	uint8_t close_count;		// polls in a row above the close threshold
 	uint8_t tone_count;		// polls in a row disagreeing with view.tone_ok (debounce)
 	int16_t rssi_published;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	int16_t rssi_ring[RADIO_RSSI_HOLD_POLLS];	// the last polls' readings while the DMR path runs (peak hold)
 	uint8_t rssi_ring_n;		// readings in the ring (0 outside DMR)
 	uint8_t rssi_ring_pos;
@@ -408,7 +418,10 @@ typedef struct {
 	bool reload_pending;		// RREQ_RELOAD came while busy
 	bool power_off_req;		// RREQ_POWER_OFF seen
 	bool power_off_busy;		// still sending what has to go out before the supply drops
-#if CONFIG_DMR
+#if CONFIG_DMR_AES
+	uint8_t dmrc_key;		// settings_t.dmrc_key: the key number, bit 7 = off
+#endif
+#if CONFIG_DMR_ANY
 	uint8_t dmr_wake_admits;	// the stack's wake_admits at the last tick (the permit tone for a short press)
 	uint8_t dmr_permit_seq;		// the stack's permit_seq at the last tick (the permit tone before keying)
 	uint8_t dmr_prev_state;		// radio_dmr_state_t at the last tick (beeps on changes)
@@ -562,7 +575,7 @@ void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms);
 // Every RADIO_POLL_MS: status, squelch, audio, LEDs, TX time-out
 void radio_sm_poll(radio_sm_t *sm, uint32_t now_ms);
 
-// Every RADIO_TICK_MS: the DMR call stack (poll, PTT keying, TX done, the DMR view). Nothing without CONFIG_DMR
+// Every RADIO_TICK_MS: the DMR call stack (poll, PTT keying, TX done, the DMR view). Nothing without CONFIG_DMR_ANY
 void radio_sm_tick(radio_sm_t *sm, uint32_t now_ms);
 
 // Hotspot frequencies the board can use: RX in a band, TX in a band that allows transmit (the amateur band plan does

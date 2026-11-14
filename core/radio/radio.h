@@ -86,7 +86,7 @@ typedef struct {
 	uint16_t battery_off_s;	// switch off after this long with the battery critical, 0 = never
 	uint16_t backlight_dim_s;	// for batt_backlight_pct (radio/battery.h): dim after, 0 = never
 	uint16_t backlight_off_s;	// off after, 0 = never
-	// DMR (CONFIG_DMR)
+	// DMR (CONFIG_DMR_ANY)
 	uint8_t reply_s;	// reply window after a call, 0 = off .. 30 s, RADIO_REPLY_CODEPLUG = the codeplug's hang times
 	// DMR repeater roaming (CONFIG_DMR_ROAMING; docs/spec/dmr-roaming.md). Which zones roam is kept apart (RREQ_ROAM)
 	int8_t roam_rssi_dbm;	// threshold: the site counts as weak below it, a candidate must reach it (-125 .. -60)
@@ -121,7 +121,7 @@ typedef enum { RADIO_BATT_OK, RADIO_BATT_LOW, RADIO_BATT_CRITICAL } radio_batt_t
 #define RADIO_DTMF_GAP_MS	60	// shortest pause between two digits: the same digit twice decodes as two
 #define RADIO_DTMF_SHOWN	8	// digits of this transmission the view keeps (the TX screen shows them)
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #define RADIO_ALIAS_MAX		31	// talker alias characters (DMR_TA_TEXT_MAX)
 
 // What the DMR side is doing, for the screens
@@ -191,7 +191,9 @@ typedef struct {
 	// The current call (RX or TX); valid while state != RDMR_IDLE
 	radio_dmr_call_t call;
 	bool late_entry;
-	char alias[RADIO_ALIAS_MAX + 1];	// talker alias so far (CONFIG_DMR_TALKER_ALIAS), "" if none
+	// The talker alias so far, "" if none: one byte without CONFIG_DMR_TALKER_ALIAS, where it stays "" (RAM: the view has
+	// several copies)
+	char alias[CONFIG_DMR_TALKER_ALIAS ? RADIO_ALIAS_MAX + 1 : 1];
 	int16_t rssi_dbm;	// last burst of the call, 0 = unknown
 	uint32_t call_ms;	// duration of the current call
 	// The last call heard
@@ -460,7 +462,17 @@ typedef struct {
 	bool bcast;
 	bool bcast_fault;
 	uint32_t bcast_khz;		// what the receiver reports it is tuned to, for the debug link (0 = not playing)
-#if CONFIG_DMR
+#if CONFIG_FREQ_DETECT
+	// Frequency detect (radio/freq_detect.h, docs/spec/freq-detect.md): searching (the receiver is off its channel and
+	// the speaker muted), the range, the last result in it (0 = none since the start), results so far. fd_refused:
+	// the last start was refused (radio_fdet_refusal says why)
+	bool fd_on;
+	uint8_t fd_range;
+	uint8_t fd_refused;		// radio_fd_refusal_t
+	uint32_t fd_hz;
+	uint32_t fd_hits;
+#endif
+#if CONFIG_DMR_ANY
 	radio_dmr_view_t dmr;
 #endif
 #if CONFIG_DMR_ROAMING
@@ -536,6 +548,15 @@ radio_vfo_copy_t radio_req_vfo_copy_checked(void);
 // The VFO's step (Up / Down, VFO scan), kept in the settings: 1 kHz .. 1 MHz; RADIO_AM_STEP_833 (8333) is the exact
 // 8.33 kHz air band grid (radio/radio_am.h); 0 = auto, the width's: 12.5 kHz, 25 kHz wide or in the air band
 void radio_req_vfo_step_size(uint32_t hz);
+#if CONFIG_FREQ_DETECT
+// Frequency detect (radio/freq_detect.h): search range (an index into board.radio->fd_ranges), or stop. Any other
+// request that changes what the radio does (PTT, a channel, the VFO) stops it first
+void radio_req_freq_detect(bool on, uint8_t range);
+// Why a start was refused (radio_view_t.fd_refused)
+typedef enum { RFD_OK, RFD_NO_HW, RFD_BUSY, RFD_MODE, RFD_RANGE, RFD_BOARD } radio_fd_refusal_t;
+// The radio can search (CAP_FREQ_DETECT and the board's hooks)
+bool radio_fd_capable(void);
+#endif
 void radio_req_ptt(bool down);
 // PTT for a host audio session (USRP, docs/spec/usb-audio.md): the host's samples go on air instead of the microphone
 // (FM: through the board's audio tap, refused without one; DMR: into the encoder, core/usbaudio/audio_mux.c). Up is
@@ -553,7 +574,7 @@ void radio_req_reload(void);			// the settings' preferences changed (squelch, ma
 // Refused on DMR channels, while transmitting, and for tones tones_valid() rejects
 void radio_req_bandwidth(radio_bw_t bw);
 void radio_req_tone(uint8_t which, subtone_t tone);	// which: RADIO_TONE_TX, RADIO_TONE_RX or RADIO_TONE_BOTH
-#if CONFIG_DMR || CONFIG_P25 || CONFIG_NXDN
+#if CONFIG_DMR_ANY || CONFIG_P25 || CONFIG_NXDN
 // The current channel's or the VFO's mode (radio_mode_t): FM, DMR, P25 (CONFIG_P25) or NXDN (CONFIG_NXDN). On a
 // channel a temporary change; in the VFO its own, kept with it (a saved P25 or NXDN VFO comes back in its default
 // mode where the build or the board doesn't run that mode). Refused while transmitting, in hotspot mode, in a listen
@@ -568,7 +589,7 @@ void radio_req_p25_settings(const radio_p25_settings_t *s);
 // The NXDN settings (RAM only, radio_nxdn.h): the same
 void radio_req_nxdn_settings(const radio_nxdn_settings_t *s);
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 void radio_req_reply_cancel(void);		// BACK on Home: end the DMR reply window
 // Talk to someone else for now (until the channel changes or radio_req_dmr_target_clear): a typed ID or talkgroup,
 // a codeplug contact, or back to whoever was heard last (their ID for a private call, the talkgroup for a group call).
@@ -597,6 +618,11 @@ void radio_req_dmr_focus(uint32_t id, bool private_call);
 #if CONFIG_DMR_PRIVACY
 // Load a basic privacy key (type dmrPrivacyType_t, 0 = off). Held in RAM until changed or the radio restarts
 void radio_req_dmr_privacy(uint8_t type, uint16_t key);
+#endif
+#if CONFIG_DMR_AES
+// The key a call-level chip encrypts with (docs/spec/dmr-call-level.md 6): a number of the radio's key store, on or
+// off (off keeps the number). Saved in the settings and loaded into the chip on every DMR channel
+void radio_req_dmr_key(uint8_t number, bool on);
 #endif
 #endif
 // Scan (CONFIG_SCAN; no-ops otherwise). A zone scan starts from the current channel, a VFO scan steps the VFO by its

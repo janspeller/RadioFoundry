@@ -33,6 +33,10 @@ typedef struct {
 	// docs/spec/tftp.md 4): outside every area above, never written by the open-firmware CPS. 0 size: no staged writes
 	uint32_t staging_addr;
 	uint32_t staging_size;
+	// Secrets: a range no host read reaches (the encryption keys a DMR chip loads, docs/spec/dmr-call-level.md 6). The
+	// open-firmware CPS's raw flash reads refuse it; the debug link reads only its own ranges anyway. 0 size: none
+	uint32_t secret_addr;
+	uint32_t secret_size;
 } hal_flash_map_t;
 
 // The end of the highest area of a map whose flash erases in units of erase_size (an area of size 0 is none): a chip

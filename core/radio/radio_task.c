@@ -14,7 +14,7 @@
 #include "hotspot/hotspot.h"
 #include "radio/radio_hotspot.h"
 #endif
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 #include "dmr/call/dmr_call.h"
 #endif
 #if CONFIG_DMR_DATA_CORE
@@ -43,7 +43,7 @@
 // Task layout (see core/app/app.c for the whole picture)
 #define RADIO_TASK_PRIORITY	4
 #if CONFIG_DMR
-#define RADIO_TASK_STACK	768	// words: the DMR call stack and the AMBE FEC run here
+#define RADIO_TASK_STACK	768	// words: the burst-level DMR call stack and the AMBE FEC run here
 #else
 #define RADIO_TASK_STACK	512	// words
 #endif
@@ -97,7 +97,7 @@ static void send(const radio_req_t *req, TickType_t wait)
 	}
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 // The DMR stack's wake (dmr_call_set_wake): the end of a transmission is acted on at once, not at the next tick up to
 // RADIO_TICK_MS later, so the receiver is back for a reply 30 ms after the last burst. One in the queue at a time.
 // Only the modem's event callback posts it, from one task, so the flag needs no atomics
@@ -185,7 +185,7 @@ static void radio_task(void *arg)
 			do {
 				req_handled++;
 				if (req.type == RREQ_WAKE) {
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 					wake_posted = false;
 #endif
 					woken = true;
@@ -277,7 +277,7 @@ void radio_core_start(void)
 	zone_edit_settle();
 #endif
 	radio_sm_init(&sm, hal_millis());
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 	dmr_call_set_wake(wake);
 #endif
 #if CONFIG_DMR_TRUNK
@@ -411,7 +411,7 @@ void radio_req_retune(void) { post(RREQ_RETUNE, 0, pdMS_TO_TICKS(50)); }
 void radio_req_reload(void) { post(RREQ_RELOAD, 0, pdMS_TO_TICKS(50)); }
 void radio_req_bandwidth(radio_bw_t bw) { post(RREQ_BANDWIDTH, bw, 0); }
 void radio_req_tone(uint8_t which, subtone_t tone) { post(RREQ_TONE, radio_tone_arg(which, tone), 0); }
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 void radio_req_reply_cancel(void) { post(RREQ_REPLY_CANCEL, 0, 0); }
 void radio_req_dmr_target(uint32_t id, bool private_call)
 {
@@ -510,6 +510,12 @@ static const debuglink_air_core_t bench_core = { bench_enter, bench_leave, bench
 void radio_req_scan(uint8_t cmd) { post(RREQ_SCAN, cmd, 0); }
 void radio_req_scan_vfo(uint32_t lo_hz, uint32_t hi_hz) { post_pair(RREQ_SCAN_VFO, (int32_t)lo_hz, hi_hz, 0); }
 void radio_req_scan_dual(uint16_t pos) { post_pair(RREQ_SCAN, RSCAN_DUAL, pos, 0); }
+#if CONFIG_FREQ_DETECT
+void radio_req_freq_detect(bool on, uint8_t range) { post_pair(RREQ_FREQ_DETECT, on ? 1 : 0, range, 0); }
+#endif
+#if CONFIG_DMR_AES
+void radio_req_dmr_key(uint8_t number, bool on) { post_pair(RREQ_DMR_KEY, number, on ? 1u : 0u, 0); }
+#endif
 bool radio_dtmf_ready(void)
 {
 	return dtmf_ready;
