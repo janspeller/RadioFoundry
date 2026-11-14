@@ -4612,6 +4612,7 @@
    "link": "usb",
    "release": "testing",
    "debuglink_names": [
+    "AT-D878UVII",
     "d878uv2"
    ],
    "rom_base": 134217728,
