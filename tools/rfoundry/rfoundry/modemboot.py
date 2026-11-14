@@ -10,8 +10,9 @@ bytes and checked by its hash."""
 import hashlib
 
 BOOT_LEN = 2048
-# SHA-256 of the block, and its first 8 bytes to find it by (every 578 build checked carries the same block: GD and
-# Artery builds of 2.08 and PRO 1.21)
+# SHA-256 of the block, and its first 8 bytes to find it by. Every build checked carries the same block: the 578's GD
+# and Artery builds of 2.08 and PRO 1.21, and the handhelds' 868 V1.40 / V2.40, 878 and 878UVII 3.08n and 878UVII
+# PLUS 4.00 (docs/spec/hardware-anytone.md 2.2)
 BOOT_SHA256 = "743515b9f7cd90737c1fff29b652b7558bc5a56487ec38df4fdea8877e7a619a"
 BOOT_PREFIX = bytes.fromhex("448a0920f83015a6")
 

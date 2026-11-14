@@ -1,8 +1,12 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Anytone AT-D868UV / AT-D878UV / AT-D578UV hardware
 
-Status: facts only. RadioFoundry has no Anytone board. This page collects what is known about the family, what a RadioFoundry port would need, and what is
-still missing. The survey entry is in [radios.md](radios.md). The AT-D868UV pin map in section 4 is not confirmed on a radio (unverified).
+Status: facts only, for the family. The AT-D578UV has its own page and board ([hardware-d578uv.md](hardware-d578uv.md),
+[d578uv-bringup.md](../testing/d578uv-bringup.md)); the handhelds have no board yet, and what is known about the
+AT-D878UVII PLUS is in [hardware-d878uv2.md](hardware-d878uv2.md), with the order a port is built and checked in
+[d878uv2-bringup.md](../testing/d878uv2-bringup.md). This page collects what is known about the family and what
+is still missing. The survey entry is in [radios.md](radios.md). The AT-D868UV pin map in section 4 is not confirmed
+on a radio (unverified).
 
 **Summary.** These radios are a GD32F303 (or, on late D578UVs, an AT32F43x) MCU driving a Sicomm SCT3258 DMR
 baseband over an 8-bit parallel host port. The SCT3258 runs DMR layers 1 and 2 and the AMBE+2 vocoder itself, and
@@ -14,7 +18,9 @@ update mode, and SWD pads with no read-out protection on the units documented so
 RadioFoundry's burst-level modem and vocoder interfaces don't map onto it directly, and features that need the AMBE bits
 (privacy, the hotspot voice bridge) aren't possible unless a vocoder bypass is found.
 
-A value marked `(datasheet)` is from the Sicomm CT3258 / SCT3258 datasheet and "Packet Interface of CT3258" v1.0 (2015), copies of which are mirrored on hackaday.io; their license is unclear, so cite them, don't copy them into this repository. `(unverified)` is not confirmed on a radio or in a datasheet.
+A value marked `(878UVII, FCC)` is read off the board in the public internal photos of FCC ID T4KD878UVII
+(an AT-D878UVII PLUS); the filing's schematic, block diagram and parts list are under long-term
+confidentiality and are not public. A value marked `(datasheet)` is from the Sicomm CT3258 / SCT3258 datasheet and "Packet Interface of CT3258" v1.0 (2015), copies of which are mirrored on hackaday.io; their license is unclear, so cite them, don't copy them into this repository. `(unverified)` is not confirmed on a radio or in a datasheet.
 
 ---
 
@@ -22,17 +28,17 @@ A value marked `(datasheet)` is from the Sicomm CT3258 / SCT3258 datasheet and "
 
 | Item | AT-D868UV | AT-D878UV / UV PLUS, 878UVII PLUS | AT-D578UV / PLUS / PRO (mobile) |
 | --- | --- | --- | --- |
-| MCU | GD32F303VET6 (512 KB flash, 64 KB RAM) on V1 and early V2 boards; GD32F303VGT6 (1 MB, 96 KB) on late V2 | GD32F303VGT6. 878UVII: not found | GD32F303VKT6 (3 MB flash, 96 KB RAM) until 2022-07-01, then AT32F435/437 |
-| DMR baseband | Sicomm SCT3258 (CML Microcircuits sells it as SCT3258TD) | SCT3258 | SCT3258 |
+| MCU | GD32F303VET6 (512 KB flash, 64 KB RAM) on V1 and early V2 boards; GD32F303VGT6 (1 MB, 96 KB) on late V2 | GD32F303VGT6 (1 MB, 96 KB), marked on the 878UVII PLUS board (878UVII, FCC) | GD32F303VKT6 (3 MB flash, 96 KB RAM) until 2022-07-01, then AT32F435/437 |
+| DMR baseband | Sicomm SCT3258 (CML Microcircuits sells it as SCT3258TD) | marked `SCT3258TD` (878UVII, FCC) | SCT3258 |
 | Vocoder | AMBE+2 inside the SCT3258. No separate DVSI chip | same | same |
-| Audio codec | TI TLV320AIC3204, I2S to the SCT3258 | same | same |
-| RF transceiver | AT1846S, 26 MHz TCXO | AT1846S | 4× QA4818N / WX4818N, the same 3-wire bus as the AT1846S but BK4819-like registers: two as the side A/B local oscillators, two as receivers. True dual receive |
-| External flash | 1 Gbit SPI NAND, Toshiba TC58CVG0S3HRAIG (V2) | 1 Gbit; 878UVII: 2 Gbit (the vendor firmware won't boot on 1 Gbit) | 2 Gbit TC58CVG1S3HRAIG |
+| Audio codec | TI TLV320AIC3204, I2S to the SCT3258 | marked `AIC3204` (878UVII, FCC) | same |
+| RF transceiver | AT1846S, 26 MHz TCXO | marked `AT1846S` (878UVII, FCC) | 4× QA4818N / WX4818N, the same 3-wire bus as the AT1846S but BK4819-like registers: two as the side A/B local oscillators, two as receivers. True dual receive |
+| External flash | 1 Gbit SPI NAND, Toshiba TC58CVG0S3HRAIG (V2) | 1 Gbit; 878UVII: 2 Gbit `TC58CVG1S3H` (878UVII, FCC), the same part as the 578 (the vendor firmware won't boot on 1 Gbit) | 2 Gbit TC58CVG1S3HRAIG |
 | FM broadcast | RDA5802N | RDA5802N | RDA5802N |
-| PA | 2× NXP AFT05MS006 | same | 2× AFT05MP075N |
+| PA | 2× NXP AFT05MS006 | marked `A5M06` (878UVII, FCC) | 2× AFT05MP075N |
 | Audio amp | HM8872 | HM8872 | 2× YD1517P, push-pull |
-| GPS | Fitted on some units (community pages say some have none). USART1, 9600 baud, NMEA | ATGM336H or T3RV1 (GPS + BDS) | ATGM336H |
-| Bluetooth | none | PLUS: Beken BK3260 module. 878UVII: a daughter board with Bluetooth and an FSK receiver for APRS, with its own firmware ("BHT_BOARD") | PLUS: the same daughter board; "BT01" module |
+| GPS | Fitted on some units (community pages say some have none). USART1, 9600 baud, NMEA | an `AT6558` GNSS chip (878UVII, FCC), the one an ATGM336H carries | ATGM336H |
+| Bluetooth | none | PLUS: Beken BK3260 module. 878UVII: a daughter board (silkscreen `APRS-BT 201208 V2.1`) with its own HDSC `HC32F005` Cortex-M0+ (the "BHT_BOARD" firmware), a CML `CMX865` FSK modem for APRS, and a Bluetooth module carrying a Cypress `CYW20707` and a Nuvoton `NAU88C22` codec (878UVII, FCC) | PLUS: the same daughter board; "BT01" module |
 | Display | ST7735S-compatible, 128×160, RGB565, 8-bit 8080 parallel bus (section 4.2) | 1.77" color TFT, 160×128 (unverified, from the size); controller not found | not found |
 | Accelerometer | NXP MMA8653FC (I2C 0x1D, WHO_AM_I 0x5A). The firmware probes for it, so it may not be fitted | not checked | not checked |
 | Other MCUs | none known | the BT/APRS daughter board | the BT/APRS board and a small MCU in the handheld microphone |
@@ -64,10 +70,15 @@ So the MCU firmware must hold this 1024-word block and send it at every power-on
 ship it, so like the AMBE codec on other radios, it has to come from the user's own radio.
 
 The vendor firmware keeps it in the application image (internal flash), not in the NAND. The 2048 bytes are the
-same in every image examined (868 V1.40 and V2.40, 878 and 878UVII 3.08n, 578 GD 2.08). SHA-256 of the block:
-`743515b9f7cd90737c1fff29b652b7558bc5a56487ec38df4fdea8877e7a619a`. A mode setting (0–3) makes the firmware
-replace one or two bytes while sending it (offsets 0x34C and 0x352, or 0x45C–0x45D); mode 0 sends it as stored.
-What the modes select isn't known yet. An extraction tool can find the block in any vendor image by its hash.
+same in every image examined (868 V1.40 and V2.40, 878 and 878UVII 3.08n, 578 GD 2.08, 878UVII PLUS 4.00). SHA-256
+of the block: `743515b9f7cd90737c1fff29b652b7558bc5a56487ec38df4fdea8877e7a619a`. A mode setting (0–3) makes the
+firmware replace one or two bytes while sending it (offsets 0x34C and 0x352, or 0x45C–0x45D); mode 0 sends it as
+stored. What the modes select isn't known yet. An extraction tool can find the block in any vendor image by its hash,
+as `rfoundry` does for the modem boot slot (`tools/rfoundry/rfoundry/modemboot.py`).
+
+In the D878UVII PLUS 4.00 image the block is at file offset 0x0D9CC6: an even address, but not a multiple of 4, so a
+scan that steps by 4 misses it. The prefix search the merge tool uses finds it there unchanged, so the handhelds need
+no tooling of their own for the block.
 
 Reset sequence on the 868: two enable outputs go high, the PIO1 strap line is driven low (Intel mode), RSTN is
 pulsed high for 100 ms and then held low for at least 500 ms. RSTN then goes high, the strap line is released to a
@@ -135,6 +146,7 @@ confirm on the radio: the `CHAN_D` frame format in DMR mode and its timing again
 | Vendor tool | CPS → Tool → Firmware and Icon Update ("QX_Firmware_Update"): opens a `.spi` file, shows model and version, 921600 baud, a "Duplex" option and a grayed-out "Encrypt" option |
 | Update files | Three per update: `.spi` (14 or 51 bytes, the file the user opens), `.CDI` (278 bytes for firmware, about 11 KB for icon sets), `.CDD` (the payload). The icon (graphics) update uses the same tool and file set |
 | Image sizes (.CDD) | D878UV 3.08n: 939,168 bytes. D878UVII 3.08n: 939,240. D578UV2 GD 2.08: 1,020,408. D578UV2 AT 2.08: 1,040,008. Icon sets: 3.7 MB (878), 2.1–7.3 MB (578) |
+| D878UVII PLUS 4.00 | `D878UVII_V4.00_20250725.CDD`, 931,392 bytes, SHA-256 `8f840cfcfc1bb9acab65429ced211481eeb80079725ec46cf225afce071afeeb`. Its vector table declares an initial stack pointer of 0x20015858 and a reset vector of 0x08004C91, so the application is linked at 0x08004000, not the 578's 0x08006000 |
 | Model check | The 578 has separate GD and AT images, and the CPS refuses the wrong one, so the files carry a model / MCU identity |
 | Transfer | The host sends "UPDATE", then the .CDD in 32-byte packets with an additive checksum. The image is staged in the external flash and installed on the next boot |
 | After the update | "MCU reboot": PTT + PF1 at power-on (578: P2 + channel knob), confirm, set the date and time. This initializes the radio and erases the codeplug |
@@ -147,6 +159,9 @@ confirm on the radio: the `CHAN_D` frame format in DMR mode and its timing again
 | MCU ROM bootloader | Whether BOOT0 is reachable on the board is not known (GD32F303 and AT32F43x both have a ROM USB/UART loader) |
 
 ## 4. AT-D868UV pin map
+
+The AT-D878UVII PLUS has its own map, read from its own firmware and checked against this one pin by pin:
+[hardware-d878uv2.md](hardware-d878uv2.md) 4, whose 4.5 lists where the two differ. This section stays the 868's.
 
 On the 868 (V2.40). V1.40 drives the same buses on the same pins; it differs in a few key
 inputs (pull-down instead of pull-up, not yet confirmed) and adds outputs PC10 and PC11. All buses are bit-banged:
@@ -164,7 +179,7 @@ the pins allow it (the NAND, LCD and host port pins don't match the GD32F303 SPI
 | Channel knob | PC8, PC9 (quadrature, EXTI on both) | Direction from comparing the two pins at each edge |
 | AT1846S | SCLK PB3, SDIO PB4 (bidirectional), SEN PB5 (active low) | 3-wire: 8-bit address (bit 7 set = read) then 16-bit data, MSB first |
 | SPI NAND | CS PB8, CLK PB14, MOSI/IO0 PB15, MISO/IO1 PA15 | Mode 0, MSB first. Reads use dual output (two bits per clock on PA15 and PB15). JEDEC ID 0x9F: the firmware accepts manufacturer 0xC8 (GigaDevice) and 0x98 (Toshiba) |
-| I2C | SCL PB6, SDA PB7 | Devices: 0x10 (RDA5802 FM receiver, sequential register writes), 0x1D (MMA8653FC accelerometer) |
+| I2C | SCL PB6, SDA PB7 | Devices: 0x10 (RDA5802 FM receiver, sequential register writes), 0x1D (MMA8653FC accelerometer). **The 878UVII reads the other way round** (SDA PB6, SCL PB7, the same two devices): one of the two pages is wrong and the 868's image has not been re-read ([hardware-d878uv2.md](hardware-d878uv2.md) 4.1) |
 | GPS UART | USART1: TX PA2, RX PA3, 9600 baud | NMEA parser present ($GPRMC, $GNRMC, $GPGGA, $GPGSV, $PMTK commands). Some 868 units have a GPS fitted |
 | USB | PA11, PA12 (USB FS device) | CDC serial |
 
@@ -192,9 +207,11 @@ transport instead of SPI.
 | PD0 | Input with interrupt, acted on only while transmitting: high → PC4 and PE6 on and DAC0 at the power level; low → all off. Most likely the SCT3258 PIO3 slot-timing output, so the PA is keyed per TDMA slot |
 | PA0 | Input, pull-up, read at start-up (power key or wake, unverified) |
 | PA7, PE0 | Outputs switched with the tone generator and on RX/TX changes. PA7 is probably the speaker amplifier enable |
-| PA1, PC3, PC4, PC13, PD1, PD7, PC7, PE2–PE6 | Outputs; function not identified. PE3–PE5 are turned off in the SCT pass-through mode |
+| PA1, PC3, PC4, PC13, PD1, PD7, PC7, PE2–PE6 | Outputs; function not identified. PE3–PE5 are turned off in the SCT pass-through mode. On the 878UVII, PD1, PD7 and PC7 are driven in the baseband's reset sequence, PA1 resets the daughter board, PC3 is the power hold, PE2 the USB attach and PE3–PE5 the LEDs; whether the 868 uses them the same way is unchecked ([hardware-d878uv2.md](hardware-d878uv2.md) 4.1, 4.3) |
 
-The two PWM outputs (PA6, PB0) are probably the LCD backlight and a tuning voltage; not checked (unverified).
+The two PWM outputs (PA6, PB0) are probably the LCD backlight and a tuning voltage; not checked (unverified). On
+the 878UVII the pairing is the other way round from the guess here: PB0 is the backlight (TIM8 channel 2
+complementary) and PA6 the frequency-indexed tuning voltage (TIM3 channel 1) ([hardware-d878uv2.md](hardware-d878uv2.md) 4.3).
 
 ### 4.4 Calibration and settings in the NAND
 
@@ -251,7 +268,12 @@ state is in [hardware-d578uv.md](hardware-d578uv.md) 9. The rest of this table i
    the chip filters any of them. (The vendor firmware uses easy mode for voice, 2.5.)
 10. **Calibration over USB**: whether the vendor programming protocol reads NAND addresses directly (4.4).
 8. **Read-out protection** on current production radios, and whether BOOT0 is reachable for recovery.
-9. **878UVII MCU**, and **the AT32F43x pin map** on late 578s.
+9. ~~**878UVII MCU**~~: answered. The board is marked `GD32F303VGT6` (1 MB flash, 96 KB RAM), which matches what
+   the 4.00 image needs: 931,392 bytes of application above a 16 KB bootloader is more than 512 KB of flash, and its
+   initial stack pointer sits 88,152 bytes above the RAM base. 1 MB is no less room than the 578 board has in
+   practice: it caps its image at the same `__codec_slot` (0x080FF000) so its GD32 and AT32 builds share the slot
+   address, so a handheld starting at 0x08004000 gets 1004 KB against the 578's 996 KB. Still open: **the AT32F43x
+   pin map** on late 578s.
 
 ## Sources
 
@@ -259,6 +281,8 @@ state is in [hardware-d578uv.md](hardware-d578uv.md) 9. The rest of this table i
 - SCT3258 datasheet v2.0: <https://cdn.hackaday.io/files/1642237026116832/SCT3258_datasheet_v2_0.pdf>
 - Packet Interface of CT3258 v1.0: <https://cdn.hackaday.io/files/1642237026116832/CT3258_Packet_Interface.pdf>
 - CML Microcircuits SCT3258TD: <https://www.cmlmicro.com/products/sct3258td-dmr-dpmr-analog-processor/>
+- FCC ID T4KD878UVII (AT-D878UVII PLUS), internal photos: <https://fccid.io/T4KD878UVII>. The schematic,
+  block diagram and BOM in the same filing are withheld under long-term confidentiality
 - D878UV technical mods: <https://hamradiosouthernrepeaters.co.uk/images/878Mods/878techmods.html>
 - D578UV technical mods: <https://www.hamradiosouthernrepeaters.co.uk/images/578Mods/578techmods.html>
 - 868UV mods: <http://members.optuszoo.com.au/jason.reilly1/868mods.htm>
@@ -267,5 +291,6 @@ state is in [hardware-d578uv.md](hardware-d578uv.md) 9. The rest of this table i
 - anytone-flash-tools protocol notes (prose only):
   <https://github.com/reald/anytone-flash-tools/blob/master/at-d878uv_protocol.md>
 - Vendor update packages (Anytone / BridgeCom): D868UVE FW 1.40 and 2.40, D878UV PLUS and D878UVII PLUS 3.08N
-  (2025-06-14), D578UV PLUS 2.08 (2024-06-19), AT-D578 PRO 1.21; their "Firmware Update Instructions", "D878UV IC
+  (2025-06-14), D878UVII PLUS 4.00 (firmware dated 2025-07-25, package 2025-08-15), D578UV PLUS 2.08 (2024-06-19),
+  AT-D578 PRO 1.21; their "Firmware Update Instructions", "D878UV IC
   3258 Base Band Update" and "D578UV FW Update Including MCU Reboot" PDFs
