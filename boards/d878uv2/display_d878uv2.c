@@ -3,11 +3,15 @@
 // AT-D878UVII PLUS display: an ST7735S-class 128x160 TFT on an 8-bit 8080 bus driven by GPIO
 // (docs/spec/hardware-d878uv2.md 4.2): data on PE7-PE14, D/C, reset, chip select and the write strobe on PB10-PB13.
 //
-// Two things to watch, both recorded in hardware-d878uv2.md 4.2 and 4.5:
+// Two things to watch:
 //   - this board has no read strobe at all, so the data bus is never turned around for the panel;
-//   - the panel is used in portrait, 128 wide by 160 tall, as the stock firmware does. The stock MADCTL is 0x88
-//     (vertical flip, BGR), which is the driver's type 0 base (0xA0) corrected by 0x28.
-// The whole init sequence is recorded in hardware-d878uv2.md 4.2 and matches the AT-D868UV's value for value.
+//   - **the orientation.** The controller's own frame is 128 wide by 160 tall and the stock firmware draws it that
+//     way with MADCTL 0x88 (hardware-d878uv2.md 4.2), but the glass sits rotated in the housing: the screen is
+//     wider than it is high. So RadioFoundry uses the panel in landscape, 160 by 128, which needs the row/column
+//     exchange the stock value does not set. The value below is the landscape correction the family's other
+//     160x128 board needed; which way round this one lands, and whether red and blue come out swapped, is for the
+//     bench (docs/testing/d878uv2-bringup.md, stage 2).
+// The init sequence itself is recorded in hardware-d878uv2.md 4.2 and matches the AT-D868UV's value for value.
 #include "d878uv2.h"
 #include "config.h"
 #include "pins.h"
@@ -15,8 +19,8 @@
 #include "hal_time.h"
 #include "display/st7735/st7735.h"
 
-#define LCD_W		128u
-#define LCD_H		160u
+#define LCD_W		160u
+#define LCD_H		128u
 
 static bool ready;
 
@@ -84,12 +88,13 @@ static const st7735_bus_t bus = {
 	.delay_ms = hal_delay_ms,
 };
 
-// Portrait, the panel's own orientation. The stock firmware sends MADCTL 0x88 and addresses columns 0..0x80 and
-// rows 0..0xA0, so no offset is needed. Type 0's base MADCTL is 0xA0, and 0xA0 ^ 0x28 = 0x88
+// Landscape: the panel is mounted rotated, so the frame is used the long way round. Type 0's base MADCTL is 0xA0
+// and 0xA0 ^ 0xC8 = 0x68 (column/row exchange, mirrored, BGR); the stock firmware's own 0x88 is the unrotated
+// frame and does not apply here. Orientation and the color order are to be checked on the radio
 static const st7735_t panel = {
 	.bus = &bus,
 	.type = 0,
-	.madctl_xor = 0x28,
+	.madctl_xor = 0xC8,
 	.width = LCD_W,
 	.height = LCD_H,
 };

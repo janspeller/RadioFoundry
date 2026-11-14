@@ -22,6 +22,7 @@ BOARD_DIRS := boards/d878uv2 drivers/display/st7735 drivers/flash/spi_nand drive
               drivers/rf/at1846s drivers/bcast/rda5807m drivers/bus/i2c_gpio
 # The core's storage on the NAND, with CONFIG_NAND_STORAGE (hardware-d878uv2.md 5)
 BOARD_NAND_DIRS := drivers/flash/nand_sectors drivers/flash/nand_blocks
-# The 128x160 panel in 16 colors: the 4 bpp frame buffer is 10240 B over 160 rows, not the RGB565 default. A screen
-# has at most 16 colors (core/ui/gfx.h). The panel is addressed in portrait, MADCTL 0x88 (hardware-d878uv2.md 4.2)
-MCU_DEFS   += -DGFX_INDEXED=1 -DGFX_FB_BYTES=10240u -DGFX_MAX_ROWS=160u
+# The panel in 16 colors: the 4 bpp frame buffer is 10240 B over 128 rows, not the RGB565 default. A screen has at
+# most 16 colors (core/ui/gfx.h). The controller's own frame is 128x160 and the stock firmware draws it that way
+# (hardware-d878uv2.md 4.2), but the glass sits rotated in the housing, so RadioFoundry uses it as 160x128
+MCU_DEFS   += -DGFX_INDEXED=1 -DGFX_FB_BYTES=10240u -DGFX_MAX_ROWS=128u

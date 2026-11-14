@@ -24,8 +24,8 @@ bringup = "docs/testing/d878uv2-bringup.md"
 cpu = "GD32F303"
 bands = "136-174 / 400-480 MHz"
 power = "not recorded yet"
-display = "1.77\" color, 128 × 160"
-gallery = "128x160"
+display = "1.77\" color, 160 × 128"
+gallery = "160x128"
 # one rotary encoder (the channel knob) and one panel potentiometer, most likely the volume
 knobs = 1
 # PC14 and PC15 are configured as pull-up inputs, so no 32.768 kHz crystal is fitted (hardware-d878uv2.md 3)
