@@ -7,7 +7,8 @@ Flashes RadioFoundry release images onto a radio. Release images never contain t
 keeps the codec already in the radio (it writes only the firmware's own flash sectors) or writes the codec from your
 radio's stock firmware file. Radios: the boards of the [board registry](../../docs/dev/board-registry.md); a USB DFU
 radio flashes over USB, the others over their programming cable (below). A radio installed through the RAM stub
-(`[flash] family = "serial-iap"`) uses the web flasher or `stub/stubtool.py`.
+(`[flash] family = "serial-iap"`) uses the web flasher or `stub/stubtool.py`; one on a vendor block bootloader
+(`serial-block`) uses `tools/block_loader.py`.
 
 ## Install
 

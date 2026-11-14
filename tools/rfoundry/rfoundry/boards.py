@@ -54,6 +54,7 @@ class Board:
     def __init__(self, e):
         self.__dict__.update(e)
         self.app_region = tuple(e["app_region"])	# the application's flash (the linker script's MEMORY FLASH)
+        self.ram_region = tuple(e["ram_region"]) if e.get("ram_region") else None	# MEMORY RAM, or None
         self.sectors = [Sector(*s) for s in e["sectors"]]	# the sectors the bootloader can erase, in its order
         self.protected = [tuple(p) for p in e["protected"]]	# address ranges never written (the factory loader)
         self.codec_slot, self.codec_run, self.codec_tables = (_tuple(e[k]) for k in ("codec_slot", "codec_run",
@@ -68,7 +69,7 @@ class Board:
         self.codec_layouts = {}
         self.codec_former = []
         self.codec_codes = [self.codec_code] if self.codec_code is not None else []
-        if c["id"] is None:
+        if c["id"] is None and self.codec_stock:
             # a stock-file placement (STM32): each listed stock file puts its codec where its own layout says. The board's
             # windows are the union of them all: what the image must stay out of and what keeping the codec protects. A
             # merge plans against the layout of the file it merges (merge_windows)
@@ -89,7 +90,8 @@ class Board:
             # where each file's codec code starts (its first word is the codec signature), first file first
             self.codec_codes = [self.codec_layouts[h][0][0] for h in self.codec_stock]
             self.codec_code = self.codec_codes[0]
-        self.codec = CodecProfile(c["id"], [tuple(w) for w in c["windows"]], c["installed"], c["sources"] or [])
+        # A board without a codec (codec_tool None) gets an empty profile: no windows to keep or merge
+        self.codec = CodecProfile(c["id"], [tuple(w) for w in c["windows"] or ()], c["installed"], c["sources"] or [])
 
     @property
     def releasable(self):

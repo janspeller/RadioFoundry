@@ -69,6 +69,8 @@ FAMILIES = {
     # loader on the cable, through the RAM stub
     "boot-rom": {"link": "serial-cable", "needs": (), "web": "c7000-stub", "update_mode": None},	# no vendor loader:
     # the SoC's boot ROM serial window on the cable at every power-on, through the RAM stub
+    "serial-block": {"link": "serial-cable", "needs": (), "web": "none", "update_mode": None},	# a vendor bootloader
+    # on the cable that takes the application region in numbered 1 KB blocks (tools/block_loader.py)
 }
 # [flash.stub] stock_console: the debug console a stock firmware answers on the cable, by protocol (the web flasher
 # loads the stub through it before RadioFoundry is installed: site/static/js/flasher/usmart.js)
@@ -245,8 +247,9 @@ BOARD_SCHEMA = {
                       "spi": _opt({"bus": _req(int), "mode": _req(int), "hz": _req(int)}),
                       "idle_cs": _opt(STR_LIST)}),
     }),
-    # stock_version: the stock firmware version whose file carries the codec, as the web flasher asks for the file
-    "codec": _req({"tool": _req(CODEC_TOOLS), "stock": _opt(STR_LIST), "profile": _opt(str), "sources": _opt(STR_LIST),
+    # stock_version: the stock firmware version whose file carries the codec, as the web flasher asks for the file. No
+    # [codec]: the radio needs none (its DMR chip carries its own vocoder, or it has no DMR)
+    "codec": _opt({"tool": _req(CODEC_TOOLS), "stock": _opt(STR_LIST), "profile": _opt(str), "sources": _opt(STR_LIST),
                    "installed": _opt(STR_LIST), "stock_version": _opt(str)}),
     "frame": _req({"shape": _req(str), "body": _req(str), "accent": _req(str), "lens": _req(RANGE)}),
     # tests/hil: what the health checks expect (test_health.py), and the features built here but not working yet
@@ -638,6 +641,7 @@ class Board:
         self.mk = mk				# the make variables of MAKE_VARS and the build options
         self.symbols = layout["symbols"]	# __codec_* of every linker script in the board directory
         self.app_region = layout["flash"]	# (start, end) of MEMORY FLASH in the build's LDSCRIPT
+        self.ram_region = layout["ram"]	# (start, end) of MEMORY RAM there, or None
         self.source_names = names		# board_t .name: [(literal, macro)]
         self.pins = pins			# pins.h integer defines
         self.flash_map = fmap or {}		# hal_flash_map_t: FLASH_MAP_FIELDS
@@ -822,8 +826,8 @@ class Board:
         """{"profile", "windows": [(addr, length)], "sources", "installed", "code"} for a codec in a linker slot, or
         None for a stock-file placement ([codec] stock, the SHA-256 of each stock file the codec merges from: rfoundry
         reads each file's windows from its stock-file tables, and the board's are their union)."""
-        c = self.data["codec"]
-        if c.get("stock"):
+        c = self.data.get("codec")
+        if c is None or c.get("stock"):
             return None
         slot = self.codec_slot
         if slot is None or not c.get("profile"):
@@ -902,7 +906,8 @@ def _layout(root, bid, mk):
                 for k, v in parse_ld(fh.read(), defs)["symbols"].items():
                     if syms.setdefault(k, v) != v:
                         raise RegistryError("boards/%s: %s differs between the linker scripts" % (bid, k))
-    return {"flash": (org, org + length), "symbols": syms}
+    ram = main["memory"].get("RAM")
+    return {"flash": (org, org + length), "ram": (ram[0], ram[0] + ram[1]) if ram else None, "symbols": syms}
 
 
 def load(root=ROOT, only=None):
@@ -1262,7 +1267,7 @@ def check(root=ROOT):
                 if a < b.app_region[1] or a + n > b.flash_end():
                     bad("codec window 0x%08X+0x%X is outside the flash the linker script keeps free (0x%08X..0x%08X)"
                         % (a, n, b.app_region[1], b.flash_end()))
-        cst = d["codec"].get("stock")
+        cst = d.get("codec", {}).get("stock")
         if cst is not None:
             if not cst or len(set(cst)) != len(cst):
                 bad("codec.stock lists each stock file once, at least one")
@@ -1271,7 +1276,7 @@ def check(root=ROOT):
             for k in ("profile", "sources"):
                 if k in d["codec"]:
                     bad("codec.%s comes from the stock files' profiles when codec.stock is set" % k)
-        if not os.path.isfile(os.path.join(root, "tools", d["codec"]["tool"] + ".py")):
+        if "codec" in d and not os.path.isfile(os.path.join(root, "tools", d["codec"]["tool"] + ".py")):
             bad("codec.tool tools/%s.py doesn't exist" % d["codec"]["tool"])
         if codec is not None and not codec["profile"].startswith(bid + "-"):
             bad("codec.profile %r must start with %r: the firmware reports <id>-<stock tag> (RFOUNDRY_BOARD_ID)"
@@ -1427,22 +1432,25 @@ def rfoundry_view(boards):
             # offsets start (docs/spec/open-firmware-cps.md 3)
             "rom_base": b.platform.data["flash_base"],
             "app_base": b.app_base, "flash_end": b.flash_end(), "app_region": list(b.app_region),
+            # the main RAM (MEMORY RAM): block_loader checks the vector table's stack pointer against its end
+            "ram_region": list(b.ram_region) if b.ram_region else None,
             "sectors": [list(s) for s in b.sectors()], "protected": [list(p) for p in b.protected],
             # [[flash.protect]]: what no tool erases or writes, by memory, offsets from the memory's start (rfoundry/protect.py)
             "protect": b.protect,
             "keep_codec_supported": fl["keep_codec"],
             "first_stage": [b.first_stage[0], b.first_stage[1].hex()] if b.first_stage else None,
-            "codec_tool": d["codec"]["tool"], "codec_stock": list(d["codec"].get("stock", [])),
+            "codec_tool": d.get("codec", {}).get("tool"), "codec_stock": list(d.get("codec", {}).get("stock", [])),
             # a stock-file placement has no id or windows here: rfoundry reads them from its stock-file tables
             "codec": {"id": codec["profile"] if codec else None,
                       "windows": [list(w) for w in codec["windows"]] if codec else None,
-                      "installed": d["codec"].get("installed", []), "sources": d["codec"].get("sources")},
+                      "installed": d.get("codec", {}).get("installed", []), "sources": d.get("codec", {}).get("sources")},
             "codec_code": codec["code"] if codec else None,
             "codec_slot": list(b.codec_slot) if b.codec_slot else None,
             "codec_run": list(b.window("__codec_run_lo", "__codec_run_hi") or ()) or None,
             "codec_tables": list(b.window("__codec_tab_lo", "__codec_tab_hi") or ()) or None,
             "loader_id": fl["bootloader"].get("id"), "loader_keys": fl["bootloader"].get("keys"),
             "loader_sign": fl["bootloader"].get("sign", ""),
+            "loader_steps": list(fl["bootloader"]["steps"]),
             # what rfoundry tells the user: how to reach the bootloader, where the stock files come from
             "bootloader_steps": list(fl["bootloader"].get("steps", [])), "stock_download": fl.get("stock_download"),
             "key_sha256": dfu["key_sha256"] if dfu else None, "key_prefix": dfu["key_prefix"] if dfu else None,
@@ -1540,7 +1548,7 @@ def site_view(boards, root=ROOT):
                  # the image starts with a first stage of this size, its first word this signature (board.mk BOOT_*)
                  "first_stage": {"size": b.first_stage[0], "head": b.first_stage[1].hex()} if b.first_stage else None,
                  "stock_console": stub.get("stock_console"), "update_mode": b.family["update_mode"],
-                 "read_rate": stub.get("read_rate"), "codec_version": d["codec"].get("stock_version"),
+                 "read_rate": stub.get("read_rate"), "codec_version": d.get("codec", {}).get("stock_version"),
                  "build_options": json.loads(json.dumps(d.get("build_options", []))),
                  # what no write may touch ([[flash.protect]], site/static/js/flasher/protect.js)
                  "protect": b.protect}

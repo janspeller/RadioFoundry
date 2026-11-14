@@ -22,7 +22,7 @@ from rfoundry import stockfw  # noqa: E402  (stock file profiles)
 
 # Board -> codec tool, the registry's [codec] tool (each takes --stock, --image, -o and keeps its supported stock files
 # in PROFILES)
-CODEC_TOOLS = {b.id: b.codec_tool for b in boards.BOARDS.values()}
+CODEC_TOOLS = {b.id: b.codec_tool for b in boards.BOARDS.values() if b.codec_tool is not None}
 SKIP = ("README.md", ".gitignore")
 
 

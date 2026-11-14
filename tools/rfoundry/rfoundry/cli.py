@@ -806,6 +806,9 @@ def cmd_flash(args):
         return cmd_flash_serial(args, board, man, image, merged)
     if board.family == "serial-iap":
         raise UsageError("%s is installed with the web flasher or stub/stubtool.py, not with rfoundry" % board.name)
+    if board.family == "serial-block":
+        raise UsageError("%s is installed with tools/block_loader.py (its vendor bootloader's block protocol), not with "
+                         "rfoundry" % board.name)
     if args.route == serialflash.STUB:
         return cmd_flash_stub(args, board, image, merged)
     if args.route != serialflash.AUTO:

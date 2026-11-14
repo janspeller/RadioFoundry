@@ -133,7 +133,7 @@ to the build directory and the image: `make BOARD=<id> BAND=vhf` writes `build/<
 
 | Key | Meaning |
 |---|---|
-| `family` | The flashing route, by protocol: `usb-dfu`, `serial-loader` or `serial-iap` |
+| `family` | The flashing route, by protocol: `usb-dfu`, `serial-loader`, `serial-iap` or `serial-block` (a vendor bootloader that takes the application region in numbered 1 KB blocks, `tools/block_loader.py`; rfoundry and the web flasher don't offer it yet) |
 | `keep_codec` | True when an update leaves the codec in place |
 | `sectors` | Optional: a geometry of the platform other than its `default_sectors` |
 | `stock_download` | Optional: where the stock firmware can be downloaded |
@@ -263,7 +263,8 @@ firmware keeps its own rules for what it writes (the CPS shim refuses its areas,
 | `sources` | Where a slot codec comes from, for messages |
 | `installed` | Stock versions that leave exactly this codec in place |
 
-A board has either `stock`, or `profile` with a linker codec slot. With `stock`, the profile and sources come from the
+A board whose radio needs no codec from its stock firmware (its DMR chip carries the vocoder, or it has no DMR) has no
+`[codec]` table. Otherwise it has either `stock`, or `profile` with a linker codec slot. With `stock`, the profile and sources come from the
 stock files' profiles. The files must hold the same codec; each may put its tables at other addresses. The board's
 codec windows are the union of every file's layout. The image must stay out of all of them, and keeping the codec keeps
 all of them. A merge writes and checks the layout of the file it merges
