@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 The RadioFoundry Authors
+# The AT-D878UVII PLUS's registry entry (tools/boards.py, docs/dev/adding-a-radio.md): everything the tools, CI, the
+# docs and the web site know about this radio. Build facts stay in board.mk and config.mk, the memory layout in
+# boards/d878uv2/memory.ld.
+#
+# WORK IN PROGRESS: the board's interface files are not written yet, so this board does not build.
+
+id = "d878uv2"
+name = "AnyTone AT-D878UVII PLUS"
+maker = "AnyTone"
+model = "AT-D878UVII PLUS"
+# Rebadges and near-identical models are not recorded yet: only the 4.00 update set has been examined
+also = []
+kind = "handheld"
+order = 10
+
+[docs]
+hardware = "docs/spec/hardware-d878uv2.md"
+bringup = "docs/testing/d878uv2-bringup.md"
+
+# One-line summaries for the site and the generated tables; the facts are in docs.hardware
+[hardware]
+cpu = "GD32F303"
+bands = "136-174 / 400-480 MHz"
+power = "not recorded yet"
+display = "1.77\" color, 128 × 160"
+gallery = "128x160"
+# one rotary encoder (the channel knob) and one panel potentiometer, most likely the volume
+knobs = 1
+# PC14 and PC15 are configured as pull-up inputs, so no 32.768 kHz crystal is fitted (hardware-d878uv2.md 3)
+clock = { rtc = "none", note = "the GD32F303 RTC has no crystal on this board (docs/spec/hardware-d878uv2.md 3)" }
+
+[status]
+level = "bring-up"
+summary = """\
+Nothing is written yet beyond the pin map, the memory layout and the feature defaults. The pin map is read from the \
+radio's stock firmware and has not been seen on a radio."""
+# the only channels are "stable" and "testing"; nothing here is ready for a stable release
+release = "testing"
+
+# The vendor bootloader (0x08000000..0x08003FFF) is never written; the image goes to 0x08004000 through the factory
+# update mode (hardware-d878uv2.md 1.4)
+[flash]
+family = "anytone-update"
+keep_codec = false
+stock_versions = ["4.00"]
+backup = { stock = "none", rfoundry = "none", spi_size = 0 }
+
+# The GD32F30x stub's board record (stub/f4stub.py): its board id (HELLO echoes it) and whether it has run on a
+# radio. The record's other field, the bootloader's end, is APP_BASE
+[flash.stub]
+id = 8
+tested = false
+# The SPI NAND the stub reads as its external memory (pins from pins.h): 2 Gbit, dual SPI reads
+spi_nand = { mb = 256, dual = true }
+
+# What no tool erases or writes, as offsets in the program flash. Not the modem boot slot (0xFF000-0x100000): every
+# install through the update mode writes it, and the stub writes it only from an image that carries the boot block
+[[flash.protect]]
+mem = "progmem"
+start = 0x0
+end = 0x4000
+what = "the vendor bootloader and its update mode (hardware-d878uv2.md 1.3, 1.4)"
+
+# The model name the update mode answers (byte 02). Read from the 4.00 update set's descriptor file, not from a
+# radio (hardware-d878uv2.md 1.2, 1.4)
+[flash.anytone]
+models = { GD = ["D878UV2"] }
+
+[flash.bootloader]
+hold = ["ptt", "pf3"]
+steps = [
+	"Turn the radio off and connect the USB cable.",
+	"Hold PTT and the PF3 key on top and turn the radio on.",
+	"Release the keys when the red LED blinks.",
+]
+
+# How the site draws the radio
+[frame]
+shape = "handheld"
+body = "#1d1e21"
+accent = "#d0a020"
+lens = [20, 20]
+
+# The DMR baseband's boot block (hardware-anytone.md 2.2), merged from the user's stock file into the modem boot
+# slot (boards/d878uv2/memory.ld __codec_slot)
+[codec]
+tool = "modem_boot"
+profile = "d878uv2-boot"
+sources = ["AT-D878UVII PLUS stock firmware (.CDD), any build", "a program flash read of the radio"]
