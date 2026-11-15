@@ -672,6 +672,8 @@ From a radio running this port (its diagnostics page), beyond the codeplug read 
 | The battery divider and the panel potentiometer | 8275 mV at a full pack, and the potentiometer reads across its travel |
 | The keypad, the knob and the power key as inputs | the raw matrix, `knob` and `power` readings move as expected |
 | Receive on the AT1846S | RSSI and the noise reading follow the band; the squelch opens |
+| **The core's storage on the NAND** | a whole codeplug was written through the CPS and read back identical, so the sector layer mounts, wears and reads in RadioFoundry's own blocks. The factory mark it treats as blank (ten 0x55 bytes) holds on this radio too |
+| The open-firmware CPS | answers on the USB serial port: identity, and a whole codeplug written and verified |
 
 **Not confirmed: audio.** A receiver that opens its squelch is silent, which is consistent with the codec never
 being configured: it is reachable only through the baseband (2.5 of the family page), and the port sends it the
