@@ -8,13 +8,14 @@
 #include "pins.h"
 #include "mcu_io.h"
 #include "config.h"
+#include "debuglink/dl_fmt.h"
 #if CONFIG_DMR
 #include "modem/sct/sct_dmr.h"
 #endif
 
 #if CONFIG_DIAG
 
-#define DIAG_LINES	5u
+#define DIAG_LINES	7u
 
 typedef struct {
 	char *p, *end;
@@ -133,10 +134,52 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 		put_x(&o, d878uv2_rf_gpio(), 4);
 		break;
 	}
+	case 5:
+		put(&o, "adc ");
+		put_u(&o, mcu_adc_read(ADC_CH_UNKNOWN));
+		put(&o, " ");
+		put_u(&o, mcu_adc_read(ADC_CH_BATTERY));
+		put(&o, " ");
+		put_u(&o, mcu_adc_read(ADC_CH_VOLUME));
+		break;
+	case 6:
+		put(&o, "power ");
+		put_u(&o, mcu_pin_read(PIN_POWER_KEY));
+		put(&o, " knob ");
+		put_u(&o, mcu_pin_read(PIN_KNOB_A));
+		put_u(&o, mcu_pin_read(PIN_KNOB_B));
+		put(&o, " sense ");
+		put_u(&o, mcu_pin_read(PIN_KEY_SENSE0));
+		put_u(&o, mcu_pin_read(PIN_KEY_SENSE1));
+		put_u(&o, mcu_pin_read(PIN_KEY_SENSE2));
+		break;
 	default:
 		return false;
 	}
 	*o.p = '\0';
+	return true;
+}
+
+// Stable raw view keys for host tests and interactive bring-up.
+bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
+{
+	if (len == 0 || i >= 14u) {
+		return false;
+	}
+	if (i < 3u) {
+		dl_fmt(buf, len, "adc.%u=%u", 10u + i, (unsigned)mcu_adc_read((uint8_t)(10u + i)));
+	} else if (i == 3u) {
+		dl_fmt(buf, len, "power_switch=%u", (unsigned)mcu_pin_read(PIN_POWER_KEY));
+	} else if (i == 4u) {
+		unsigned ab = (mcu_pin_read(PIN_KNOB_A) ? 1u : 0u) | (mcu_pin_read(PIN_KNOB_B) ? 2u : 0u);
+		dl_fmt(buf, len, "knob_ab=%u", ab);
+	} else if (i == 5u) {
+		dl_fmt(buf, len, "matrix_idle=%u", (unsigned)d878uv2_key_idle());
+	} else {
+		uint8_t raw[8];
+		d878uv2_key_raw(raw);
+		dl_fmt(buf, len, "matrix.%u=%u", (unsigned)(i - 6u), (unsigned)raw[i - 6u]);
+	}
 	return true;
 }
 

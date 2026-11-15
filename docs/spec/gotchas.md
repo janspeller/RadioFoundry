@@ -645,6 +645,12 @@ on every read of a hot clock. Rule: integer fixed point (1e-7 degree, x10 units,
 a single-precision FPU does it in hardware. `tools/ci.sh` warns when a default or maximal image links double or libm
 code.
 
+**13.13 GPS power through an uninitialized RF chip.** A GPS task started during board initialization can run
+while the startup task yields in display initialization, before the radio initializes its RF bus. If GPS power
+is an RF-chip GPIO, the power callback calls through an uninitialized bus pointer and faults before the UI or
+USB starts. Create the GPS task after the RF chip and bus are initialized. A scheduler delay is not a readiness
+guarantee. A host test must exercise GPS power immediately when task creation becomes possible.
+
 ## 14. SFR (single frequency repeater)
 
 **14.1 The HR_C6000's RX status is unreliable while it transmits.** CRC flag, color code (reg 0x52), sync type
@@ -802,6 +808,11 @@ board whose encoder runs on one level interrupt, the key scan checks that a pend
 on two scans running with no handler entry between them, keep the controller and bank state for the debug link, serve
 the bank from the scan and unmask the source (the steps of the stall window may be lost). Count every source the fallback handler masks. Radios: the HR_C7000
 boards with an interrupt-driven encoder; one confirmed.
+
+**16.5 Encoder rest mask and consumed total.** A quadrature decoder's rest argument is a bit mask of accepted
+states, not the current two-bit pin value. Use the named rest masks. Keep the consumer's taken total between
+reads; resetting it replays old detents indefinitely. A regression test must include edges between scans and
+repeated reads after a single turn.
 
 ## 17. Scan
 

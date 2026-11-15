@@ -25,6 +25,7 @@ void d878uv2_gps_init(void);
 #endif
 #if CONFIG_DIAG
 bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len);
+bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len);
 void d878uv2_diag_reset(void);
 #endif
 
@@ -47,6 +48,7 @@ _Static_assert(KEY_COUNT <= 32, "the key scan is a 32-bit mask");
 void d878uv2_key_raw(uint8_t raw[8]);
 // The direct inputs as pressed bits: 0 PTT, 1 PF3, 2 PF1, 3 PF2, 4 the accessory detect on PA13
 uint8_t d878uv2_key_direct(void);
+uint8_t d878uv2_key_idle(void);
 
 // --- SPI NAND (nand_d878uv2.c, docs/spec/hardware-d878uv2.md 4.1) ---
 // RadioFoundry's own blocks, above everything the stock firmware writes (it stops at block 1741). The same layout

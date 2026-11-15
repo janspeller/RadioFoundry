@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from rfoundry_hil import DebugLinkError, as_int
+from rfoundry_hil import DebugLinkError, as_int, skip
 
 
 @pytest.mark.feature("debuglink")
@@ -109,3 +109,23 @@ def test_oversized_request_rejected(radio):
     r = radio.link._read_frame(time.monotonic() + 1.0)
     assert r is not None and r[0] == 0xFF and r[2][0] == 6, r
     radio.ping()
+
+
+@pytest.mark.feature("gps")
+@pytest.mark.reboot
+def test_gps_startup_survives_restart(radio):
+    """GPS power through an RF chip must not fault before or during normal startup."""
+    if "GPS" not in radio.features():
+        skip("not_built", "built without GPS")
+    radio.link.reboot(0, radio.link.chip()["token"])
+    radio.link.close()
+    time.sleep(2.0)
+    radio.reconnect(30.0, "GPS startup")
+    previous = as_int(radio.view(["link"])["uptime_ms"])
+    # Cover the initial module probe and the missing-module shutdown path.
+    deadline = time.monotonic() + 12.0
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        current = as_int(radio.view(["link"])["uptime_ms"])
+        assert current >= previous, "radio restarted during GPS startup"
+        previous = current

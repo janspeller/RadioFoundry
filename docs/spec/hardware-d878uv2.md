@@ -496,3 +496,58 @@ Nothing has been written back to a radio.
 - Sections 2 to 6 are read from the stock image named in 1.2, under the spec side's rules
   ([CLEANROOM.md](../CLEANROOM.md))
 - The family's page, [hardware-anytone.md](hardware-anytone.md), and its sources
+
+## Early startup diagnostic
+
+The opt-in `D878UV2_STARTUP_PROBE` build holds PC3 high and sets PE3 high before clock setup. After resetting the
+time base at the selected clock rate, it initializes the LCD, enables PB0 and draws the boot splash. It then
+blinks PE3 every 500 ms without starting the scheduler or initializing storage, USB or the modem. This is a
+bring-up probe, not normal application behavior. The owner observed a blinking receive LED and a visible splash with probe 1. The splash was rotated 180 degrees
+with MADCTL 0x68; the board now selects 0xA8 by toggling MX and MY. The corrected orientation awaits confirmation.
+Probe 2 continues into normal startup after the early splash and reports board initialization stages with LED
+pulse counts, as listed in the bring-up procedure.
+See [the bring-up procedure](../testing/d878uv2-bringup.md#early-startup-probe).
+
+Probe 3 reads and validates the retained crash record before the scheduler starts. A valid record is displayed
+with the fault summary, LR, CFSR and HFSR; the probe then waits while servicing the watchdog through the early
+delay path. Without a valid record it continues like probe 2. Seven pulses followed by a reset were observed
+with probe 2; the failure is not yet localized beyond board initialization returning.
+
+### GPS startup dependency
+
+The GPS task must be created only after the RF bus is attached and AT1846S initialization has finished.
+The GPS power callback writes the RF chip's GPIO register, so creating the task in board initialization lets
+it dereference an uninitialized bus while display delays yield the startup task. The observed crash was
+`fault 3 at 20001E50 in gps`, LR `08032739`, CFSR `00020000`, HFSR `40000000`: an invalid instruction reached
+through the bus callback. GPS initialization now runs at the end of the radio initialization callback.
+The corrected image awaits hardware confirmation.
+
+### Power and input bring-up corrections
+
+A normal boot is confirmed after deferring GPS task creation. The next observed faults were zero battery and
+volume readings, an unresponsive channel knob, and only digits 7, 8 and 9 responding. Power initialization was
+never called, leaving the shared ADC driver uninitialized. Board initialization now calls the power interface
+before peripheral setup. The volume display uses the existing MCU-read knob bar; the ADC supplies its position.
+
+The channel encoder now samples PC8 and PC9 on both edges through EXTI8 and EXTI9. Its decoder uses four
+transitions per detent with rest mask `QUAD_REST_11`; the previous code passed a pin value as the mask and reset
+the consumer's total on every read. Verify steps per click and direction on hardware.
+
+Matrix settling is 5 microseconds per drive change, rather than the shorter guessed loop. The scan restores the
+LCD data outputs before returning, including when it preempts a display write. The keypad map is unchanged and
+still requires hardware confirmation. The normal 8-second power-switch guard is restored in the controls image;
+the previous diagnostic build deliberately ignored shutdown for about 49 days.
+
+With diagnostics enabled, the board view exposes these raw keys:
+
+| Key | Value |
+| --- | --- |
+| `board.adc.10`, `.11`, `.12` | ADC counts for PC0, battery PC1 and volume PC2 |
+| `board.power_switch` | PA0 level, before debounce |
+| `board.knob_ab` | PC8 in bit 0 and PC9 in bit 1 |
+| `board.matrix_idle` | Sense-low bits with all rows high, captured by the key scan |
+| `board.matrix.0` through `.7` | Sense-low bits for each driven row; PB1 bit 0, PB2 bit 1, PC5 bit 2 |
+
+The owner confirms all keys and the battery bar work with the controls image. The channel knob reports one
+channel change per two physical clicks with the four-transition setting. The correct transitions per click
+and rest-state mask must be measured; the likely two-transition correction is not yet applied.

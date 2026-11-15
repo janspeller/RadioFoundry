@@ -17,6 +17,10 @@ build between releases the commit it was built from. The boot text lines are 16 
 To turn the radio off, use the power switch again. On the handhelds, turn the volume knob counterclockwise until it
 clicks. See [Turning off](16-battery-and-power.md#turning-off).
 
+On a radio with an MCU-read volume knob, turning it shows the volume bar. Check the battery reading and turn
+the channel knob one click each way before programming channels. See the [feature matrix](../feature-matrix.md)
+for each radio's controls and bring-up status.
+
 ## Channels on a new installation
 
 RadioFoundry reads the codeplug from the radio's SPI flash, in the layout the Codeplug Editor and qdmr write. The codeplug holds the channels, zones,

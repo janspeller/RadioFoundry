@@ -11,6 +11,15 @@
 #include "pins.h"
 #include "mcu_io.h"
 #include "hal_time.h"
+#ifdef D878UV2_STARTUP_PROBE
+#include "ui/ui.h"
+#if D878UV2_STARTUP_PROBE == 3 && CONFIG_CRASH_LOG
+#include "ui/gfx.h"
+#include "crash/crash.h"
+#include "debuglink/dl_fmt.h"
+#endif
+void gd32_time_init(void);
+#endif
 #if CONFIG_USB
 #include "usb/usb_device.h"
 #endif
@@ -115,6 +124,7 @@ const board_t board = {
 #endif
 #if CONFIG_DIAG
 	.diag_line = d878uv2_diag_line,
+	.view_line = d878uv2_view_line,
 	.diag_reset = d878uv2_diag_reset,
 #endif
 };
@@ -130,27 +140,93 @@ void board_rf_safe(void)
 
 void board_early_init(void)
 {
+#ifdef D878UV2_STARTUP_PROBE
+	// An early marker independent of the RTOS, NAND and modem.
+	mcu_pin_out(PIN_POWER_HOLD, true, false);
+	mcu_pin_out(PIN_LED_RX, true, false);
+#endif
 	mcu_clock_init(CRYSTAL_HZ, CORE_HZ);
+#ifdef D878UV2_STARTUP_PROBE
+	// Restart the time base after the clock change before using display delays.
+	gd32_time_init();
+	board.display->init();
+	board.display->set_backlight(100);
+	ui_boot_splash();
+#if D878UV2_STARTUP_PROBE == 3 && CONFIG_CRASH_LOG
+	// Read before crash_init or any new task can replace the previous run's record.
+	const crash_record_t *r = hal_crash_store();
+	if (crash_valid(r)) {
+		char text[104];
+		crash_summary(r, text, sizeof(text));
+		gfx_frame_begin();
+		gfx_clear(0);
+		for (unsigned row = 0, i = 0; row < 4 && text[i]; row++) {
+			char line[26];
+			unsigned n = 0;
+			while (n < sizeof(line) - 1 && text[i]) {
+				line[n++] = text[i++];
+			}
+			line[n] = 0;
+			gfx_text(&font_6x12, 2, (int)row * 14, line, 0xFFFF);
+		}
+		dl_fmt(text, sizeof(text), "LR %08X", (unsigned)r->lr);
+		gfx_text(&font_6x12, 2, 62, text, 0xFFFF);
+		dl_fmt(text, sizeof(text), "SR %08X %08X", (unsigned)r->status[0], (unsigned)r->status[1]);
+		gfx_text(&font_6x12, 2, 78, text, 0xFFFF);
+		gfx_flush();
+		for (;;) {
+			hal_delay_ms(500);
+		}
+	}
+#endif
+#if D878UV2_STARTUP_PROBE == 1
+	for (;;) {
+		mcu_pin_write(PIN_LED_RX, false);
+		hal_delay_ms(500);
+		mcu_pin_write(PIN_LED_RX, true);
+		hal_delay_ms(500);
+	}
+#endif
+#endif
 	// PA15, PB3 and PB4 are the NAND's MISO and the RF bus: free them from JTAG, keep SWD
 	mcu_jtag_release();
 }
 
+#if defined(D878UV2_STARTUP_PROBE) && D878UV2_STARTUP_PROBE >= 2
+// Pulse count names the next operation, so a stall leaves its last marker visible.
+static void startup_stage(unsigned stage)
+{
+	mcu_pin_write(PIN_LED_RX, false);
+	hal_delay_ms(700);
+	for (unsigned i = 0; i < stage; i++) {
+		mcu_pin_write(PIN_LED_RX, true);
+		hal_delay_ms(150);
+		mcu_pin_write(PIN_LED_RX, false);
+		hal_delay_ms(150);
+	}
+}
+#else
+#define startup_stage(stage) ((void)0)
+#endif
+
 void board_init(void)
 {
-	// The power hold first: everything else runs on it
-	mcu_pin_out(PIN_POWER_HOLD, true, false);
+	// Initialize the ADC and power inputs before any consumer reads them.
+	d878uv2_power.init();
 	hal_delay_ms(10);
+	startup_stage(2);
 	d878uv2_nand_init();
 #if CONFIG_NAND_STORAGE
 	// The core's storage, mounted before storage_init reads it. Without it the radio runs on the default settings
+	startup_stage(3);
 	d878uv2_flash_init();
 #endif
 	// The factory calibration: read before anything can transmit, never written (hardware-d878uv2.md 5)
+	startup_stage(4);
 	d878uv2_cal_load();
 #if CONFIG_DMR
+	startup_stage(5);
 	d878uv2_modem_init();
 #endif
-#if CONFIG_GPS
-	d878uv2_gps_init();
-#endif
+	startup_stage(7);
 }

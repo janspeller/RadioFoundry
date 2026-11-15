@@ -3,6 +3,10 @@
 
 # AT-D878UVII PLUS bring-up checklist
 
+Latest status and resumption instructions: [2026-11-15 session handoff](d878uv2-session-handoff.md).
+Normal boot, all keys and the battery bar are now confirmed. The channel knob currently needs two clicks per
+channel change. Earlier planning statements below are historical; use the handoff for current hardware status.
+
 No board for the handhelds yet. The family's platform, baseband driver and flashing route are written and running on
 the AT-D578UV, so this radio is a board on top of them, not a new port: `platform/gd32f30x`, `drivers/modem/sct`
 ([modem-sct.md](../spec/modem-sct.md)), `drivers/flash/spi_nand`, `drivers/rf/at1846s`, `drivers/display/st7735` and
@@ -219,3 +223,93 @@ Everything not named here follows [d578uv-bringup.md](d578uv-bringup.md) unchang
 | The eight the image did not settle: PA5, ADC channel 10, the LED colors, PE0, PE15, PB11, PA9, PC13, the PB2+PE1 power-on path, the daughter board's protocol | [hardware-d878uv2.md](../spec/hardware-d878uv2.md) 6 |
 | Whether the BT/APRS board speaks the protocol `drivers/input/bt_at` already drives, and whether its `CMX865` can serve APRS receive in place of the software demodulator | this page, the table above |
 | Whether the 868 can share this board directory, with its smaller flash and RAM | the registry, when the board lands |
+
+## Early startup probe
+
+A first RadioFoundry install left the screen dark and exposed no USB device. Extending the PA0 shutdown guard
+with `D878UV2_POWER_KEY_GUARD_MS=4294967295u` did not resolve it. The owner confirms a volume potentiometer with
+a mechanical on/off click; the power-key interpretation of PA0 remains unconfirmed.
+
+Build the isolated probe with:
+
+```
+make BOARD=d878uv2 BUILD=build/d878uv2-startup-probe D878UV2_DEFS=-DD878UV2_STARTUP_PROBE=1
+```
+
+Flash the resulting `_codec.bin` through update mode. This probe asserts PC3 and lights the receive LED before
+clock setup, then initializes the display and draws the boot splash. A blinking receive LED means it passed
+those calls. A steady receive LED means it reached the early marker but has not reached the blink loop. No LED
+is inconclusive because the LED wiring is also unconfirmed. The watchdog can restart a stalled probe.
+
+The probe stops before the scheduler, NAND, calibration, input, USB and modem initialization. No USB device is
+expected from this image. It does not test normal application startup. Turn the knob off to end the test.
+
+### Probe 1 result and probe 2
+
+The owner observed the blinking receive LED and a RadioFoundry splash rotated 180 degrees. The early clock,
+display and backlight path therefore runs. MADCTL changes from 0x68 to 0xA8 to reverse both axes; confirm the
+corrected orientation on the next boot.
+
+Probe 2 (`D878UV2_STARTUP_PROBE=2`) continues after the early splash into normal startup. Keep the extended
+PA0 guard for this test. The green LED pulses before each operation:
+
+| Pulses | Next operation |
+| --- | --- |
+| 2 | NAND probe |
+| 3 | Storage mount |
+| 4 | Factory calibration read |
+| 5 | Modem initialization |
+| 6 | GPS initialization |
+| 7 | Return from board initialization to application startup |
+
+No pulses after the splash narrows the failure to the path before the startup task reaches board initialization.
+Repeated groups can indicate watchdog resets. Unlike probe 1, probe 2 can expose normal application USB if startup
+reaches it. Record the last complete group, any repeated sequence, and whether the splash disappears.
+
+### Probe 2 result and crash probe
+
+The owner observed seven pulses followed by a restart. Board initialization returned; the reset occurs later or
+in another task. Probe 3 (`D878UV2_STARTUP_PROBE=3`, with the extended PA0 guard) checks the retained crash record
+immediately after the early splash. If its CRC is valid, it displays the summary, LR, CFSR and HFSR and stops
+before the scheduler. Record every displayed line. If no valid record survives, it continues like probe 2;
+a subsequent captured crash can be displayed on the next automatic restart. A hardware watchdog reset without
+a captured record, or a bootloader that overwrites retained RAM, may still repeat without showing details.
+
+### GPS startup fault
+
+Probe 3 displayed `fault 3 at 20001E50 in gps`, LR `08032739`, SR `00020000 40000000`.
+The crash-probe ELF maps LR to the indirect bus write in `at1846s_write_force`. GPS power used that bus before
+RF initialization. GPS task creation moves from board initialization to the end of RF initialization.
+The next image uses normal startup, with the extended PA0 guard retained. Confirm the splash, a working home
+screen and USB, then leave it running beyond the GPS probe window. Probe stage 6 is removed because GPS creation
+now occurs later. `rfGpsStartupTest` exercises the real RF initialization and immediately calls GPS power when
+the GPS task would be created; it fails without the fix.
+
+### Normal boot and controls image
+
+The owner confirms normal boot with the GPS ordering fix. Battery was 0 percent, volume produced no bar,
+shutdown at the knob click was ignored, the channel knob did not work, and only numeric keys 7, 8 and 9 responded.
+The controls image calls power initialization, samples encoder edges with a valid rest mask and persistent
+consumer count, and gives the keypad 5 microseconds to settle while preserving the interrupted LCD data byte.
+It uses the normal 8-second shutdown guard, not the extended diagnostic guard.
+
+After installing `build/d878uv2-controls/rfoundry_d878uv2_codec.bin`, check:
+
+1. Battery millivolts and percentage. Compare the raw `board.adc.11` with the scaled value.
+2. Volume knob travel and the existing volume bar. `board.adc.12` must change with the knob.
+3. All numeric keys, then menu, arrows and exit. Hold a failing key while reading `board.matrix.*` and
+   `board.matrix_idle`; do not change the map from a guessed position.
+4. Ten channel clicks each way, with the manual encoder HIL test. Confirm direction and one event per click.
+5. After at least 8 seconds on, turn the volume knob past the off click and allow 2 seconds for debounce.
+   If it stays on, inspect `board.power_switch` rather than guessing its polarity.
+
+`boardPowerStartupTest` verifies power initialization precedes other board work. `matrixEncoderTest` exercises
+every mapped key against delayed sense inputs, output restoration, encoder edges between scans and consuming
+each detent only once. Both encoder regressions and missing power initialization fail without their fixes.
+
+### Controls image result
+
+The owner confirms all keys work, the battery bar works, and the channel rotary works. Two physical clicks are
+needed for one channel change with the current four-transition decoder. The likely next correction is two
+transitions per detent with `QUAD_REST_EQUAL`, after checking physical rest states and raw transition counts.
+No encoder-ratio correction has been applied yet. Volume bar/audio and shutdown still await explicit confirmation.

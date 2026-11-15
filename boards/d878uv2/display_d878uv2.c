@@ -8,9 +8,8 @@
 //   - **the orientation.** The controller's own frame is 128 wide by 160 tall and the stock firmware draws it that
 //     way with MADCTL 0x88 (hardware-d878uv2.md 4.2), but the glass sits rotated in the housing: the screen is
 //     wider than it is high. So RadioFoundry uses the panel in landscape, 160 by 128, which needs the row/column
-//     exchange the stock value does not set. The value below is the landscape correction the family's other
-//     160x128 board needed; which way round this one lands, and whether red and blue come out swapped, is for the
-//     bench (docs/testing/d878uv2-bringup.md, stage 2).
+//     exchange the stock value does not set. The first probe confirmed a working splash with a 180-degree
+//     rotation; the correction below flips both axes (docs/testing/d878uv2-bringup.md, stage 2).
 // The init sequence itself is recorded in hardware-d878uv2.md 4.2 and matches the AT-D868UV's value for value.
 #include "d878uv2.h"
 #include "config.h"
@@ -88,13 +87,12 @@ static const st7735_bus_t bus = {
 	.delay_ms = hal_delay_ms,
 };
 
-// Landscape: the panel is mounted rotated, so the frame is used the long way round. Type 0's base MADCTL is 0xA0
-// and 0xA0 ^ 0xC8 = 0x68 (column/row exchange, mirrored, BGR); the stock firmware's own 0x88 is the unrotated
-// frame and does not apply here. Orientation and the color order are to be checked on the radio
+// Landscape MADCTL 0xA8: the early startup probe displayed the splash rotated 180 degrees
+// with 0x68. Toggle MX and MY together, retaining row/column exchange and color order.
 static const st7735_t panel = {
 	.bus = &bus,
 	.type = 0,
-	.madctl_xor = 0xC8,
+	.madctl_xor = 0x08,
 	.width = LCD_W,
 	.height = LCD_H,
 };

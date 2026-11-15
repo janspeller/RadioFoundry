@@ -1569,3 +1569,32 @@ run-webctlassets: httpAssetsTestWebctl
 	./httpAssetsTestWebctl out/http_webctl
 	python3 -I $(ROOT)/tools/gen_http_assets.py --check out/http_webctl $(WEBCTL_ASSETS)
 .PHONY: run-webctlassets
+
+# RF-powered GPS must start after the board's RF bus and chip initialization.
+TESTS += rfGpsStartupTest
+rfGpsStartupTest: rfGpsStartupTest.c stubs/rf_startup/mcu_io.h $(ROOT)/boards/d878uv2/radio_d878uv2.c $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS)
+	$(CC) $(CFLAGS) -I$(ROOT)/hal -Istubs/rf_startup -ffunction-sections -fdata-sections \
+		'-DRF_STARTUP_SOURCE="../../boards/d878uv2/radio_d878uv2.c"' \
+		-DRF_GPS_INIT=d878uv2_gps_init -DRF_GPS_POWER=d878uv2_gps_power -DRF_GPIO_READ=d878uv2_rf_gpio \
+		-Wl,--gc-sections -o $@ rfGpsStartupTest.c $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS) $(ROOT)/drivers/rf/subaudio/subaudio.c
+.PHONY: run-rfgps
+run: run-rfgps
+run-rfgps: rfGpsStartupTest
+	./rfGpsStartupTest
+
+TESTS += matrixEncoderTest boardPowerStartupTest
+matrixEncoderTest: matrixEncoderTest.c stubs/input_mcu/mcu_io.h $(ROOT)/boards/d878uv2/input_d878uv2.c $(ROOT)/drivers/input/keymatrix/keymatrix.c $(ROOT)/drivers/input/quadrature/quadrature.c
+	$(CC) $(CFLAGS) -I$(ROOT) -I$(ROOT)/hal -Istubs/input_mcu \
+		'-DINPUT_SOURCE="boards/d878uv2/input_d878uv2.c"' -o $@ matrixEncoderTest.c \
+		$(ROOT)/drivers/input/keymatrix/keymatrix.c $(ROOT)/drivers/input/quadrature/quadrature.c
+boardPowerStartupTest: boardPowerStartupTest.c stubs/input_mcu/mcu_io.h $(ROOT)/boards/d878uv2/board.c
+	$(CC) $(CFLAGS) -I$(ROOT) -I$(ROOT)/hal -Istubs/input_mcu -ffunction-sections -fdata-sections \
+		-DCONFIG_GPS=0 -DCONFIG_DIAG=0 -DCONFIG_NAND_STORAGE=0 \
+		'-DBOARD_STARTUP_SOURCE="boards/d878uv2/board.c"' '-DBOARD_T_NAME="host"' \
+		-DPOWER_DEVICE=d878uv2_power -DNAND_INIT=d878uv2_nand_init -DCAL_LOAD=d878uv2_cal_load -DMODEM_INIT=d878uv2_modem_init \
+		-Wl,--gc-sections -o $@ boardPowerStartupTest.c
+.PHONY: run-board-input
+run: run-board-input
+run-board-input: matrixEncoderTest boardPowerStartupTest
+	./matrixEncoderTest
+	./boardPowerStartupTest

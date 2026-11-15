@@ -209,6 +209,10 @@ static void init(void)
 	gpio_shadow = RF_GPIO_SETUP;
 	gpio_flush();
 	at1846s_init_finish(&rf);
+#if CONFIG_GPS
+	// GPS power is an RF-chip GPIO: its task must not run until this bus is ready.
+	d878uv2_gps_init();
+#endif
 }
 
 static void set_mode(radio_mode_t mode)

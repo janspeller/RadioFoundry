@@ -3,8 +3,8 @@
 // AT-D878UVII PLUS keys, PTT and channel knob (docs/spec/hardware-d878uv2.md 4.1.1, 4.3).
 //
 // The matrix is driven on the LCD's data lines PE7-PE14, one line low at a time, and read on three pull-up
-// inputs; keys are active low. The stock firmware scans between LCD writes, and so does this: the scan leaves the
-// data bus high, and the display's own writes set it again on every byte.
+// inputs; keys are active low. A scan restores the data bus before returning, so it can preempt a display write
+// without changing the byte that the interrupted write will latch.
 //
 // Four keys are not matrix positions: they are wired to ground and read with every drive line high. PTT is PA10,
 // PF1 is PE1 and PF2 is PA14. **PF3 shares PB2 with matrix column 1**, so while PF3 is held that column cannot be
@@ -17,6 +17,7 @@
 #include "config.h"
 #include "pins.h"
 #include "mcu_io.h"
+#include "hal_time.h"
 #include "input/keymatrix/keymatrix.h"
 #include "input/quadrature/quadrature.h"
 
@@ -52,16 +53,17 @@ static const keymatrix_t matrix = {
 };
 
 static quad_dec_t knob;
+static int32_t knob_taken;
+#define KNOB_LINES (MCU_PIN(8) | MCU_PIN(9))
 static uint8_t last_raw[ROWS];
 static uint8_t last_direct;
+static uint8_t last_idle;
 static bool ptt_prev;
 
-// The settle between driving a line and reading the senses. The stock firmware uses a short busy loop; at 120 MHz
-// this is a few hundred nanoseconds, well over the RC of a pull-up on a short trace
+// Allow the matrix pull-ups to settle, matching the few-microsecond scan delay in the spec.
 static inline void settle(void)
 {
-	for (volatile int i = 0; i < 16; i++) {
-	}
+	hal_delay_us(5);
 }
 
 static uint8_t read_sense(void)
@@ -125,6 +127,12 @@ static uint8_t knob_ab(void)
 	return ab;
 }
 
+void MCU_EXTI9_5_HANDLER(void)
+{
+	mcu_exti_clear(KNOB_LINES);
+	(void)quad_sample(&knob, knob_ab());
+}
+
 static void init(void)
 {
 	for (unsigned c = 0; c < COLS; c++) {
@@ -138,18 +146,28 @@ static void init(void)
 	mcu_pin_in(PIN_KNOB_B, MCU_PULL_UP);
 	// The drive lines are the LCD's data bus and the display's init already made them outputs; leave them high
 	drive_all_high();
-	quad_init(&knob, 4, knob_ab(), knob_ab());
+	quad_init(&knob, 4, QUAD_REST_11, knob_ab());
+	knob_taken = 0;
+	mcu_exti_route(GPIOC, 8);
+	mcu_exti_route(GPIOC, 9);
+	mcu_exti_both_edges(KNOB_LINES);
+	mcu_exti_clear(KNOB_LINES);
+	mcu_exti_enable(KNOB_LINES);
+	NVIC_SetPriority(MCU_EXTI9_5_IRQn, 6);
+	NVIC_EnableIRQ(MCU_EXTI9_5_IRQn);
 }
 
 static uint32_t scan(void)
 {
 	uint8_t row_low[ROWS];
+	uint16_t saved_data = (uint16_t)(KEY_DRIVE_PORT->OCTL & LCD_DATA_MASK);
 
 	// The direct inputs are read with every drive line high, as the stock firmware does
 	drive_all_high();
 	settle();
 	uint8_t direct = read_direct();
 	uint8_t idle_low = read_sense();
+	last_idle = idle_low;
 
 	for (unsigned r = 0; r < ROWS; r++) {
 		drive_one_low(r);
@@ -157,11 +175,9 @@ static uint32_t scan(void)
 		row_low[r] = read_sense();
 		last_raw[r] = row_low[r];
 	}
-	drive_all_high();
+	mcu_port_put(KEY_DRIVE_PORT, saved_data, (uint16_t)(LCD_DATA_MASK & ~saved_data));
 	last_direct = direct;
 
-	// The knob is sampled with the scan: a detent is slower than the UI's scan interval
-	(void)quad_sample(&knob, knob_ab());
 
 	uint32_t keys = keymatrix_decode(&matrix, idle_low, row_low);
 	// PF1 and PF2 are their own pins. PTT keys the transmitter, so it is reported only once two scans running
@@ -183,8 +199,7 @@ static uint32_t scan(void)
 
 static int8_t encoder(void)
 {
-	int32_t taken = 0;
-	return quad_take(&knob, &taken);
+	return quad_take(&knob, &knob_taken);
 }
 
 static void encoder_stats(hal_encoder_stats_t *st)
@@ -201,6 +216,11 @@ void d878uv2_key_raw(uint8_t raw[8])
 	for (unsigned r = 0; r < ROWS; r++) {
 		raw[r] = last_raw[r];
 	}
+}
+
+uint8_t d878uv2_key_idle(void)
+{
+	return last_idle;
 }
 
 uint8_t d878uv2_key_direct(void)
