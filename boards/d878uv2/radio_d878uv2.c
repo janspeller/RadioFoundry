@@ -43,6 +43,7 @@ static at1846s_t rf;
 static rfbus_3w_t rf3w;
 static uint16_t gpio_shadow = RF_GPIO_SETUP;
 static bool keyed;
+static uint32_t rx_hz;		// the last frequency tuned for receive, to put the front end back after a transmission
 
 // --- The three-wire bus ---
 
@@ -263,6 +264,7 @@ static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 	pa_off();
 	bool ok = at1846s_set_bandwidth(&rf, bw_of(bw));
 	ok &= at1846s_set_freq(&rf, hz);
+	rx_hz = hz;
 	front_end_rx(hz);
 	if (rx_tone != NULL && rx_tone->type != TONE_NONE) {
 		ok &= at1846s_set_rx_tone(&rf, tone_of(rx_tone->type), rx_tone->value);
@@ -289,10 +291,18 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 	return ok;
 }
 
+// Back to receive. **The front end has to be put back**: keying drove both receive band enables low (4.3), and
+// leaving them there makes the radio deaf after every transmission - the chip reads no signal at all and the
+// stack sees a dead channel. Measured on a radio before this: RSSI pinned at its floor directly after a
+// transmission until the channel was changed
 static void tx_off(void)
 {
 	pa_off();
 	at1846s_set_state(&rf, AT1846S_STATE_IDLE);
+	if (rx_hz != 0) {
+		front_end_rx(rx_hz);
+		at1846s_set_state(&rf, AT1846S_STATE_RX);
+	}
 }
 
 // The chip's reading is its own scale. The offset below is a datasheet-order placeholder: two known levels on the

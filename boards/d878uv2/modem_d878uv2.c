@@ -171,10 +171,18 @@ static uint32_t crc32(const uint8_t *p, uint32_t len)
 #define CODEC_MICPGA_DEFAULT	0x14u	// unmuted, 10 dB
 #define CODEC_HPL_DEFAULT	0x0Au	// unmuted, +10 dB
 
+#define CODEC_LOL_GAIN		0x12u	// LOL Driver Gain: the line outputs feed the RF chip's modulator input
+#define CODEC_LOR_GAIN		0x13u
+#define CODEC_LINE_DEFAULT	0x00u	// unmuted, 0 dB
+
 static const sct_codec_write_t codec_writes[] = {
 	{ CODEC_PAGE_OUT, CODEC_MICPGA_R, CODEC_MICPGA_DEFAULT },	// the RF chip into the codec
 	{ CODEC_PAGE_OUT, CODEC_MICPGA_L, CODEC_MICPGA_DEFAULT },	// the microphone
 	{ CODEC_PAGE_OUT, CODEC_HPL_GAIN, CODEC_HPL_DEFAULT },		// the speaker, unmuted
+	// Transmit audio: the codec's line outputs drive the RF chip's modulator input, so a transmission with these
+	// muted puts a carrier on the air with nothing on it (hardware-d878uv2.md 4.6, inferred there)
+	{ CODEC_PAGE_OUT, CODEC_LOL_GAIN, CODEC_LINE_DEFAULT },
+	{ CODEC_PAGE_OUT, CODEC_LOR_GAIN, CODEC_LINE_DEFAULT },
 };
 
 static const sct_voice_t voice = {
