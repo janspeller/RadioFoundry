@@ -123,8 +123,11 @@ The factory calibration sits at NAND block 379. RadioFoundry's NAND write window
 driver refuses anything outside it, so neither the firmware nor an install can reach the calibration. The vendor
 update route writes program flash only and does not touch the NAND at all.
 
-**What is still unproven**: none of this has run against a radio. The model string comes from a file, not from one
-answering, and `[flash.stub] tested = false`.
+**Proven on a radio.** Update mode was entered with PTT + PF3, the radio answered model `D878UV2`, hardware 0,
+protocol `V100` (the GD variant), and a whole vendor set was written back over itself: 931,392 bytes in 29,106
+frames, installed, restarted clean. So the way back is not a plan but a procedure that has been run. What has
+**not** run on a radio is a RadioFoundry image itself, and `[flash.stub] tested = false` still holds for the
+separate stub route.
 
 ## Confirming the pin map
 

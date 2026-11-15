@@ -68,9 +68,9 @@ Flash is not the constraint; RAM is, at 96 KB with no CCM.
 | Item | Finding |
 | --- | --- |
 | PC link | Native USB on the MCU, a CDC serial port. The vendor update route is `anytone-update` (921600 baud) |
-| Update mode | PTT + PF3 held at power-on; the red LED blinks |
+| Update mode | PTT + PF3 held at power-on; the red LED blinks. **Confirmed on a radio**, together with a whole write: 931,392 bytes in 29,106 frames, after which the radio installed the image and restarted clean |
 | After an update | "MCU reboot": PTT + PF1 at power-on. It erases the codeplug |
-| Model string | `D878UV2`, carried by the update set's `.spi` (1.2). What the radio itself answers in update mode is unconfirmed |
+| Model string | `D878UV2`. **Confirmed on a radio**: in update mode it answers model `D878UV2`, hardware byte 0, protocol `V100`, which is the GD variant |
 | SWD | Pads marked "AF" beside the MCU. The application disables SWJ with AFIO remap 0x00300400 early in its init (3), so a debugger attaches only with NRST (MCU pin 14) held low. Read-out protection was off on the family's documented units; unconfirmed on current production |
 | Baseband update | A separate mode (`#` + the top key) and a vendor tool. The port never writes it |
 

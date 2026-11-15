@@ -34,8 +34,9 @@ clock = { rtc = "none", note = "the GD32F303 RTC has no crystal on this board (d
 [status]
 level = "bring-up"
 summary = """\
-Nothing is written yet beyond the pin map, the memory layout and the feature defaults. The pin map is read from the \
-radio's stock firmware and has not been seen on a radio."""
+The board builds with FM, DMR through the SCT3258 baseband, the keypad, storage and GPS, from a pin map read out \
+of the radio's stock firmware. No RadioFoundry image has run on a radio yet; the factory update route back to \
+stock has been exercised on one."""
 # the only channels are "stable" and "testing"; nothing here is ready for a stable release
 release = "testing"
 
