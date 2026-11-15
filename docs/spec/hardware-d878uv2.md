@@ -3,8 +3,8 @@
 
 # AnyTone AT-D878UVII PLUS hardware
 
-Status: facts only. Sections 2 to 6 are read from the stock image, so **nothing in them is confirmed on a radio:
-read every line as (unverified)**; section 1.1 is read off a board in photographs. The family page is
+Status: facts only. Sections 2 to 6 are read from the stock image, so **read every line in them as (unverified)**
+unless section 7 says a radio confirmed it; section 1.1 is read off a board in photographs. The family page is
 [hardware-anytone.md](hardware-anytone.md): the baseband, the update modes and what a port needs are there and are
 not repeated here; the baseband's protocol and engine are in [modem-sct.md](modem-sct.md). This page records what is
 specific to the AT-D878UVII PLUS, and checks the AT-D868UV pin map (hardware-anytone.md section 4) pin by pin
@@ -18,7 +18,9 @@ does not record are filled in here: PTT is PA10, and the band and front-end swit
 pins rather than on any MCU pin. Everything else — the
 SCT3258 host port, the LCD transport and controller, the keypad matrix, the AT1846S three-wire bus, the SPI NAND,
 I2C, the GPS UART, the per-slot PA gate — carries over pin for pin. The calibration layout carries over too, with
-wider UHF tables.
+wider UHF tables. The receive audio path is traced in 4.6: the AT1846S's audio reaches the speaker only through
+the codec and the baseband, the volume knob moves a codec register, and PE0 selects which source the speaker
+amplifier amplifies.
 
 ## 1. The radio and its image
 
@@ -31,7 +33,7 @@ schematic, block diagram, operational description and parts list are withheld un
 | --- | --- | --- |
 | MCU | `GD32F303VGT6` | Cortex-M4, 1 MB flash, 96 KB RAM, no CCM. 100-pin LQFP |
 | DMR baseband | `SCT3258TD` | QFN64. Runs DMR layers 1-2 and the AMBE+2 vocoder itself ([modem-sct.md](modem-sct.md)) |
-| Audio codec | `AIC3204` | TLV320AIC3204. Set up through the baseband, not from the MCU ([hardware-anytone.md](hardware-anytone.md) 2.5), which is why it is on no bus in section 4 |
+| Audio codec | `AIC3204` | TLV320AIC3204. The MCU has no bus to it: it is reached through the baseband, which also sets up its clocks, routing and converters (4.6) |
 | RF transceiver | `AT1846S` | `drivers/rf/at1846s` drives it. One chip: no second receiver. Its own GPIO pins carry the band and front-end switching (4.3) |
 | PA | `A5M06` | NXP AFT05MS006 |
 | External flash | `TC58CVG1S3H RA1G` | 2 Gbit SPI NAND, and the part the identity check in 4.1 demands |
@@ -68,9 +70,9 @@ Flash is not the constraint; RAM is, at 96 KB with no CCM.
 | Item | Finding |
 | --- | --- |
 | PC link | Native USB on the MCU, a CDC serial port. The vendor update route is `anytone-update` (921600 baud) |
-| Update mode | PTT + PF3 held at power-on; the red LED blinks. **Confirmed on a radio**, together with a whole write: 931,392 bytes in 29,106 frames, after which the radio installed the image and restarted clean |
+| Update mode | PTT + PF3 held at power-on; the red LED blinks. **Confirmed on a radio** (7.1) |
 | After an update | "MCU reboot": PTT + PF1 at power-on. It erases the codeplug |
-| Model string | `D878UV2`. **Confirmed on a radio**: in update mode it answers model `D878UV2`, hardware byte 0, protocol `V100`, which is the GD variant |
+| Model string | `D878UV2`. **Confirmed on a radio**: in update mode it answers model `D878UV2`, hardware byte 0, protocol `V100`, the GD variant |
 | SWD | Pads marked "AF" beside the MCU. The application disables SWJ with AFIO remap 0x00300400 early in its init (3), so a debugger attaches only with NRST (MCU pin 14) held low. Read-out protection was off on the family's documented units; unconfirmed on current production |
 | Baseband update | A separate mode (`#` + the top key) and a vendor tool. The port never writes it |
 
@@ -271,8 +273,8 @@ parallel transport serves both radios.
 | PA4 | DAC channel 1 (analog mode): **TX power level**. The value is an 8-bit number shifted left by 4 and written 12-bit right-aligned, so only the top 8 bits of the DAC are used. Same as the 868 |
 | PA5 | DAC channel 2 (analog mode), enabled and written from three call sites; what it drives is not identified |
 | PA6 | TIM3 channel 1 PWM, period 4095, AF push-pull: a **frequency-dependent analog control voltage** (VCO or front-end tracking; which is not identified). The duty comes from two 16-bit tables held in RAM. At or below 174 MHz, a 39-entry table on a 1 MHz grid from 136 MHz, interpolated at 100 kHz steps and clamped to its last entry. Above 174 MHz, a 6-entry table on a 1 MHz grid from 220 MHz — which clamps to its last entry for anything past 225 MHz, so the duty is one constant across the whole UHF band. Two other operating modes load a fixed entry instead. The 868 page guesses PA6 or PB0 is a tuning voltage; on this radio it is PA6 |
-| PA7 | **Speaker amplifier enable**, active high, left low at boot. Set in three places, cleared on nearly every state change |
-| PE0 | A second audio-path switch, driven opposite to PA7 in the receive path. Not identified |
+| PA7 | **Speaker amplifier enable**, active high, left low at boot. Set in three places, cleared on nearly every state change. Levels per state: 4.6.3 |
+| PE0 | **The amplifier's input select** (4.6.3): high picks the codec's output (the radio's receive audio), low the tone generator and the broadcast receiver. It is low at reset and whenever the amplifier is off, and the paths that drive it low with PA7 high are the RDA5802 broadcast receiver's — which is where the "driven opposite to PA7" reading came from |
 | PB0 | **LCD backlight**: TIM8 channel 2 complementary output (CH2N), AF push-pull, period 4095, prescaler 3, PWM mode 2 with both polarities low. A separate call reconfigures PB0 as a plain push-pull output driven low to kill the backlight. The 868 page guesses TIMER2 channel 2 here; on this radio it is TIM8 |
 | PB9 | **Tone output**: TIM4 channel 4 PWM, AF push-pull while sounding, switched back to analog when idle. Same as the 868 |
 | PC0, PC1, PC2 | ADC1 channels 10, 11, 12, analog mode, scanned continuously into a three-halfword buffer by DMA1 channel 1 in circular mode, sample time 71.5 cycles. **Channel 11 (PC1) is the battery divider**: four samples are averaged and scaled by × 330 × 4 / 4096, giving units of 10 mV, then a calibration byte is added and 100 subtracted. Full scale works out at about 13.2 V, so the divider is about 1:4. The low-battery thresholds are 600 and 610 (6.00 V and 6.10 V). Channel 12 (PC2) is averaged separately and compared against a moving reference with a 50-count hysteresis, then mapped through a table — the shape of a panel potentiometer, most likely the volume control. Channel 10 (PC0) is read as the top 8 bits of its sample and appended to a 1-byte-per-sample ring buffer indexed by a counter, from two periodic paths — a sampled level trace; what it measures is not identified |
@@ -404,6 +406,165 @@ and carries single-byte commands to the board, one of which is 0xD8.
 | Serial | USART1 (GPS) only | USART2 (GPS, 9600) and UART4 (BT/APRS board, 115200) |
 | Extra lines | — | PA1 daughter-board reset, PE2 USB attach, PE15 BT status |
 
+### 4.6 Receive audio path
+
+All of this is read from the image and **none of it is confirmed on a radio (unverified)**.
+
+**Where the audio goes.** The AT1846S's demodulated audio never reaches the speaker amplifier on its own, in FM or
+in DMR. It goes into the TLV320AIC3204, over I2S to the SCT3258, back over I2S to the codec's DAC and out of the
+codec's **HPL** driver, through the PE0 switch and into the speaker amplifier that PA7 enables:
+
+```
+AT1846S audio out -> AIC3204 analog input (right MICPGA) -> I2S -> SCT3258 -> I2S
+  -> AIC3204 DAC -> HPL driver -> PE0 high -> speaker amplifier (PA7 high) -> speaker
+```
+
+Transmit runs the same loop the other way: the codec's **LOL/LOR** line outputs feed the AT1846S's microphone
+input, which is why the AT1846S's voice source is left on "microphone" (4.6.4).
+
+| Evidence | What it shows |
+| --- | --- |
+| The volume knob sets the codec's HPL driver gain, nothing else (4.6.2) | The level the user hears is produced in the codec, so the audio the user hears comes out of the codec |
+| The AT1846S's own receive gain (reg 0x44) is a fixed per-mode value from a five-entry settings table, never the knob (4.6.4) | The AT1846S is a fixed-gain stage in the chain, not the volume control |
+| No MCU ADC or DAC is on an audio line (4.3: ADC1 is battery, the knob and one level trace; DAC1 is TX power) | The MCU is not in the audio path at all; the only digital path between the RF chip and the speaker is codec + SCT3258 |
+| The SCT3258 carries analog-mode fields (`ANALOG_CONFIG`, `ANALOG_SUBAUDIO`, `CTC_PARAM`, `SQ_LEVEL`, gains — hardware-anytone.md 2.5) and its vocoder selection has an "analog" value | The baseband processes analog FM audio, which it can only get over its I2S link to the codec |
+| The codec's left input chain (IN1L or IN2L routing, left MICPGA volume, left AGC) is set separately from the right MICPGA volume, and only the left one gets AGC | Left channel = microphone, right channel = the RF chip's audio. This split is a reading of the register set, not something the image states |
+| The firmware never writes the codec's clock, DAC, ADC or routing registers (4.6.2) | The SCT3258's own firmware sets the codec up over its I2C master; the MCU only trims gains |
+
+**4.6.1 How the MCU reaches the codec.** Only through the SCT3258, as **codec-bypass packets**: TYPE 0x40 (bit 6
+set, packet type 0), one field with id 0x00 and a five-byte payload
+
+| Payload byte | Meaning |
+| --- | --- |
+| 0 | codec page (0 or 1) |
+| 1 | codec register |
+| 2 | value |
+| 3, 4 | zero |
+
+so one packet is one `page / register = value` write. 22 call sites build such a packet, each with the page and
+register as constants in a literal pool and the value either a constant or an argument; that is the "about twenty
+codec-bypass packets" the family page records. One more call site takes the three bytes from a host command, so the
+PC tool can write any codec register.
+
+**No `CODEC_SELECT`, `SET_I2C_ADDRESS` or `I2C_OPERATION` field is sent to the codec in this image.** No I2C device
+address appears as a constant anywhere in the baseband driver. Codec access is the bypass packet above and nothing
+else, which is a correction to the family page's note (hardware-anytone.md 2.5) for this firmware version
+(unverified).
+
+**4.6.2 The codec registers the firmware writes.** Register names are the TLV320AIC3204 datasheet's (SLOS602).
+
+| Page | Reg | Value written | Datasheet register | Sent from |
+| --- | --- | --- | --- | --- |
+| 1 | 0x10 | gain & 0x3F (bit 6, mute, always cleared) or 0x40 (muted) | HPL Driver Gain Setting | **The volume.** Audio parameter 0x0D |
+| 1 | 0x11 | 0x40, and in one path a caller's gain | HPR Driver Gain Setting | present, no live caller found: HPR is left muted |
+| 1 | 0x12 | caller's byte | LOL Driver Gain Setting | Audio parameter 0x0A |
+| 1 | 0x13 | caller's byte | LOR Driver Gain Setting | Audio parameter 0x0B |
+| 1 | 0x09 | 0x20, 0x0C or 0x2C (HPL only; LOL+LOR; all three) | Output Driver Power Control | three helpers, **no live caller**: the output drivers are powered up by the baseband's own codec setup |
+| 1 | 0x34 | 0x80 (IN1L) or 0x20 (IN2L), 0x00 to unroute | Left MICPGA Positive Terminal Input Routing | microphone select, with the register below |
+| 1 | 0x3B | caller's byte | Left MICPGA Volume Control | **microphone gain.** Audio parameter 0x0E, together with 0x34 |
+| 1 | 0x3C | caller's byte | Right MICPGA Volume Control | Audio parameter 0x0C. No AGC is set for this channel |
+| 0 | 0x56 | caller's byte | Left Channel AGC Control 1 | microphone AGC |
+| 0 | 0x58 | caller's byte | Left Channel AGC Control 3 | microphone AGC maximum gain |
+
+Three things to take from the table. The **mute** is the HPL driver's own bit 6: every gain write the firmware makes
+clears it, and the firmware has no other way to mute that driver. The **volume** is the HPL driver gain, 6-bit
+two's complement, −6 dB … +29 dB. And there is **no output routing, clocking, DAC or ADC setup at all** — the MCU
+inherits whatever the SCT3258 left.
+
+**When they are sent.** Not per call and not per mode change:
+
+| Moment | What is sent |
+| --- | --- |
+| Once, in the boot sequence, after the SCT3258 is booted and immediately before the AT1846S init | The whole audio bring-up: LOL gain, LOR gain, right MICPGA volume, the HPL gain for the current volume step, the microphone routing and gain, plus about fifteen non-codec baseband audio parameters. The five gain bytes come from a RAM record that the settings/calibration reader fills (offsets +0x4D… in the record at 0x2000A050), so they are per-radio values, not constants |
+| Every change of the volume knob, and every path that re-applies the volume | One codec-bypass packet: page 1 register 0x10 = the mapped gain |
+| Squelch opening or closing, a DMR call starting or ending | **Nothing.** The gate is PA7 (and PE0), not the codec |
+
+**The volume map.** Three stages, all in the MCU:
+
+1. The knob's averaged ADC reading (4.3, ADC1 channel 12) becomes a step 0–15: at or below 0x78 step 0, at or
+   above 0xF60 step 15, otherwise `(raw − 0x78) / 0x112 + 1`.
+2. Step 0 maps to 0; steps 1–15 index a 15-byte row of a 9-row table at 0x080DDC20, the row chosen by a settings
+   byte (one byte for one mode and another for the other, with a ninth row — offset +0x78 — forced in one state).
+   The rows rise from `00 02 04 06 09 0B 0C 0D 0E 0F 10 11 12 13 14` to
+   `00 09 0E 12 16 18 1A 1C 1D 1E 1F 20 21 22 23`, so the table is a set of volume curves with different maxima.
+3. That 0…0x23 value indexes a 36-byte table at 0x080DDAF2 which holds `3A 3B 3C 3D 3E 3F 00 01 02 … 1D`, i.e.
+   −6 dB … +29 dB in 1 dB steps as the codec's 6-bit two's complement. The result is the byte written to page 1
+   register 0x10.
+
+So volume step 0 gives −6 dB **and** PA7 low; the firmware never relies on the codec alone to go quiet.
+
+**4.6.3 PA7 and PE0.**
+
+PA7 enables the speaker amplifier, active high, as 4.3 records. PE0 selects what the amplifier amplifies. PE0 is
+driven high only by the audio manager, and only for the radio's own audio; every other path that touches it drives
+it low, and the two paths that drive PE0 low with PA7 high belong to the RDA5802 FM-broadcast receiver (its
+preset list, tuning and its own volume writes sit in the same module). The reading that fits every site is:
+
+| PE0 | Amplifier input |
+| --- | --- |
+| high | the TLV320AIC3204's HPL output — the radio's receive audio, FM and DMR, and anything the baseband plays |
+| low | the other analog source: the MCU's own PB9 PWM tone generator and the RDA5802 broadcast receiver. Also the level at reset and whenever the amplifier is off |
+
+That PE0 is one 2:1 analog switch rather than two things is an inference from the call sites, not something the
+image states (unverified).
+
+Levels, with the conditions the firmware actually tests:
+
+| State | PA7 | PE0 |
+| --- | --- | --- |
+| Board init, before anything else | low | low |
+| Idle, FM receive squelched, DMR receive with no call | low | low |
+| FM receive, squelch open | **high** | **high** |
+| DMR receive, call audio | **high** | **high** |
+| Receive audio open but the sink is the Bluetooth board (the route byte = 4) | high | low |
+| A tone, beep or voice prompt sounding | high | low |
+| Broadcast FM (RDA5802) playing | high | low |
+| Transmit | low | low (the transmit entry clears the audio state, and the manager follows) |
+| Power-off | low | low |
+
+The gate itself is one state byte. The squelch and sub-audio decision for the current channel is reduced to a
+single "audio open" byte, the manager copies it, and from it PA7 and PE0 follow on the next pass of the periodic
+task. There is no separate unmute sequence, no delay and nothing sent to the codec or the baseband when the
+squelch opens. The amplifier is raised through one helper that holds PA7 low only when a settings byte and two
+state bytes all say "suppressed"; otherwise it goes high.
+
+**4.6.4 The AT1846S's audio registers.** Entering a channel, the firmware writes, in this order (register = value,
+through the chip's three-wire bus; the register pair is the same write function used everywhere):
+
+| Register | FM | DMR | Note |
+| --- | --- | --- | --- |
+| 0x3A bits 14:12 | 100 | 100 | voice_sel = microphone, the TX modulator source. Also the value the bandwidth tables leave (0x40C3). The 868-family radios differ from the HR_C6000 radios here, which use 000: on this board the modulator audio arrives on the AT1846S's microphone pin from the codec's line outputs |
+| 0x58 | 0x8085 | 0x80E5 | audio filters |
+| 0x40 | 0x0030 | 0x0031 | bit 0 passes low-frequency audio: set for 4FSK, clear for FM, as on the HR_C6000 radios |
+| 0x44 | one of 0x07F9, 0x08F9, 0x09F9, 0x0AF9, 0x0CF9 | 0x0AFA | **receive volume / AF gain.** FM takes a five-entry halfword table at 0x080AF204 indexed by a settings byte; DMR is the one constant |
+| bandwidth table | 12.5 kHz or 25 kHz | the same | includes 0x3A = 0x40C3, 0x32, 0x33, 0x34, 0x35, 0x36, 0x3C, 0x3F, 0x41, 0x48, 0x50, 0x56, 0x60, 0x62, 0x65, 0x66 and the page-1 AGC table |
+| 0x30 | idle value, then the RX value | the same | 12.5 kHz 0x4006 then 0x4026; 25 kHz 0x7006 then 0x7026. One settings byte adds bit 4 to both (0x4016/0x4036), and the same byte makes AT1846S gpio3 follow the audio state |
+
+In reg 0x44 the low nibble is 9 in FM and 0xA in DMR, bits 7:4 are 0xF in both (full AF gain in the field our
+AT1846S spec calls dac_vgain) and bits 11:8 carry the five FM steps 7, 8, 9, 0xA, 0xC. **The volume knob does not
+reach this register**: the index is a settings byte, so 0x44 is a per-mode trim, the equivalent of the fixed
+0x06CC / 0x07EF the HR_C6000 radios use ([hardware-dm1701.md](hardware-dm1701.md) 5.5).
+
+Reg 0x30 bit 7 (mute) is read from a RAM flag that **nothing in the image ever writes**, so the mute paths
+(0x4086/0x40A6 and the 25 kHz pair) are dead and receive always runs unmuted. Note also that 12.5 kHz here is
+0x4006/0x4026, not the 0x6006/0x6026 the HR_C6000 radios use: this board clears both bandwidth bits for 12.5 kHz.
+
+**4.6.5 What a silent port is missing.** A port that tunes the AT1846S, sees RSSI rise, opens the squelch and
+raises PA7 hears nothing because the two stages after the RF chip are untouched:
+
+1. **PE0 is low.** PA7 high with PE0 low points the amplifier at the tone/broadcast input, not at the codec. In the
+   stock firmware receive audio has **PE0 high and PA7 high together**; the only paths that pair PE0 low with PA7
+   high are the broadcast receiver's.
+2. **The codec's HPL driver is never written**, so it keeps whatever gain and mute bit the SCT3258's own codec
+   setup left. Every gain write the stock firmware makes clears the mute bit; a port that writes nothing has no
+   volume control and may be muted outright.
+3. **The audio bring-up never ran**, so the LOL/LOR gains, the right MICPGA volume (the RF chip's input to the
+   codec), the microphone routing and gain and the baseband's own audio parameters are all at the baseband's
+   defaults.
+
+The AT1846S side (0x44, 0x40, 0x58, 0x30) is the least likely cause: in FM its values are within a few dB of the
+HR_C6000 radios' and the mute bit is never set.
+
 ## 5. Calibration and settings in the NAND
 
 **The 868's addresses hold.** Both the calibration block and the settings record are kept as an A/B pair, and the
@@ -456,7 +617,8 @@ A port must read this calibration from the radio's own NAND and never overwrite 
 
 1. Everything on this page, on a radio.
 2. What PA5 (DAC channel 2) drives, and whether PA6's tuning voltage goes to the VCO or a tracking filter.
-3. What PE0, PE15, PB11, PA9 and PC13 do, and whether PE4 is the Bluetooth indicator.
+3. What PE15, PB11, PA9 and PC13 do, and whether PE4 is the Bluetooth indicator. PE0 is read as the amplifier's
+   input select in 4.6.3; that reading needs a radio and, if it is one 2:1 switch, which source sits on each side.
 4. What ADC channel 10 (PC0) measures: its samples go into a ring buffer, but the consumer was not traced.
 5. What the two-key power-on path (PF3 + PF1, 4.3) does once it is entered.
 6. The meaning of each Bluetooth/APRS command byte over UART4 (4.4), which board key raises which key event, and
@@ -471,6 +633,15 @@ A port must read this calibration from the radio's own NAND and never overwrite 
 12. Whether the keys the firmware calls P1 and P2 (4.1.1) exist on the AT-D878UVII PLUS front panel, and whether
     the label-index-to-settings-offset mapping that names PF1/PF2/PF3 is the positional one assumed there.
 13. Whether a keypad scan has to be locked against LCD writes, since both drive PE7–PE14 (4.1.1).
+14. The receive audio path (4.6), on a radio: that PE0 high and PA7 high together are what makes FM audio
+    audible, that the codec's HPL driver is what the volume knob moves, and whether the codec needs anything
+    beyond the gains once the SCT3258 has booted.
+15. Which settings byte selects the FM value of AT1846S reg 0x44 (4.6.4), which byte adds reg 0x30 bit 4, and
+    which menu item each is.
+16. What the codec's LOL/LOR line outputs feed. The modulator input of the AT1846S is the reading in 4.6; the
+    accessory connector is the other candidate.
+17. Whether `CODEC_SELECT`, `SET_I2C_ADDRESS` and `I2C_OPERATION` are used in any other firmware version of this
+    family: this image reaches the codec only with codec-bypass packets (4.6.1).
 
 ## 7. Stock codeplug, read on a radio
 
@@ -513,58 +684,3 @@ selection but no routing or gain writes. 4.6 records what the stock firmware sen
 - Sections 2 to 6 are read from the stock image named in 1.2, under the spec side's rules
   ([CLEANROOM.md](../CLEANROOM.md))
 - The family's page, [hardware-anytone.md](hardware-anytone.md), and its sources
-
-## Early startup diagnostic
-
-The opt-in `D878UV2_STARTUP_PROBE` build holds PC3 high and sets PE3 high before clock setup. After resetting the
-time base at the selected clock rate, it initializes the LCD, enables PB0 and draws the boot splash. It then
-blinks PE3 every 500 ms without starting the scheduler or initializing storage, USB or the modem. This is a
-bring-up probe, not normal application behavior. The owner observed a blinking receive LED and a visible splash with probe 1. The splash was rotated 180 degrees
-with MADCTL 0x68; the board now selects 0xA8 by toggling MX and MY. The corrected orientation awaits confirmation.
-Probe 2 continues into normal startup after the early splash and reports board initialization stages with LED
-pulse counts, as listed in the bring-up procedure.
-See [the bring-up procedure](../testing/d878uv2-bringup.md#early-startup-probe).
-
-Probe 3 reads and validates the retained crash record before the scheduler starts. A valid record is displayed
-with the fault summary, LR, CFSR and HFSR; the probe then waits while servicing the watchdog through the early
-delay path. Without a valid record it continues like probe 2. Seven pulses followed by a reset were observed
-with probe 2; the failure is not yet localized beyond board initialization returning.
-
-### GPS startup dependency
-
-The GPS task must be created only after the RF bus is attached and AT1846S initialization has finished.
-The GPS power callback writes the RF chip's GPIO register, so creating the task in board initialization lets
-it dereference an uninitialized bus while display delays yield the startup task. The observed crash was
-`fault 3 at 20001E50 in gps`, LR `08032739`, CFSR `00020000`, HFSR `40000000`: an invalid instruction reached
-through the bus callback. GPS initialization now runs at the end of the radio initialization callback.
-The corrected image awaits hardware confirmation.
-
-### Power and input bring-up corrections
-
-A normal boot is confirmed after deferring GPS task creation. The next observed faults were zero battery and
-volume readings, an unresponsive channel knob, and only digits 7, 8 and 9 responding. Power initialization was
-never called, leaving the shared ADC driver uninitialized. Board initialization now calls the power interface
-before peripheral setup. The volume display uses the existing MCU-read knob bar; the ADC supplies its position.
-
-The channel encoder now samples PC8 and PC9 on both edges through EXTI8 and EXTI9. Its decoder uses four
-transitions per detent with rest mask `QUAD_REST_11`; the previous code passed a pin value as the mask and reset
-the consumer's total on every read. Verify steps per click and direction on hardware.
-
-Matrix settling is 5 microseconds per drive change, rather than the shorter guessed loop. The scan restores the
-LCD data outputs before returning, including when it preempts a display write. The keypad map is unchanged and
-still requires hardware confirmation. The normal 8-second power-switch guard is restored in the controls image;
-the previous diagnostic build deliberately ignored shutdown for about 49 days.
-
-With diagnostics enabled, the board view exposes these raw keys:
-
-| Key | Value |
-| --- | --- |
-| `board.adc.10`, `.11`, `.12` | ADC counts for PC0, battery PC1 and volume PC2 |
-| `board.power_switch` | PA0 level, before debounce |
-| `board.knob_ab` | PC8 in bit 0 and PC9 in bit 1 |
-| `board.matrix_idle` | Sense-low bits with all rows high, captured by the key scan |
-| `board.matrix.0` through `.7` | Sense-low bits for each driven row; PB1 bit 0, PB2 bit 1, PC5 bit 2 |
-
-The owner confirms all keys and the battery bar work with the controls image. The channel knob reports one
-channel change per two physical clicks with the four-transition setting. The correct transitions per click
-and rest-state mask must be measured; the likely two-transition correction is not yet applied.

@@ -87,6 +87,8 @@ const char *d878uv2_modem_codec(void);
 bool d878uv2_modem_booting(void);
 void d878uv2_modem_carrier(bool carrier);
 sct_boot_result_t d878uv2_modem_boot_result(void);
+// One TLV320AIC3204 register through the baseband (hardware-d878uv2.md 4.6)
+bool d878uv2_codec_write(uint8_t page, uint8_t reg, uint8_t value);
 #endif
 
 // --- Factory calibration, read from the NAND (cal_d878uv2.c, docs/spec/hardware-d878uv2.md 5) ---

@@ -217,10 +217,25 @@ static void init(void)
 
 static radio_mode_t mode_now = RADIO_MODE_FM;
 
+// The RF chip's audio registers, per mode (hardware-d878uv2.md 4.6). 0x44's bits 7:4 are full AF gain in both
+// modes; its bits 11:8 are a fixed trim, one of five FM steps in the stock firmware chosen by a settings byte -
+// the middle one is used here. 0x40 bit 0 passes the low-frequency audio 4FSK needs
+#define RF_AUDIO_TRIM_FM	0x09F9u
+#define RF_AUDIO_TRIM_DMR	0x0AFAu
+#define RF_AUDIO_FILTER_FM	0x0030u
+#define RF_AUDIO_FILTER_DMR	0x0031u
+#define RF_AUDIO_58_FM		0x8085u
+#define RF_AUDIO_58_DMR		0x80E5u
+
 static void set_mode(radio_mode_t mode)
 {
+	bool dmr = mode == RADIO_MODE_DMR;
+
 	mode_now = mode;
-	at1846s_set_mode(&rf, mode == RADIO_MODE_DMR ? AT1846S_MODE_DMR : AT1846S_MODE_FM);
+	at1846s_set_mode(&rf, dmr ? AT1846S_MODE_DMR : AT1846S_MODE_FM);
+	at1846s_write(&rf, 0, 0x58, dmr ? RF_AUDIO_58_DMR : RF_AUDIO_58_FM);
+	at1846s_write(&rf, 0, 0x40, dmr ? RF_AUDIO_FILTER_DMR : RF_AUDIO_FILTER_FM);
+	at1846s_write(&rf, 0, 0x44, dmr ? RF_AUDIO_TRIM_DMR : RF_AUDIO_TRIM_FM);
 }
 
 static at1846s_bw_t bw_of(radio_bw_t bw)
@@ -307,20 +322,36 @@ static void status(radio_status_t *st)
 #endif
 }
 
-// The speaker amplifier, with the second audio switch driven the other way in the receive path (4.3)
+// The speaker amplifier and what it listens to. **PE0 is the amplifier's input select, not the inverse of PA7**:
+// high picks the codec's output (the receive audio of both modes), low the other analog source, which is the tone
+// generator on PB9 and the broadcast receiver. Stock receive audio is both pins high together; the earlier
+// reading of "driven opposite to PA7" came from the broadcast paths, the only ones that pair PE0 low with PA7
+// high (docs/spec/hardware-d878uv2.md 4.3, 4.6). Driving PE0 low here pointed the amplifier at the tone input and
+// was why a receiver that opened its squelch was silent
 static void audio(bool on)
 {
+	mcu_pin_write(PIN_AUDIO_SW, on);	// the codec's output
 	mcu_pin_write(PIN_SPK_EN, on);
-	mcu_pin_write(PIN_AUDIO_SW, !on);
 }
 
-// The chip's own volume register (AT1846S datasheet 0x44: two 4-bit fields). Unconfirmed on this radio
-#define RF_VOLUME_REG		0x44u
+// The volume is made in the codec, not in the RF chip: the TLV320AIC3204's HPL driver gain (page 1, register
+// 0x10), six bits of two's complement dB from -6 to +29, with bit 6 the mute. Every gain write clears that bit,
+// which is the only unmute route there is. The RF chip's 0x44 is a fixed per-mode trim and the knob never reaches
+// it (docs/spec/hardware-d878uv2.md 4.6).
+//
+// The stock firmware maps the knob through a per-mode curve table this port does not have, so the mapping below
+// is a plain line across the same range. It is a placeholder: the levels will not match the stock radio's
+#define CODEC_PAGE_OUT		1u
+#define CODEC_HPL_GAIN		0x10u
+#define CODEC_GAIN_MIN_DB	(-6)
+#define CODEC_GAIN_MAX_DB	29
 
 static void volume(uint8_t percent)
 {
-	uint16_t step = (uint16_t)((percent * 15u) / 100u);
-	at1846s_write(&rf, 0, RF_VOLUME_REG, (uint16_t)((step << 4) | step));
+	int db = CODEC_GAIN_MIN_DB + ((int)percent * (CODEC_GAIN_MAX_DB - CODEC_GAIN_MIN_DB)) / 100;
+	uint8_t reg = (uint8_t)((db < 0 ? db + 64 : db) & 0x3F);	// two's complement in six bits, mute clear
+
+	d878uv2_codec_write(CODEC_PAGE_OUT, CODEC_HPL_GAIN, reg);
 }
 
 const hal_radio_t d878uv2_radio = {

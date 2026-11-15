@@ -290,6 +290,26 @@ void d878uv2_modem_carrier(bool carrier)
 	}
 }
 
+// One codec register, as a codec-bypass packet. The MCU has no bus to the TLV320AIC3204: it reaches it only
+// through the baseband, which adds the codec's I2C address itself (sct_pkt.h). The baseband's own firmware sets
+// the codec's clocks, routing and converters up; the MCU only trims gains
+// (docs/spec/hardware-d878uv2.md 4.6)
+bool d878uv2_codec_write(uint8_t page, uint8_t reg, uint8_t value)
+{
+	uint8_t pkt[SCT_CODEC_PKT_BYTES];
+	sct_codec_write_t w = { .page = page, .reg = reg, .value = value };
+
+	if (!booted) {
+		return false;
+	}
+	sct_pkt_codec(pkt, &w);
+	port_lock(NULL);
+	bool ok = sct_host_send(&host, pkt, sizeof(pkt));
+
+	port_unlock(NULL);
+	return ok;
+}
+
 // The boot's result, for the diagnostics line
 sct_boot_result_t d878uv2_modem_boot_result(void)
 {
