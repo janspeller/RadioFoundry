@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The RadioFoundry Authors
 // AT1846S RF transceiver driver (docs/spec/hardware-dm1701.md section 5; AT1846S datasheet and programming guide)
 #include "at1846s.h"
+#include <stddef.h>
 #include "rf/subaudio/subaudio.h"
 
 #define REG_PAGE	0x7F
@@ -135,6 +136,12 @@ uint16_t at1846s_state_value(at1846s_bw_t bw, at1846s_state_t state)
 	return ctrl_values[state][bw == AT1846S_BW_25K ? 1 : 0];
 }
 
+static uint16_t control_value(const at1846s_t *dev, at1846s_bw_t bw, at1846s_state_t state)
+{
+	return dev->control_values != NULL ? dev->control_values[state][bw == AT1846S_BW_25K ? 1 : 0] :
+		at1846s_state_value(bw, state);
+}
+
 uint8_t at1846s_ctcss_threshold(uint16_t tone_reg)
 {
 	if (tone_reg > 24000u) {
@@ -188,6 +195,7 @@ void at1846s_cache_clear(at1846s_t *dev)
 void at1846s_attach(at1846s_t *dev, const at1846s_bus_t *bus)
 {
 	dev->bus = bus;
+	dev->control_values = NULL;
 	at1846s_cache_clear(dev);
 	dev->bw = -1;
 	dev->mode = -1;
@@ -299,7 +307,7 @@ bool at1846s_set_bandwidth(at1846s_t *dev, at1846s_bw_t bw)
 		ok &= at1846s_write(dev, bw_rows[i].page, bw_rows[i].reg, bw_rows[i].val[col]);
 	}
 	ok &= select_page(dev, 0);
-	ok &= at1846s_write_force(dev, 0, REG_CTRL, at1846s_state_value(bw, AT1846S_STATE_IDLE));
+	ok &= at1846s_write_force(dev, 0, REG_CTRL, control_value(dev, bw, AT1846S_STATE_IDLE));
 	dev->state = AT1846S_STATE_IDLE;
 	dev->bw = ok ? (int8_t)bw : -1;
 	dev->mode = -1;		// the table overwrote mode registers (0x15, 0x32, 0x3A, ...)
@@ -325,7 +333,7 @@ static at1846s_bw_t cur_bw(const at1846s_t *dev)
 bool at1846s_set_freq(at1846s_t *dev, uint32_t hz)
 {
 	uint32_t word = at1846s_freq_word(hz);
-	bool ok = at1846s_write_force(dev, 0, REG_CTRL, at1846s_state_value(cur_bw(dev), AT1846S_STATE_IDLE));
+	bool ok = at1846s_write_force(dev, 0, REG_CTRL, control_value(dev, cur_bw(dev), AT1846S_STATE_IDLE));
 	dev->state = AT1846S_STATE_IDLE;
 	ok &= at1846s_write_force(dev, 0, 0x05, 0x8763);
 	ok &= at1846s_write_force(dev, 0, 0x29, (uint16_t)((word >> 16) & 0x3FFFu));
@@ -336,7 +344,7 @@ bool at1846s_set_freq(at1846s_t *dev, uint32_t hz)
 
 bool at1846s_set_state(at1846s_t *dev, at1846s_state_t state)
 {
-	bool ok = at1846s_write_force(dev, 0, REG_CTRL, at1846s_state_value(cur_bw(dev), state));
+	bool ok = at1846s_write_force(dev, 0, REG_CTRL, control_value(dev, cur_bw(dev), state));
 	dev->state = (uint8_t)state;
 	return ok;
 }

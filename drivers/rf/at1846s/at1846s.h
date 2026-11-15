@@ -43,6 +43,8 @@ typedef enum { AT1846S_TONE_NONE, AT1846S_TONE_CTCSS, AT1846S_TONE_DCS, AT1846S_
 
 typedef struct {
 	const at1846s_bus_t *bus;
+	// Optional board control words [state][12.5/25 kHz], with static lifetime. Set after attach, before init.
+	const uint16_t (*control_values)[2];
 	uint16_t cache[2][128];
 	uint32_t valid[2][4];	// one bit per cached register
 	int8_t page;		// selected page, -1 unknown

@@ -286,6 +286,33 @@ static void test_bw_sequence(void)
 	CHECK(n_wr > 0 && last_write(0x58) == 0xBC85);
 }
 
+static void test_control_profile(void)
+{
+	static const uint16_t profile[][2] = {
+		{ 0x4006, 0x7006 }, { 0x4006, 0x7006 }, { 0x4026, 0x7026 },
+		{ 0x4046, 0x7046 }, { 0x4046, 0x7046 },
+	};
+	at1846s_t dev;
+	at1846s_attach(&dev, &bus);
+	CHECK(dev.control_values == NULL);
+	dev.control_values = profile;
+	log_reset();
+	CHECK(at1846s_init(&dev));
+	CHECK(last_write(0x30) == 0x4006);
+	for (int bw = 0; bw < 2; bw++) {
+		CHECK(at1846s_set_bandwidth(&dev, (at1846s_bw_t)bw));
+		CHECK(last_write(0x30) == profile[AT1846S_STATE_IDLE][bw]);
+		CHECK(at1846s_set_freq(&dev, 433500000));
+		CHECK(last_write(0x30) == profile[AT1846S_STATE_IDLE][bw]);
+		for (int state = 0; state <= AT1846S_STATE_DMR_TX; state++) {
+			CHECK(at1846s_set_state(&dev, (at1846s_state_t)state));
+			CHECK(last_write(0x30) == profile[state][bw]);
+		}
+	}
+	at1846s_attach(&dev, &bus);
+	CHECK(dev.control_values == NULL);
+}
+
 int main(void)
 {
 	test_pure();
@@ -294,6 +321,7 @@ int main(void)
 	test_dcs();
 	test_ctcss();
 	test_bw_sequence();
+	test_control_profile();
 	if (failures) {
 		printf("# FAILED %d\n", failures);
 		return 1;

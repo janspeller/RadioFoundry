@@ -697,3 +697,10 @@ On the radio (`docs/testing/on-air-coverage.md`, HIL 2026-10-10): zone scan stop
 watch, the battery saver, the 1750 Hz burst and the roger beep on air; TX inhibit and the TOT warning on the radio's
 state; VOX only in silence (the `mic_level` hook is unverified); whether PCM beeps play in FM mode is still open
 (`beep.no_stream` / `beep.blocks` answer that).
+
+## RF control profiles
+
+A transceiver driver may accept a board-supplied static table of control words indexed by radio state and
+channel bandwidth. The shared driver uses that table at initialization, bandwidth changes, frequency writes
+and state transitions. A board without a table retains the driver's default profile. The profile describes
+the RF audio wiring; it does not replace the shared tuning or transmit state machine.
