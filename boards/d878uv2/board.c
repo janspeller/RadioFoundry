@@ -27,10 +27,10 @@ static const band_t bands[] = {
 #endif
 };
 
-// The rated power per level is **not recorded**: the labels say which step is which until a power meter on the
-// bench gives the watts (docs/testing/d878uv2-bringup.md, stage 7). The drive values behind them are placeholders
-// in radio_d878uv2.c, deliberately low
-static const char *const power_names[] = { "Low", "Mid", "High" };
+// Four levels, as the factory calibration carries four transmit power tables per band
+// (docs/spec/hardware-d878uv2.md 5). The watts each gives are **not recorded**: the labels say which step is which
+// until a power meter on the bench measures them (docs/testing/d878uv2-bringup.md, stage 7)
+static const char *const power_names[] = { "L1", "L2", "L3", "L4" };
 
 // Only PTT is mapped. It is a direct input on PA10, not a matrix position, so it works before the keypad does;
 // every matrix key waits for a bench session to fill in the map (input_d878uv2.c, hardware-d878uv2.md 4.3)
@@ -100,6 +100,8 @@ void board_init(void)
 	// The core's storage, mounted before storage_init reads it. Without it the radio runs on the default settings
 	d878uv2_flash_init();
 #endif
+	// The factory calibration: read before anything can transmit, never written (hardware-d878uv2.md 5)
+	d878uv2_cal_load();
 #if CONFIG_DMR
 	d878uv2_modem_init();
 #endif

@@ -138,18 +138,23 @@ uint16_t d878uv2_rf_gpio(void)
 
 // --- The transmitter's gate and level ---
 
-// Placeholder drive per power level, deliberately low: the real values come from the NAND's per-MHz tables by
-// level and frequency (5), which is not read yet. Only the top 8 bits of the DAC are used (4.3)
-static const uint8_t tx_drive_placeholder[] = { 0x20, 0x40, 0x60 };
+// The drive comes from the radio's own per-MHz calibration (cal_d878uv2.c). Without it the transmitter stays at
+// the floor below rather than guessing: a wrong drive is what damages a PA. Only the top 8 bits of the DAC are
+// used (4.3)
+#define TX_DRIVE_UNCALIBRATED	0x20u
 
 static void tx_dac(uint8_t level8)
 {
 	mcu_dac_write(0, (uint16_t)level8 << 4);
 }
 
-static void pa_on(uint8_t power)
+static void pa_on(uint8_t power, uint32_t hz)
 {
-	uint8_t drive = tx_drive_placeholder[power < sizeof(tx_drive_placeholder) ? power : 0];
+	uint8_t drive = TX_DRIVE_UNCALIBRATED;
+
+	if (!d878uv2_cal_tx_drive(power, hz, &drive)) {
+		drive = TX_DRIVE_UNCALIBRATED;
+	}
 	mcu_pin_write(PIN_PA_EN0, true);
 	mcu_pin_write(PIN_PA_EN1, true);
 	tx_dac(drive);
@@ -249,7 +254,7 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 	}
 	front_end_tx(hz);
 	ok &= at1846s_set_state(&rf, AT1846S_STATE_FM_TX);
-	pa_on(power);
+	pa_on(power, hz);
 	return ok;
 }
 

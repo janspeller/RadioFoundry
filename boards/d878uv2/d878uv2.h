@@ -86,6 +86,11 @@ void d878uv2_modem_carrier(bool carrier);
 sct_boot_result_t d878uv2_modem_boot_result(void);
 #endif
 
+// --- Factory calibration, read from the NAND (cal_d878uv2.c, docs/spec/hardware-d878uv2.md 5) ---
+bool d878uv2_cal_load(void);
+bool d878uv2_cal_ready(void);
+bool d878uv2_cal_tx_drive(uint8_t level, uint32_t hz, uint8_t *drive);
+
 // LCD backlight, 0..100 %: TIM8 channel 2's complementary output on PB0 (power_d878uv2.c, hardware-d878uv2.md 4.3)
 void d878uv2_backlight(uint8_t percent);
 
