@@ -580,11 +580,15 @@ Each 128 KB block carries two 4-byte tags in its last eight bytes:
 
 | Offset in block | Written | Meaning |
 |---|---|---|
-| +0x1FFFC | `55 55 AA AA` | written **before** the data: a write is in progress |
-| +0x1FFF8 | `AA AA 55 55` | written **after** the data: the copy is complete |
+| +0x1FFFC | `55 55 AA AA` | written to the new copy **after its data**, making it eligible as the active copy |
+| +0x1FFF8 | `AA AA 55 55` | written to the previous copy after the replacement is ready, retiring the previous copy |
 
-A copy is taken as good when the bytes at +0x1FFF8 match; otherwise the other copy is used. Mirroring copies the
-block page by page in 2048-byte steps and then writes the tags.
+**Corrected by the 2026-11-16 audit.** The active-copy predicate requires the +0x1FFFC marker
+to match and the +0x1FFF8 retirement marker not to match. The calibration loader selects the
+primary when this predicate is true; otherwise it selects the mirror without another predicate
+check. The previous description of +0x1FFF8 as a completion tag was incorrect. These are
+logical addresses: the stock NAND block-remapping layer described below can change their
+physical locations.
 
 The calibration block is about 1.5 KB of small records at fixed offsets from 0x02F60000:
 
@@ -675,9 +679,10 @@ From a radio running this port (its diagnostics page), beyond the codeplug read 
 | **The core's storage on the NAND** | a whole codeplug was written through the CPS and read back identical, so the sector layer mounts, wears and reads in RadioFoundry's own blocks. The factory mark it treats as blank (ten 0x55 bytes) holds on this radio too |
 | The open-firmware CPS | answers on the USB serial port: identity, and a whole codeplug written and verified |
 
-**Not confirmed: audio.** A receiver that opens its squelch is silent, which is consistent with the codec never
-being configured: it is reachable only through the baseband (2.5 of the family page), and the port sends it the
-selection but no routing or gain writes. 4.6 records what the stock firmware sends.
+**Not confirmed: audio.** FM and DMR receive remain silent after codec gain/unmute writes were added. DMR call
+recognition is observed, but speaker output is not. Codec power, routing and mute readback are the next check;
+a successful gain-write acknowledgment alone does not establish an audible path. Section 4.6 records the audio
+register map and inferred wiring.
 
 ## Sources
 
@@ -686,3 +691,418 @@ selection but no routing or gain writes. 4.6 records what the stock firmware sen
 - Sections 2 to 6 are read from the stock image named in 1.2, under the spec side's rules
   ([CLEANROOM.md](../CLEANROOM.md))
 - The family's page, [hardware-anytone.md](hardware-anytone.md), and its sources
+
+### Audio-path follow-up, 2026-11-15
+
+The owner confirms that restoring the receive front end after transmit fixes the RSSI floor problem. FM and
+DMR receive audio remain silent; DMR transmit is not recognized by the other radio. Live diagnostics show
+three DMR calls played and 118 voice bursts with no lost frames. That establishes DMR packet reception,
+not audible playback. The agent did not transmit or start the SDR bench.
+
+The port was still leaving AT1846S register 0x3A's transmit-source bits at 000. Section 4.6.4 requires 100
+because the codec modulates through the microphone input. The board now applies this source together with
+its mode-specific 0x40, 0x44 and 0x58 trims after bandwidth changes, which overwrite those registers. DMR
+transmit now selects the shared driver's DMR-TX state. Returning to receive also retunes the saved receive
+frequency, so split RX/TX channels do not remain tuned to their transmit frequency. These corrections are
+host-tested and await hardware confirmation; they do not establish a fix for silent receive audio.
+
+The audio-path image with `CONFIG_DIAG` captures codec pages 0 and 1 after voice setup, using raw
+`I2C_OPERATION` access to address 0x30 (the AIC3204's seven-bit 0x18 address). Page 0 is restored afterward.
+Selected actual register values appear as `board.codec.<page>.<decimal-register>`; -1 means readback failed.
+The snapshot includes DAC power and mute, ADC power and mute, HPL/line output routing and power, output gains,
+and microphone routing/gain. It is a boot snapshot, so later volume changes are not reflected in it.
+It reads the current setup rather than changing routing, clocks or gains. It does not invalidate a successful
+baseband boot if readback is unavailable.
+
+The PA6 tuning output remains unimplemented, and PA5's role remains unidentified. No frequency-error or DMR
+deviation measurement was made, so the absent DMR transmit indication cannot yet be attributed to frequency.
+The FM path also lacks explicit SCT analog-mode control; the documented analog-call sequence needs to be
+implemented in the shared protocol layer rather than assuming the DMR engine passes FM audio.
+
+Register meanings: [TI TLV320AIC3204 Application Reference Guide](https://www.ti.com/lit/ml/slaa557/slaa557.pdf).
+
+### DMR receive confirmed; microphone, FM and dual watch follow-up
+
+With the audio-path image, the owner confirms audible DMR receive. DMR transmit is recognized but has no
+microphone audio. FM receive and transmit audio are still absent. The first DMR channel after boot shows
+"DMR modem off" until a channel change. Codec raw-I2C snapshots all read -1 and provide no register evidence.
+
+The next image connects IN1L to the left MICPGA with page 1 register 0x34 = 0x80 and sets the baseband's digital
+microphone/speaker gains to nominal unity. This is the recorded internal microphone input choice; accessory
+input selection is not inferred from PA13. The audio setup data now lives in `audio_setup.h` and is exercised
+through the actual voice-setup transport by a host test. The codec input and microphone audio still need a
+hardware check.
+
+The shared analog engine in [modem-sct.md](modem-sct.md#analog-calls-through-the-baseband) now owns the baseband
+on FM channels. Radio callbacks request RX/TX and channel width; the modem task handles acknowledgments.
+Returning to receive restores both the saved RF frequency and bandwidth. FM baseband state is exposed as
+`board.fm.enabled`, `.ready`, `.tx` (requested direction), `.pending` (field ID), `.error`, `.commands` and
+`.timeouts`. Error 0 means no error, 254 send failure, 255 timeout; other values are chip status codes.
+
+The radio core now defers its DMR start while the baseband is booting and starts it when boot completes.
+The longer diagnostic boot had exposed a race: the first start failed, and only changing channels retried it.
+
+Software dual watch is enabled through the shared default. A single AT1846S can alternate between channels;
+the former `BOARD_UNSUPPORTED DUAL_WATCH` entry was incorrect. This provides one-receiver dual watch, not
+simultaneous reception. The new default build fits in 96 KB SRAM. Hardware timing and mixed-mode dual watch
+remain untested. The PA6 tuning output remains unimplemented and no transmit frequency/deviation measurement
+was made.
+
+### FM mode rejection and microphone routing test
+
+The owner confirms DMR startup and dual watch work with the audio/FM image. DMR receive remains audible, but
+DMR microphone audio and both directions of FM audio remain silent. Live FM diagnostics showed error 6 with
+no timeout. The engine state identified the refused step as `PROCESS_MODE=0x80`, before any analog config or
+RX work-mode command. The next image selects vocoder 16 first and restores vocoder 4 before allowing DMR to
+start again. Readiness covers this mode change; scan and dual watch wait while the library loads.
+Same-mode changes do not reload the library. Mixed-mode watch can have longer gaps than a watch of two DMR
+or two FM channels and still requires hardware timing validation.
+
+Additional view keys are `board.fm.last_field` (decimal command ID), `board.fm.digital_ready`, and
+`board.fm.analog_loaded`. Vocoder selection is field 16, process mode field 26. The latest codec snapshots
+remain unavailable and do not establish microphone bias, ADC mute or input routing.
+
+With diagnostics enabled, CHIP_REG chip 1/page 1/register 0x34 is a **write-only microphone input selector**.
+Only 0x80 (IN1L) and 0x20 (IN2L) are accepted, and changes are refused while the PA is keyed. The returned value
+is the requested write, not register readback; a successful bus write does not prove speech input. The boot
+profile still selects IN1L. An owner-controlled A/B test can select IN2L without another flash:
+
+```sh
+python3 tools/rfoundry_debug.py --port /dev/ttyACM0 reg 1 0x34 0x20 --page 1
+# Restore the boot profile's choice:
+python3 tools/rfoundry_debug.py --port /dev/ttyACM0 reg 1 0x34 0x80 --page 1
+```
+
+This selector does not alter calibration, codec clocks or gains, and it does not start a transmission. Whether
+the owner uses the built-in microphone or an external harness must be recorded when comparing input choices.
+
+The vocoder/FM image has now accepted all six FM setup commands on the radio, reporting ready 1, error 0 and
+zero timeouts. A receiver-only return to the saved DMR channel restored digital readiness and an active DMR
+stack. No transmission or audible FM test was performed by the agent. An IN2L microphone-route request was
+issued for an owner-controlled comparison; its speech result is not yet recorded.
+
+### Owner confirms FM receive; transmit remains open
+
+The owner confirms FM receive audio now works, as well as DMR receive, startup and dual watch. With IN2L
+requested, FM transmit still has no microphone speech, and the other handheld does not recognize the DMR
+transmission reliably enough to assess microphone audio. The agent restored the IN1L request for an FM
+comparison. The owner reports FM transmit still fails with IN1L; whether the accessory jack was empty is not
+explicitly confirmed.
+The current FM engine status had no error or timeout after the owner's tests, but no per-command error
+history was captured during transmit.
+
+A separate code audit found that `PIN_SCT_SLOT` (PD0) has no user in the board implementation. The current
+`pa_on` holds both PA enables and the calibrated DAC drive throughout a call; there is no DMR burst interrupt
+or per-slot PA gating. This is a known implementation gap, not an RF measurement proving the cause of the
+unrecognized call. It needs shared burst-gating support and hardware timing validation. The mobile board's
+measured on/off delays must not be assumed correct here without checking them. Frequency error, deviation
+and the PA6 tuning output remain unverified. Do not infer a microphone failure from an undecodable DMR signal.
+
+### Microphone codec loopback
+
+The owner repeated the FM speech test with the harness removed and the built-in microphone: the other
+handheld received a carrier but no speech. The harness is therefore not the sole cause.
+
+The next diagnostic image exposes chip 2, page 0, register 0x18 as the SCT work-mode **loop byte** through
+CHIP_REG. Only 0 (normal) and 0x11 (codec loopback) are writable, only when unkeyed and analog receive is ready.
+Reads return the requested loop byte, not a hardware register readback. The shared engine selects full-duplex
+codec loopback without starting a call. The board refuses RF keying while it is selected. `board.fm.loopback`
+shows the selection; `.ready`, `.pending` and `.error` show command completion. A channel or mode request
+cancels it. Open monitor to enable the normal speaker path, use low volume and keep PTT released. This is a
+microphone-capture check, not a claimed fix for transmit audio. Hardware behavior is untested.
+
+### Stock audio command audit, 2026-11-15
+
+This is a static audit of the V4.00 MCU payload identified in section 1.2. No radio was accessed.
+Observed command bytes below have high confidence; their electrical effects remain unverified. The codec's
+resident baseband-controlled initialization is not present as an MCU register-write sequence in this image.
+
+- The microphone-enable operation writes codec page 1 register 0x34 = 0x80, then page 1 register 0x3B =
+  the configured microphone gain. Its disable operation writes register 0x34 = 0x00 and leaves register
+  0x3B alone. The image has callers of both enable and disable through its audio-control dispatcher.
+  Therefore the earlier statement that microphone routing never changes per call is too broad. The
+  exact call states selecting each operation have not been completely traced.
+- Another microphone-routing operation writes register 0x34 = 0x20, but no direct caller of that
+  operation was found. IN1L is the input used by the called enable operation. This is evidence for
+  the stock software's input choice, not a board-level continuity measurement or a proven accessory
+  microphone input mapping. No separate MCU-controlled microphone power GPIO was established.
+- The left AGC enable operation sets page 0 register 0x56 to the configured control byte with bit 7
+  set, then writes the configured maximum gain to register 0x58. Its disable operation writes the
+  configured control byte to register 0x56 without forcing bit 7. Numeric calibrated gain and AGC
+  values were not recovered and must not be replaced with another board's values.
+- No additional MCU writes establishing ADC power, ADC digital mute, microphone bias, negative
+  microphone input routing, DAC power/mute or line-output routing were found in the codec-bypass
+  command helpers. Section 4.6.2 remains the available MCU register inventory. These missing writes
+  do not prove those hardware functions are disabled: the resident SCT firmware owns codec setup.
+- The audio-control parameter dispatcher includes several numbered entries that send nothing.
+  The earlier estimate of fifteen additional baseband audio parameters is not an established list
+  of fifteen required setup writes. Identified active control fields include digital speaker gain
+  (0x69), digital microphone gain (0x68), demodulator gain (0x1C), analog configuration (0x3C), and
+  additional settings-dependent fields 0x6B and 0x6C. Their presence alone does not establish
+  required values for a minimal audio path.
+- Both called analog-configuration construction paths force bit 7 of field 0x3C payload byte 0
+  to 1, preserving the other seven bits from settings. This is observed packet construction, not
+  an inference from the codec signal path. The port currently sends byte 0 = 0x00 for narrow or
+  0x0A for wide, so this bit differs from the stock command. The packet-interface manual calls
+  this bit ALT_LPF: additional attenuation at 3 kHz with BB_CH_SEL = 1. It is not a microphone
+  enable, and this difference does not establish an explanation for silent transmit.
+- The image contains analog command support for PROCESS_MODE = 0x80 followed by WORK_MODE =
+  02 00 00, sub-audio field 0x26 and call-start field 0x78 with no payload. No direct
+  caller of that combined helper was found, so it is not a confirmed normal-transmit sequence.
+  Called control paths also send PROCESS_MODE = 0x82 when the selected vocoder is 16. The
+  distinction between 0x80 and 0x82 must be checked against the packet-interface specification
+  before changing the port; this audit does not establish that 0x82 fixes silent transmit.
+
+No stock full-duplex codec-loopback use was established. A loud feedback sound in a local codec loop
+is not a measurement of the microphone ADC signal or the transmit line-output signal. Raw I2C read
+failures likewise provide no evidence for the codec's actual register contents.
+
+### Stock frequency-control DAC audit, 2026-11-15
+
+Static evidence identifies a separate analog control from the PA6 tuning PWM. The first unsigned
+16-bit word of the 22-byte calibration record at NAND 0x02F60000, or its valid mirror at 0x02F80000,
+is loaded into the record's RAM offset 0. Its calibration-reset default is 1900 (0x076C). The
+service editor constrains this value to 0 through 4095 and writes changes immediately to DAC
+channel 2, PA5. Normal RF retuning also reapplies this word after updating the PA6 tuning PWM.
+
+The hardware write is the raw, right-aligned count to DAC channel 2's 12-bit holding register
+0x40007414. No Hz/ppm conversion, signed offset or addition to an RF frequency word occurs on
+this path. DAC channel 1 on PA4 remains the separate PA-power control. PA6's TIM3 PWM uses
+frequency-indexed tables and is not this DAC count.
+
+The owner's reported stock FQCU value near 3620 is within this DAC's raw range. Association of
+the FQCU display label with this exact stored word has not yet been fully traced, so that name
+is provisional. The electrical destination of PA5, the direction and size of its frequency
+effect, and the radio's actual saved value still need independent evidence. Do not convert
+3620 into Hz or ppm, or substitute it for the radio's stored calibration solely from this audit.
+
+**Byte order and band selection.** The two bytes at calibration offset 0 are copied unchanged
+from NAND and read as a native little-endian unsigned halfword. A value of 3620 would therefore
+be stored as bytes 0x24, 0x0E. The separate 22-byte record at NAND offset 0x20 is copied to
+RAM immediately after the first record; its reset default first word is 1920 (0x0780).
+The normal-retune path does not select that second word for DAC2. Its UHF, VHF and other-band
+branches all join one common step that applies the first record's offset-0 word to PA5.
+The conditional tables in that routine select PA6 PWM counts only.
+
+**Invalid calibration.** The normal calibration reader checks whether the primary has its active marker and lacks
+its retirement marker, then chooses the mirror when that predicate is false. The observed reader then copies the selected record
+without validating its first word against 0 through 4095. The normal DAC application likewise
+has no range check or replacement with 1900. The explicit calibration-reset routine writes
+1900 to the first record and 1920 to the second; that is evidence for reset defaults, not
+proof of automatic recovery from an erased or out-of-range saved word. A port that rejects
+an unavailable, erased or out-of-range first word and uses 1900 adds a defensive policy; it
+must not describe that policy as a byte-for-byte reproduction of stock invalid-data handling.
+
+### Applying the saved PA5 control
+
+The port now reads the little-endian word at calibration offset 0 from the selected valid A/B copy,
+independently of the PA power-table validity. A value in 0..4095 is applied unchanged to PA5/DAC2 at RF init,
+RX tune, TX tune and return to RX. DAC1/PA4 remains zero until PA power is requested. No calibration is written.
+Missing, unreadable or out-of-range data does not initialize or write PA5/DAC2. An earlier candidate used
+1900, the stock calibration-reset count; that unverified automatic fallback was removed after a receive
+regression with factory=0. A reset default does not establish the correct tuning voltage for this radio.
+
+The diagnostic board keys `control_dac.count` and `control_dac.factory` report the selected count and whether
+it came from a valid saved word. They are not a voltage or RF frequency measurement. The owner-recalled 3620
+is not hard-coded. The FQCU label mapping and carrier-frequency effect remain unconfirmed on hardware.
+
+### Stock transmit RF state and packet lengths, 2026-11-15
+
+The called RF transmit-entry path branches for digital versus analog tone configuration, then
+both branches reach the same AT1846S register 0x30 helper. Its writes are:
+
+| Width | Idle write | Transmit write |
+| --- | --- | --- |
+| Narrow | 0x4006 | 0x4046 |
+| Wide | 0x7006 | 0x7046 |
+
+One settings option adds bit 4 to both writes: 0x4016 then 0x4056, or 0x7016 then
+0x7056. Another called transmit path explicitly writes 0x4006 then 0x4046 or 0x7006
+then 0x7046. The shared normal entry does not choose a bit-7-set register 0x30 value
+for DMR. This is direct MCU register-write evidence, not an inference from a muted
+receiver or undecodable transmission. The bit-13-set narrow value 0x6046 and the
+0x60C6 digital value differ from this stock transmit entry.
+
+The analog-only part of that entry additionally writes register 0x58 = 0x8405 and
+register 0x40 = 0x0030 before applying bandwidth-dependent settings. The digital
+branch skips those two writes. Both use the common transmit register 0x30 helper.
+
+The stock packet serializer establishes the exact payload lengths independently
+of the buffers passed by command helpers:
+
+| Field | ID | Payload bytes |
+| --- | --- | --- |
+| Vocoder selection | 0x10 | 1 |
+| Work mode | 0x18 | 3 |
+| Process mode | 0x1A | 1 |
+| Analog sub-audio | 0x26 | 2 |
+| Analog configuration | 0x3C | 11 |
+| Digital microphone/speaker gains | 0x68 / 0x69 | 2 each |
+| Call start | 0x78 | **0** |
+
+In particular, a pointer to a zero-filled buffer supplied alongside call start
+does not put zero bytes into that field: the emitted field is its ID alone. The
+earlier audio-audit wording about a zero-filled call-start payload must not be
+interpreted as a requirement to append any payload bytes.
+
+**Process-mode conditions.** The channel-change configuration distinguishes pure analog, pure
+digital and the two mixed channel types recorded in [codeplug-stock-anytone.md](codeplug-stock-anytone.md).
+Pure analog selects operating mode 1. Pure digital and mixed channels that transmit digital
+select operating mode 4; mixed channels that transmit analog select mode 3. These paths select
+vocoder 16. With vocoder 16, the process-mode chooser sends 0x82 when the operating mode is
+greater than 2 and 0x80 otherwise. Consequently, observing 0x82 elsewhere in the image is
+not evidence that a pure analog channel needs 0x82: its recorded selection is 0x80.
+
+**Microphone timing.** Called transmit-control paths enable the left microphone by writing
+page 1 register 0x34 = 0x80 followed by the configured left PGA gain before advancing into
+transmit. Release paths disable it with register 0x34 = 0x00. Reapplying these documented
+settings after analog vocoder selection would match the stock ordering more closely than
+only applying them before subsequent vocoder changes. This does not establish that a vocoder
+change resets the codec: the MCU image cannot reveal that resident-baseband behavior.
+No additional called line-driver power, ADC power or DAC mute operation was established.
+
+### TX path corrections from the stock audit
+
+The board now supplies its register 0x30 control profile to the shared AT1846S driver: narrow idle 0x4006,
+RX 0x4026 and both TX modes 0x4046; wide idle 0x7006, RX 0x7026 and both TX modes 0x7046. The old shared
+narrow TX 0x6046 and DMR TX 0x60C6 were not the observed values for this RF path. FM TX also applies
+register 0x58 = 0x8405 and 0x40 = 0x0030; release reapplies the saved receive profile. Other boards retain
+the default control table. These are code corrections to observed register sequences, not an on-air result.
+
+The audio profile's first two codec writes are IN1L routing followed by unmuted left MICPGA gain. Analog
+TX now reapplies and acknowledges them after vocoder loading, before TX work mode and call start. DMR
+start uses the existing codec-start list for both writes, and its per-TX codec hook reapplies IN1L routing.
+This matches the observed microphone-enable ordering more closely; a vocoder-induced codec reset is not
+established. The placeholder gain is still not factory calibration. Pure FM retains PROCESS_MODE 0x80 and
+bare-ID call start, both confirmed by the stock audit. No new ADC-power or microphone-bias values are guessed.
+
+`board.fm.mic_writes` reports how many TX microphone-prepare codec writes have been acknowledged during
+the latest press (two for this profile). It does not measure microphone samples. A rejected write leaves
+analog error nonzero and prevents the modem call from starting.
+
+### Stock calibration copy markers and NAND remapping, 2026-11-16
+
+This audit corrects the earlier copy-selection interpretation. The calibration-save path first
+erases the inactive copy and writes its calibration data. It then writes bytes 0x55, 0x55,
+0xAA, 0xAA at the new copy's offset 0x1FFFC. Finally, it writes 0xAA, 0xAA, 0x55, 0x55 at
+the old copy's offset 0x1FFF8. A retirement marker must not be treated as evidence that the
+copy is current. The active predicate and loader selection are described in section 5.
+Neither record is ASCII or BCD encoded on the demonstrated DAC2 path: its first two bytes
+are copied unchanged into RAM and read as a little-endian unsigned halfword.
+
+**Logical NAND addresses.** Normal stock NAND reads apply an optional persisted block map
+before issuing the SPI-NAND page-read command. The erase-block size is 0x20000 bytes. Each
+entry replaces a logical block number while preserving the low 17 address bits. A logical
+address with no matching entry passes through unchanged. The calibration blocks are logical
+block 0x017B for 0x02F60000 and 0x017C for 0x02F80000. Replacement blocks are allocated from
+physical byte addresses 0x03000000 through 0x03FFFFFF, block numbers 0x0180 through 0x01FF.
+Thus a raw physical read at a calibration logical address need not return its current data.
+
+**Map log format.** The map resides in physical erase block 0. It uses 1024-byte log slots,
+starting at byte address 0, with at most 125 slots examined by the loader. Each stored record
+is 0x1F8 bytes:
+
+| Record offset | Format |
+| --- | --- |
+| 0x0000 through 0x00F9 | 125 little-endian unsigned 16-bit source block-number slots |
+| 0x00FA through 0x01F3 | 125 little-endian unsigned 16-bit replacement block-number slots, paired by index |
+| 0x01F4 | 0x55 marks a written log slot |
+| 0x01F5 | log-slot index written by the stock map writer |
+| 0x01F6 | number of mapping entries |
+| 0x01F7 | runtime map-enable flag, written as zero in the persisted record |
+
+The loader disables mapping while reading this log. It scans slot marker bytes at
+0x1F4 + slot * 0x400 until the first marker other than 0x55, or until 125 slots. It loads
+the last consecutive marked slot; with no marked slot it still reads slot 0. A separate
+25-byte identification marker at physical 0x1FF00 gates normal map loading. Its standard
+IEEE CRC-32 is 0xD0D91952 (the usual reflected algorithm, initial/final XOR 0xFFFFFFFF);
+its SHA-256 is `adff2a2cb2e1c80e15b1f500df243f3cbffd49c30e6ad0e74fff254799020545`.
+These fingerprints cover exactly 25 bytes. Once the
+identification marker is accepted, stock loads the map and enables remapping. The observed
+startup path refuses a count of 90 or more. No checksum or per-entry range validation was
+identified in that load path; a new read-only parser should validate its bounds independently.
+
+If the identification marker is absent, stock enters a raw block-scan and map-reconstruction
+path that can erase and write flash. It is not a safe read-only fallback to reproduce during
+bring-up. A port must report an unavailable map distinctly from an identity map and must not
+rebuild or write the owner's calibration. Normal reads with mapping enabled use the resolver;
+an internal bypass flag suppresses it for raw operations. ECC remains the SPI-NAND device's
+page-read behavior; the observed address transformation is block replacement, not stripping
+ASCII fields, changing byte order or interleaving ECC bytes into the calibration record.
+
+### Calibration reader repair after receive regression
+
+The owner reports FM transmit still has no speech and DMR no longer works in either direction with the
+combined TX-path image. Live diagnostics show count 1900, factory 0, mic_writes 2, zero analog errors and
+zero decoded DMR receive calls. A receive-only channel switch brings DMR active with digital readiness,
+so modem startup completes. The radio's volume read zero during this check; that does not explain the
+absence of decoded calls. The agent did not transmit.
+
+The next reader uses the corrected active/retired markers and the persisted NAND replacement log through
+[the shared read-only resolver](nand-remap.md). It checks the 25-byte identification fingerprint before
+loading the log and refuses an absent or malformed map. A calibration copy must satisfy the active predicate to be
+eligible; the primary is preferred. This is stricter than the observed stock blind mirror fallback.
+Neither map reconstruction nor calibration writes are provided. `control_dac.map_entries=-1` means the
+map is unavailable, zero means a validated identity map and a positive count means replacements loaded.
+A missing calibration leaves the control DAC uninitialized; count 0 with factory 0 is not an applied zero.
+No receive-recovery or transmit-speech success is claimed before hardware verification.
+
+Map diagnostics: `control_dac.map_status` is 0 before a load, 1 for identification-read failure, 2 for a
+fingerprint mismatch, 3 for an invalid/unreadable map log and 4 for a loaded map. `.map_crc` is the CRC-32 of
+the 25 identification bytes when readable; it is not a calibration dump or a frequency measurement.
+
+### Stock common transmit gain trims, 2026-11-16
+
+After selecting the transmit bandwidth, the normal transmit entry applies common gain trims
+before the register 0x30 transmit-enable writes. There is no band selection inside this trim
+helper. It serves both analog and digital transmit. The order is:
+
+1. Set register 0x0A bits 14 through 11 to binary 0111, preserving the remaining bits.
+2. Read register 0x0A, retain mask 0x780F, then set 0x03A0. Together these operations leave
+   0x3BA0 plus the previous low nibble.
+3. Write register 0x44 from the table below for pure analog channels; other channel types
+   receive 0x0BFF.
+4. Write register 0x41 = 0x070F.
+5. Write register 0x59 = 0x0C50.
+
+The pure-analog transmit gain selector is the settings-record byte at offset 0x43. Its own
+ROM table contains five bytes, 0x07, 0x08, 0x09, 0x0A and 0x0C. The selected byte is shifted
+into register 0x44's high byte; its low byte is 0xFF. This is independently verified from
+the transmit helper, not inferred from the receive table. Settings reset selects index 2;
+settings loading replaces any index greater than 4 with index 2.
+
+| Index | Transmit register 0x44 |
+| --- | --- |
+| 0 | 0x07FF |
+| 1 | 0x08FF |
+| 2, reset default | 0x09FF |
+| 3 | 0x0AFF |
+| 4 | 0x0CFF |
+
+These transmit values must not be confused with the receive trims in section 4.6.4.
+Whether correcting them restores intelligible microphone modulation remains a hardware
+question; this audit establishes the register writes and their order only.
+
+### Applying the complete TX trim
+
+The board now applies the stock-audited common TX trim after bandwidth setup and before RF keying: register
+0x0A bits 14:11 become 0111, followed by keep-mask 0x780F/set 0x03A0; register 0x44 becomes 0x09FF in FM
+(the verified reset index 2) or 0x0BFF in DMR; register 0x41 becomes 0x070F and register 0x59 becomes 0x0C50.
+The old path had retained receive gains and the shared driver's voice/deviation values during transmit.
+These writes are in addition to the FM TX filter. This uses the documented FM TX default, not a decoded saved
+index; the audio gains still need per-radio calibration support.
+
+Before applying the temporary trim, the board saves the initialized receive values of 0x0A, 0x41 and 0x59.
+TX release and direct RX entry restore them, and the RX mode helper restores 0x44 and the receive filters.
+Otherwise a cached mode table could leave TX gain values behind in RX. Host tests check narrow/wide TX,
+DMR TX, register values and both receive-return paths. Hardware speech remains unverified.
+
+### Latest owner audio observation, 2026-11-16
+
+A repeat test reveals FM microphone speech at a very low level. Earlier "no speech" entries describe the
+owner's initial observation, not proof that the microphone produced zero signal. A subsequent live read
+confirms the owner has installed the complete-TX-trim, map-aware image: map status 4, three entries and
+identification CRC 0xD0D91952, but factory 0 and control count 0. The saved DAC word is still unavailable,
+so no calibrated carrier alignment is established. The owner reports "TS1 late" on DMR receive and no
+recognized TX call at the peer. Neither observation establishes a measured carrier offset, calibrated
+deviation or successful complete DMR call.

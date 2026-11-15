@@ -91,3 +91,25 @@ screen.png` saves one over USB.
 
 If the radio restarted by itself, look at **Settings > Advanced > Crash log** ([Settings](17-settings.md#crash-log))
 and copy its lines into the issue. Developers get the whole record with `tools/rfoundry_debug.py crash`.
+
+## Audio during radio bring-up
+
+If a bring-up build recognizes calls but stays silent, record the mode and save diagnostics before and during
+a received call. Include whether the other station recognizes your transmission and whether it hears speech.
+A received-call counter confirms packet reception; it does not confirm the codec or speaker output. See the
+[feature matrix](../feature-matrix.md) for the radio's bring-up status.
+
+A DMR channel selected at startup waits for the baseband to finish booting. It should become active without a
+channel change. For a bring-up build with baseband-controlled FM, include the board's FM setup status and error
+in the diagnostic report; speaker and microphone gains alone do not establish the FM signal path.
+
+A switch between FM and DMR can wait for a baseband mode library to load. Scan and dual watch wait for that
+initialization before listening on the new channel, so mixed-mode watch can have longer reception gaps.
+
+When receive audio works but a transmitted carrier has no speech, repeat the check with the accessory jack
+empty and the built-in microphone. Report both results. A supported codec loopback diagnostic can separate
+microphone capture from modulation; follow the board's bring-up instructions with PTT released and low volume.
+
+A carrier on the expected channel does not establish enough frequency accuracy for digital decoding.
+When digital calls are not recognized, check the board's saved calibration status and measure the carrier
+offset before treating the problem as microphone audio. A raw calibration count is not a frequency in hertz.

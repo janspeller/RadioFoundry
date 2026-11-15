@@ -12,10 +12,8 @@
 //   - the PA gate, PC4 with PE6, which then keys per TDMA slot from PD0 while DMR runs;
 //   - the transmit band select, gpio5, with gpio7 for the 165-300 MHz path the stock firmware never keys.
 //
-// **The transmit level is not calibrated.** The real value comes from the per-MHz tables in the radio's own NAND
-// (5), which no reader has been written for yet, so the table below is a deliberately low placeholder. Do not
-// transmit into an antenna until it has been checked on a power meter
-// (docs/testing/d878uv2-bringup.md, stage 7).
+// Transmit drive comes from the per-MHz tables in the radio's own NAND (5). Unavailable calibration uses the
+// existing low drive floor; calibrated RF operation still needs owner testing (docs/testing/d878uv2-bringup.md).
 #include "d878uv2.h"
 #include "config.h"
 #include "pins.h"
@@ -40,9 +38,18 @@
 #define RF_GPIO_SETUP		0x5AE2u
 
 static at1846s_t rf;
+// This RF path uses the microphone pin for both modes; its TX state must not mute that path.
+static const uint16_t control_values[][2] = {
+	[AT1846S_STATE_OFF] = { 0x4006, 0x7006 },
+	[AT1846S_STATE_IDLE] = { 0x4006, 0x7006 },
+	[AT1846S_STATE_RX] = { 0x4026, 0x7026 },
+	[AT1846S_STATE_FM_TX] = { 0x4046, 0x7046 },
+	[AT1846S_STATE_DMR_TX] = { 0x4046, 0x7046 },
+};
 static rfbus_3w_t rf3w;
 static uint16_t gpio_shadow = RF_GPIO_SETUP;
 static bool keyed;
+static radio_bw_t rx_bw = RADIO_BW_12K5;
 static uint32_t rx_hz;		// the last frequency tuned for receive, to put the front end back after a transmission
 
 // --- The three-wire bus ---
@@ -153,6 +160,18 @@ uint16_t d878uv2_rf_gpio(void)
 // used (4.3)
 #define TX_DRIVE_UNCALIBRATED	0x20u
 
+static bool control_initialized;
+static void control_dac(void)
+{
+	uint16_t value;
+	if (!d878uv2_cal_control(&value)) return;
+	if (!control_initialized) {
+		mcu_dac_init(PIN_CONTROL_DAC);
+		control_initialized = true;
+	}
+	mcu_dac_write(PIN_CONTROL_DAC, value);
+}
+
 static void tx_dac(uint8_t level8)
 {
 	mcu_dac_write(0, (uint16_t)level8 << 4);
@@ -203,9 +222,11 @@ static void init(void)
 	mcu_pin_analog(GPIOA, MCU_PIN(4));	// the TX power DAC
 	mcu_dac_init(0);
 	tx_dac(0);
+	control_dac();
 
 	rfbus_3w_attach(&rf3w, &bus_pins);
 	at1846s_attach(&rf, &rf_bus);
+	rf.control_values = control_values;
 	at1846s_init(&rf);
 	gpio_shadow = RF_GPIO_SETUP;
 	gpio_flush();
@@ -226,17 +247,72 @@ static radio_mode_t mode_now = RADIO_MODE_FM;
 #define RF_AUDIO_FILTER_FM	0x0030u
 #define RF_AUDIO_FILTER_DMR	0x0031u
 #define RF_AUDIO_58_FM		0x8085u
+#define RF_AUDIO_58_FM_TX	0x8405u
 #define RF_AUDIO_58_DMR		0x80E5u
+#define RF_TX_GAIN_FM		0x09FFu	// documented reset index 2 of the TX table
+#define RF_TX_GAIN_DMR		0x0BFFu
+#define RF_TX_VOICE_GAIN	0x070Fu
+#define RF_TX_DEVIATION		0x0C50u
+
+static struct {
+	uint16_t input, voice, deviation;
+	bool valid;
+} rx_audio;
+
+static bool restore_rx_audio(void)
+{
+	if (!rx_audio.valid) return true;
+	bool ok = at1846s_write(&rf, 0, 0x0A, rx_audio.input);
+	ok &= at1846s_write(&rf, 0, 0x41, rx_audio.voice);
+	ok &= at1846s_write(&rf, 0, 0x59, rx_audio.deviation);
+	if (ok) rx_audio.valid = false;
+	return ok;
+}
+
+static bool apply_tx_audio(void)
+{
+	// These registers were initialized by the RF driver. Save their RX values before temporary TX trims.
+	if (!rx_audio.valid) {
+		rx_audio.input = rf.cache[0][0x0A];
+		rx_audio.voice = rf.cache[0][0x41];
+		rx_audio.deviation = rf.cache[0][0x59];
+		rx_audio.valid = true;
+	}
+	bool ok = true;
+	if (mode_now == RADIO_MODE_FM) {
+		ok &= at1846s_write(&rf, 0, 0x58, RF_AUDIO_58_FM_TX);
+		ok &= at1846s_write(&rf, 0, 0x40, RF_AUDIO_FILTER_FM);
+	}
+	ok &= at1846s_modify(&rf, 0, 0x0A, 0x87FFu, 0x3800u);
+	ok &= at1846s_modify(&rf, 0, 0x0A, 0x780Fu, 0x03A0u);
+	ok &= at1846s_write(&rf, 0, 0x44, mode_now == RADIO_MODE_FM ? RF_TX_GAIN_FM : RF_TX_GAIN_DMR);
+	ok &= at1846s_write(&rf, 0, 0x41, RF_TX_VOICE_GAIN);
+	ok &= at1846s_write(&rf, 0, 0x59, RF_TX_DEVIATION);
+	return ok;
+}
+
+// Bandwidth tables overwrite mode and audio registers, so restore this board's wiring after them.
+static bool apply_mode(void)
+{
+	bool dmr = mode_now == RADIO_MODE_DMR;
+	bool ok = at1846s_set_mode(&rf, dmr ? AT1846S_MODE_DMR : AT1846S_MODE_FM);
+	ok &= at1846s_write(&rf, 0, 0x58, dmr ? RF_AUDIO_58_DMR : RF_AUDIO_58_FM);
+	ok &= at1846s_write(&rf, 0, 0x40, dmr ? RF_AUDIO_FILTER_DMR : RF_AUDIO_FILTER_FM);
+	ok &= at1846s_write(&rf, 0, 0x44, dmr ? RF_AUDIO_TRIM_DMR : RF_AUDIO_TRIM_FM);
+	// The codec's modulator outputs are wired to the RF chip's microphone input (spec 4.6.4).
+	ok &= at1846s_modify(&rf, 0, 0x3A, 0x8FFFu, 0x4000u);
+	return ok;
+}
 
 static void set_mode(radio_mode_t mode)
 {
-	bool dmr = mode == RADIO_MODE_DMR;
-
 	mode_now = mode;
-	at1846s_set_mode(&rf, dmr ? AT1846S_MODE_DMR : AT1846S_MODE_FM);
-	at1846s_write(&rf, 0, 0x58, dmr ? RF_AUDIO_58_DMR : RF_AUDIO_58_FM);
-	at1846s_write(&rf, 0, 0x40, dmr ? RF_AUDIO_FILTER_DMR : RF_AUDIO_FILTER_FM);
-	at1846s_write(&rf, 0, 0x44, dmr ? RF_AUDIO_TRIM_DMR : RF_AUDIO_TRIM_FM);
+#if CONFIG_FM
+	if (mode != RADIO_MODE_FM) {
+		d878uv2_modem_analog(false, false, true);
+	}
+#endif
+	(void)apply_mode();
 }
 
 static at1846s_bw_t bw_of(radio_bw_t bw)
@@ -262,9 +338,13 @@ static at1846s_tone_t tone_of(tone_type_t t)
 static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 {
 	pa_off();
-	bool ok = at1846s_set_bandwidth(&rf, bw_of(bw));
+	bool ok = restore_rx_audio();
+	ok &= at1846s_set_bandwidth(&rf, bw_of(bw));
+	ok &= apply_mode();
+	control_dac();
 	ok &= at1846s_set_freq(&rf, hz);
 	rx_hz = hz;
+	rx_bw = bw;
 	front_end_rx(hz);
 	if (rx_tone != NULL && rx_tone->type != TONE_NONE) {
 		ok &= at1846s_set_rx_tone(&rf, tone_of(rx_tone->type), rx_tone->value);
@@ -272,21 +352,34 @@ static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 		ok &= at1846s_set_rx_tone(&rf, AT1846S_TONE_NONE, 0);
 	}
 	ok &= at1846s_set_state(&rf, AT1846S_STATE_RX);
+#if CONFIG_FM
+	if (mode_now == RADIO_MODE_FM) d878uv2_modem_analog(true, false, bw != RADIO_BW_25K);
+#endif
 	return ok;
 }
 
 static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_tone)
 {
+#if CONFIG_DIAG && CONFIG_FM
+	// A codec loopback test must not key the PA, even if PTT is pressed.
+	if (d878uv2_analog_value(10)) return false;
+#endif
 	bool ok = at1846s_set_state(&rf, AT1846S_STATE_IDLE);
 	ok &= at1846s_set_bandwidth(&rf, bw_of(bw));
+	ok &= apply_mode();
+	control_dac();
 	ok &= at1846s_set_freq(&rf, hz);
 	if (tx_tone != NULL && tx_tone->type != TONE_NONE) {
 		ok &= at1846s_set_tx_tone(&rf, tone_of(tx_tone->type), tx_tone->value);
 	} else {
 		ok &= at1846s_set_tx_tone(&rf, AT1846S_TONE_NONE, 0);
 	}
+	ok &= apply_tx_audio();
 	front_end_tx(hz);
-	ok &= at1846s_set_state(&rf, AT1846S_STATE_FM_TX);
+	ok &= at1846s_set_state(&rf, mode_now == RADIO_MODE_DMR ? AT1846S_STATE_DMR_TX : AT1846S_STATE_FM_TX);
+#if CONFIG_FM
+	if (mode_now == RADIO_MODE_FM) d878uv2_modem_analog(true, true, bw != RADIO_BW_25K);
+#endif
 	pa_on(power, hz);
 	return ok;
 }
@@ -299,9 +392,17 @@ static void tx_off(void)
 {
 	pa_off();
 	at1846s_set_state(&rf, AT1846S_STATE_IDLE);
+	(void)restore_rx_audio();
 	if (rx_hz != 0) {
+		at1846s_set_bandwidth(&rf, bw_of(rx_bw));
+		(void)apply_mode();
+		control_dac();
+		at1846s_set_freq(&rf, rx_hz);
 		front_end_rx(rx_hz);
 		at1846s_set_state(&rf, AT1846S_STATE_RX);
+#if CONFIG_FM
+		if (mode_now == RADIO_MODE_FM) d878uv2_modem_analog(true, false, rx_bw != RADIO_BW_25K);
+#endif
 	}
 }
 
@@ -344,6 +445,7 @@ static void audio(bool on)
 	mcu_pin_write(PIN_SPK_EN, on);
 }
 
+#if CONFIG_DMR || CONFIG_FM
 // The volume is made in the codec, not in the RF chip: the TLV320AIC3204's HPL driver gain (page 1, register
 // 0x10), six bits of two's complement dB from -6 to +29, with bit 6 the mute. Every gain write clears that bit,
 // which is the only unmute route there is. The RF chip's 0x44 is a fixed per-mode trim and the knob never reaches
@@ -364,6 +466,31 @@ static void volume(uint8_t percent)
 	d878uv2_codec_write(CODEC_PAGE_OUT, CODEC_HPL_GAIN, reg);
 }
 
+#endif
+
+#if CONFIG_DIAG && (CONFIG_DMR || CONFIG_FM)
+// A write-only bring-up selector, not codec readback. Only the documented microphone inputs are allowed.
+bool d878uv2_audio_reg(uint8_t chip, uint8_t page, uint8_t reg, uint32_t *value, bool write)
+{
+#if CONFIG_FM
+	// Chip 2 exposes the SCT WORK_MODE loop byte, restricted to normal or codec loopback.
+	if (chip == 2u && page == 0u && reg == 0x18u && value != NULL) {
+		if (!write) {
+			*value = d878uv2_analog_value(10) ? 0x11u : 0u;
+			return true;
+		}
+		if (keyed || (*value != 0u && *value != 0x11u)) return false;
+		return d878uv2_modem_loopback(*value == 0x11u);
+	}
+#endif
+	if (!write || keyed || chip != 1u || page != 1u || reg != 0x34u || value == NULL ||
+	    (*value != 0x80u && *value != 0x20u)) {
+		return false;
+	}
+	return d878uv2_codec_write(page, reg, (uint8_t)*value);
+}
+#endif
+
 const hal_radio_t d878uv2_radio = {
 	.init = init,
 	.set_mode = set_mode,
@@ -372,5 +499,8 @@ const hal_radio_t d878uv2_radio = {
 	.tx_off = tx_off,
 	.status = status,
 	.audio = audio,
+
+#if CONFIG_DMR || CONFIG_FM
 	.volume = volume,
+#endif
 };

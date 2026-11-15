@@ -87,6 +87,7 @@
 #define PIN_PA_EN0		GPIOE, MCU_PIN(6)
 #define PIN_PA_EN1		GPIOC, MCU_PIN(4)
 #define PIN_TX_POWER_DAC	0u			// DAC channel 1 on PA4, top 8 bits only
+#define PIN_CONTROL_DAC		1u			// DAC channel 2 on PA5, full 12-bit calibration count
 #define PIN_TUNE_PWM_PORT	GPIOA			// PA6, TIM3 channel 1: frequency-indexed control voltage
 #define PIN_TUNE_PWM_BIT	MCU_PIN(6)
 

@@ -129,3 +129,79 @@ def test_gps_startup_survives_restart(radio):
         current = as_int(radio.view(["link"])["uptime_ms"])
         assert current >= previous, "radio restarted during GPS startup"
         previous = current
+
+
+@pytest.mark.feature("debuglink")
+def test_codec_boot_snapshot(radio):
+    """Boards with codec readback expose actual startup register values, not write shadows."""
+    values = {k: as_int(v) for k, v in radio.view(["board"]).items() if k.startswith("board.codec.")}
+    if not values:
+        skip("no_hw", "board does not expose a codec boot snapshot")
+    assert all(0 <= v <= 255 for v in values.values()), f"codec boot readback failed: {values}"
+
+
+@pytest.mark.feature("dmr_voice")
+@pytest.mark.reboot
+def test_dmr_channel_starts_after_boot(radio):
+    """A saved DMR channel must become active when asynchronous baseband boot completes."""
+    if radio.view(["core"]).get("mode") != "dmr":
+        skip("state", "select a DMR channel before this restart test")
+    radio.wait_for(lambda v: v.get("settings.dirty") == "0", timeout=10.0, sections=("storage",),
+                   what="settings saved before restart")
+    radio.link.reboot(0, radio.link.chip()["token"])
+    radio.link.close()
+    time.sleep(2.0)
+    radio.reconnect(30.0, "DMR startup")
+    assert radio.view(["core"]).get("mode") == "dmr", "saved DMR channel was not restored"
+    radio.wait_for(lambda v: v.get("dmr.active") == "1", timeout=10.0, sections=("dmr",),
+                   what="DMR modem active without switching channels")
+
+
+@pytest.mark.feature("fm")
+def test_analog_baseband_ready(radio):
+    """An FM channel with a baseband audio path must finish its analog-call setup."""
+    if radio.view(["core"]).get("mode") != "fm":
+        skip("state", "select an FM channel for the analog-baseband check")
+    before = radio.view(["board"])
+    if "board.fm.enabled" not in before:
+        skip("no_hw", "board does not expose analog-baseband state")
+    state = radio.wait_for(lambda v: v.get("board.fm.ready") == "1" or v.get("board.fm.error") != "0",
+                           timeout=5.0, sections=("board",), what="FM baseband setup")
+    assert state.get("board.fm.enabled") == "1" and state.get("board.fm.error") == "0", state
+    assert state.get("board.fm.ready") == "1", state
+
+
+@pytest.mark.feature("debuglink")
+@pytest.mark.manual
+def test_analog_codec_loopback(radio):
+    """Opt-in codec loopback completes and restores RX without requesting RF TX."""
+    before = radio.view(["board", "core"])
+    if "board.fm.loopback" not in before:
+        skip("no_hw", "board does not expose codec loopback")
+    if before.get("mode") != "fm" or before.get("state") != "idle":
+        skip("state", "select an idle FM channel with scan and dual watch off")
+    if before.get("board.fm.ready") != "1" or before.get("board.fm.loopback") != "0":
+        skip("state", "normal analog receive must be ready")
+    try:
+        radio.link.chip_reg(2, 0x18, 0x11)
+        radio.wait_for(lambda v: v.get("board.fm.ready") == "1", timeout=3.0,
+                       sections=("board",), what="codec loopback command complete")
+        state = radio.view(["board", "core"])
+        assert state["board.fm.loopback"] == "1", state
+        assert state["board.fm.error"] == "0" and state["state"] == "idle", state
+    finally:
+        radio.link.chip_reg(2, 0x18, 0)
+    radio.wait_for(lambda v: v.get("board.fm.ready") == "1" and v.get("board.fm.loopback") == "0",
+                   timeout=3.0, sections=("board",), what="normal analog RX restored")
+
+
+@pytest.mark.feature("debuglink")
+def test_factory_control_dac_calibration(radio):
+    """A board with the factory DC-control path must select a valid saved 12-bit count."""
+    view = radio.view(["board"])
+    if "board.control_dac.count" not in view:
+        skip("no_hw", "board does not expose factory DC-control calibration")
+    assert 0 <= as_int(view["board.control_dac.count"]) <= 4095, view
+    if "board.control_dac.map_entries" in view:
+        assert 0 <= as_int(view["board.control_dac.map_entries"]) <= 89, "factory block map unavailable"
+    assert view["board.control_dac.factory"] == "1", "factory word unavailable; control DAC must remain uninitialized"

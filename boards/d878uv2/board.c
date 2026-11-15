@@ -86,11 +86,13 @@ const board_t board = {
 	.name = BOARD_T_NAME,
 #if CONFIG_DMR
 	.caps = CAP_KEYPAD | CAP_ENCODER | CAP_DMR | CAP_MODEM_VOICE | (CONFIG_GPS ? CAP_GPS : 0) | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
-	.dmr = &sct_dmr_modem,	// start() fails until the baseband has booted: FM only without the boot block
+	.dmr = &sct_dmr_modem,	// start() waits until the baseband and its codec have booted
 	.modem_codec = d878uv2_modem_codec,
-	.boot_busy = d878uv2_modem_booting,
 #else
 	.caps = CAP_KEYPAD | CAP_ENCODER | (CONFIG_GPS ? CAP_GPS : 0) | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
+#endif
+#if CONFIG_DMR || CONFIG_FM
+	.boot_busy = d878uv2_modem_booting,
 #endif
 #if CONFIG_GPS
 	.gps_enable = mcu_gps_enable,
@@ -124,6 +126,9 @@ const board_t board = {
 #endif
 #if CONFIG_DIAG
 	.diag_line = d878uv2_diag_line,
+#if CONFIG_DMR || CONFIG_FM
+	.chip_reg = d878uv2_audio_reg,
+#endif
 	.view_line = d878uv2_view_line,
 	.diag_reset = d878uv2_diag_reset,
 #endif
@@ -224,7 +229,7 @@ void board_init(void)
 	// The factory calibration: read before anything can transmit, never written (hardware-d878uv2.md 5)
 	startup_stage(4);
 	d878uv2_cal_load();
-#if CONFIG_DMR
+#if CONFIG_DMR || CONFIG_FM
 	startup_stage(5);
 	d878uv2_modem_init();
 #endif

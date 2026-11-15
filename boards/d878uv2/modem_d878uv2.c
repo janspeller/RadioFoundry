@@ -13,11 +13,17 @@
 // the radio runs FM only and the boot reports "no block".
 #include "d878uv2.h"
 #include "config.h"
-#if CONFIG_DMR	// the whole file
+#if CONFIG_DMR || CONFIG_FM	// both modes use the baseband's codec path
 #include "pins.h"
 #include "mcu_io.h"
 #include "hal_time.h"
+#if CONFIG_DMR
 #include "modem/sct/sct_dmr.h"
+#endif
+#if CONFIG_FM
+#include "modem/sct/sct_analog.h"
+static sct_analog_t analog;
+#endif
 #include "modem/sct/sct_host.h"
 #include "FreeRTOS.h"
 #include "semphr.h"
@@ -36,10 +42,8 @@
 extern const uint8_t __codec_slot[];
 
 // The voice set-up sent once the application runs: the codec is a TLV320AIC3204 and the vocoder AMBE+2, the same
-// pair the family's mobile carries (hardware-d878uv2.md 1.1). This board sends no gains or routing of its own, so
-// the chip keeps its defaults; the per-radio audio values live in the NAND calibration, which has no reader yet
-#define VOICE_CODEC		1
-#define VOICE_VOCODER		4
+// pair the family's mobile carries (hardware-d878uv2.md 1.1). The gains below are bring-up defaults; the per-radio
+// audio calibration values and the codec routing still need confirmation
 
 // The bus has no wait line: a short settle inside each strobe. The stock firmware uses a 20-iteration busy loop
 #define STROBE_US		1u
@@ -156,41 +160,7 @@ static uint32_t crc32(const uint8_t *p, uint32_t len)
 	return ~crc;
 }
 
-// The codec gains the MCU sets after the baseband has booted. The baseband's own firmware sets the codec's
-// clocks, routing and converters; the MCU only trims gains (docs/spec/hardware-d878uv2.md 4.6).
-//
-// **These values are placeholders**, not the radio's own: the stock firmware takes its five gain bytes from a
-// calibration record this port does not read yet. What matters here is that the input is not left muted: the
-// TLV320AIC3204 powers up with both MICPGAs muted (bit 7), and the right one carries the RF chip's audio into the
-// codec, so a port that never writes it is silent however loud the output gain is. The output gain is set again
-// on every volume change (radio_d878uv2.c)
-#define CODEC_PAGE_OUT		1u
-#define CODEC_MICPGA_R		0x3Cu	// Right MICPGA Volume Control: bit 7 mute, bits 6:0 in 0.5 dB steps
-#define CODEC_MICPGA_L		0x3Bu	// Left MICPGA Volume Control: the microphone's side
-#define CODEC_HPL_GAIN		0x10u	// HPL Driver Gain: bit 6 mute, bits 5:0 two's complement dB
-#define CODEC_MICPGA_DEFAULT	0x14u	// unmuted, 10 dB
-#define CODEC_HPL_DEFAULT	0x0Au	// unmuted, +10 dB
-
-#define CODEC_LOL_GAIN		0x12u	// LOL Driver Gain: the line outputs feed the RF chip's modulator input
-#define CODEC_LOR_GAIN		0x13u
-#define CODEC_LINE_DEFAULT	0x00u	// unmuted, 0 dB
-
-static const sct_codec_write_t codec_writes[] = {
-	{ CODEC_PAGE_OUT, CODEC_MICPGA_R, CODEC_MICPGA_DEFAULT },	// the RF chip into the codec
-	{ CODEC_PAGE_OUT, CODEC_MICPGA_L, CODEC_MICPGA_DEFAULT },	// the microphone
-	{ CODEC_PAGE_OUT, CODEC_HPL_GAIN, CODEC_HPL_DEFAULT },		// the speaker, unmuted
-	// Transmit audio: the codec's line outputs drive the RF chip's modulator input, so a transmission with these
-	// muted puts a carrier on the air with nothing on it (hardware-d878uv2.md 4.6, inferred there)
-	{ CODEC_PAGE_OUT, CODEC_LOL_GAIN, CODEC_LINE_DEFAULT },
-	{ CODEC_PAGE_OUT, CODEC_LOR_GAIN, CODEC_LINE_DEFAULT },
-};
-
-static const sct_voice_t voice = {
-	.codec = VOICE_CODEC,
-	.vocoder = VOICE_VOCODER,
-	.codec_writes = codec_writes,
-	.codec_count = sizeof(codec_writes) / sizeof(codec_writes[0]),
-};
+#include "audio_setup.h"
 
 static const sct_host_t host = {
 	.write = hpi_write,
@@ -205,6 +175,26 @@ static const sct_host_t host = {
 
 static SemaphoreHandle_t lock;
 static bool booted, boot_done;
+#if CONFIG_DIAG
+static uint8_t codec_snapshot[2][128];
+static bool codec_snapshot_valid[2];
+
+static void snapshot_codec(sct_rx_t *rx)
+{
+	// TI's 0x18 seven-bit address is 0x30 in the SCT raw-I2C command.
+	for (uint8_t page = 0; page < 2; page++) {
+		codec_snapshot_valid[page] = sct_host_i2c_page(&host, rx, 0x30, page, 200) &&
+			sct_host_i2c_read(&host, rx, 0x30, 0, codec_snapshot[page], 128, 200) &&
+			codec_snapshot[page][0] == page;
+	}
+	(void)sct_host_i2c_page(&host, rx, 0x30, 0, 200);
+}
+
+int d878uv2_codec_snapshot(uint8_t page, uint8_t reg)
+{
+	return page < 2 && reg < 128 && codec_snapshot_valid[page] ? codec_snapshot[page][reg] : -1;
+}
+#endif
 static sct_boot_result_t boot_result = SCT_BOOT_SILENT;
 
 static bool port_send(const uint8_t *buf, uint16_t len, void *ctx)
@@ -213,11 +203,17 @@ static bool port_send(const uint8_t *buf, uint16_t len, void *ctx)
 	return sct_host_send(&host, buf, len);
 }
 
+#if CONFIG_DMR
 static bool port_ready(void *ctx)
 {
 	(void)ctx;
+#if CONFIG_FM
+	return booted && analog.digital_ready && !analog.enabled;
+#else
 	return booted;
+#endif
 }
+#endif
 
 static void port_lock(void *ctx)
 {
@@ -235,6 +231,7 @@ static void port_unlock(void *ctx)
 	}
 }
 
+#if CONFIG_DMR
 // The chip looks for sync only from CARRIER_READY on (modem-sct.md 3), so a board that never sends it boots the
 // baseband and then hears nothing. It goes out two ways: from the board's own carrier reading
 // (d878uv2_modem_carrier, called by the radio's status path) and, whatever the board reads, rx_settle_ms after
@@ -256,6 +253,9 @@ static void port_unlock(void *ctx)
 static const sct_dmr_port_t port = {
 	.send = port_send,
 	.call_option = { 0x01, 0x40, 0x42, 0x4F, 0x08 },
+	.codec_start = codec_writes,
+	.codec_start_count = CODEC_MIC_COUNT,
+	.codec_tx = &codec_writes[0],
 	.report_field = 0xFF,
 	.rx_ready = D878UV2_CR_READY,
 	.rx_settle_ms = CR_SETTLE_MS,
@@ -264,10 +264,20 @@ static const sct_dmr_port_t port = {
 	.unlock = port_unlock,
 };
 
+#endif
+
 static void on_packet(const uint8_t *pkt, uint16_t len, void *ctx)
 {
 	(void)ctx;
+#if CONFIG_FM
+	if (sct_analog_owns_link(&analog)) {
+		sct_analog_packet(&analog, pkt, len);
+		return;
+	}
+#endif
+#if CONFIG_DMR
 	sct_dmr_packet(pkt, len, hal_millis());
+#endif
 }
 
 static void modem_task(void *arg)
@@ -277,12 +287,26 @@ static void modem_task(void *arg)
 	(void)arg;
 	sct_rx_reset(&rx);
 	boot_result = sct_host_boot(&host, &rx, BOOT_TIMEOUT_MS);
+#if CONFIG_DIAG
+	if (boot_result == SCT_BOOT_OK) {
+		snapshot_codec(&rx);
+	}
+#endif
 	booted = boot_result == SCT_BOOT_OK;
 	boot_done = true;
 	for (;;) {
 		port_lock(NULL);
 		sct_host_poll(&host, &rx, on_packet, NULL);
-		sct_dmr_poll(hal_millis());
+#if CONFIG_FM
+		if (booted && sct_analog_owns_link(&analog)) {
+			sct_analog_poll(&analog, hal_millis());
+		} else
+#endif
+		{
+#if CONFIG_DMR
+			sct_dmr_poll(hal_millis());
+#endif
+		}
 		port_unlock(NULL);
 		vTaskDelay(pdMS_TO_TICKS(MODEM_POLL_MS));
 	}
@@ -290,7 +314,14 @@ static void modem_task(void *arg)
 
 bool d878uv2_modem_init(void)
 {
+#if CONFIG_DMR
 	sct_dmr_init(&port);
+#endif
+#if CONFIG_FM
+	sct_analog_init(&analog, port_send, NULL);
+	analog.tx_codec = codec_writes;
+	analog.tx_codec_count = CODEC_MIC_COUNT;
+#endif
 	if (crc32(__codec_slot, SCT_BOOT_BLOCK_BYTES) != BOOT_BLOCK_CRC32) {
 		boot_result = SCT_BOOT_NO_BLOCK;
 		boot_done = true;
@@ -310,9 +341,15 @@ const char *d878uv2_modem_codec(void)
 // board_t.boot_busy: true while the chip is still booting, so the UI can wait instead of reporting no DMR
 bool d878uv2_modem_booting(void)
 {
-	return !boot_done;
+	if (!boot_done) return true;
+#if CONFIG_FM
+	if (booted && analog.error == 0 &&
+	    ((analog.enabled && !analog.ready) || (!analog.enabled && !analog.digital_ready))) return true;
+#endif
+	return false;
 }
 
+#if CONFIG_DMR
 // The board's carrier reading, passed to the engine once the chip is up
 void d878uv2_modem_carrier(bool carrier)
 {
@@ -320,6 +357,49 @@ void d878uv2_modem_carrier(bool carrier)
 		sct_dmr_carrier(carrier ? (uint8_t)D878UV2_CR_READY : 0u);
 	}
 }
+
+#endif
+
+#if CONFIG_FM
+void d878uv2_modem_analog(bool enabled, bool tx, bool narrow)
+{
+	port_lock(NULL);
+	sct_analog_request(&analog, enabled, tx, narrow);
+	port_unlock(NULL);
+}
+
+#if CONFIG_DIAG
+bool d878uv2_modem_loopback(bool enabled)
+{
+	port_lock(NULL);
+	bool ok = booted && sct_analog_loopback(&analog, enabled);
+	port_unlock(NULL);
+	return ok;
+}
+#endif
+
+uint32_t d878uv2_analog_value(uint8_t key)
+{
+	port_lock(NULL);
+	if (key == 11) {
+		uint8_t count = analog.tx_codec_index;
+		port_unlock(NULL);
+		return count;
+	}
+#if CONFIG_DIAG
+	if (key == 10) {
+		bool value = analog.loopback;
+		port_unlock(NULL);
+		return value;
+	}
+#endif
+	uint32_t value = key == 0 ? analog.enabled : key == 1 ? analog.ready : key == 2 ? analog.want_tx :
+		key == 3 ? analog.pending : key == 4 ? analog.error : key == 5 ? analog.commands :
+		key == 6 ? analog.timeouts : key == 7 ? analog.last_id : key == 8 ? analog.digital_ready : analog.analog_loaded;
+	port_unlock(NULL);
+	return value;
+}
+#endif
 
 // One codec register, as a codec-bypass packet. The MCU has no bus to the TLV320AIC3204: it reaches it only
 // through the baseband, which adds the codec's I2C address itself (sct_pkt.h). The baseband's own firmware sets
@@ -347,4 +427,4 @@ sct_boot_result_t d878uv2_modem_boot_result(void)
 	return boot_result;
 }
 
-#endif	// CONFIG_DMR
+#endif	// CONFIG_DMR || CONFIG_FM

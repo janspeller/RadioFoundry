@@ -313,3 +313,226 @@ The owner confirms all keys work, the battery bar works, and the channel rotary 
 needed for one channel change with the current four-transition decoder. The likely next correction is two
 transitions per detent with `QUAD_REST_EQUAL`, after checking physical rest states and raw transition counts.
 No encoder-ratio correction has been applied yet. Volume bar/audio and shutdown still await explicit confirmation.
+
+### Audio-path and codec-readback image
+
+After the receiver-restoration fix, RSSI returns after transmit, but the owner reports silent FM and DMR receive
+and no recognized DMR transmission at the other radio. The live DMR receive counters showed three calls and
+118 voice bursts with no lost frames. The current patch restores the RF chip's microphone modulation source,
+reapplies board audio trims after bandwidth changes, selects DMR-TX for digital transmission, and retunes the
+receive frequency at transmit end. The receive audio fault remains open.
+
+Build and flash `build/d878uv2-audio-path/rfoundry_d878uv2_codec.bin` in factory update mode, then power-cycle
+normally. Read `tools/rfoundry_debug.py --port /dev/ttyACM0 view --section board`. The `board.codec.*` keys hold
+actual startup register reads; -1 indicates an unsupported or failed read. Compare DAC power, HPL power,
+HPL routing and mute state before changing gain values. Codec reads occur before the runtime packet engine,
+so they need no ongoing debug-link transactions with the codec and do not trigger RF.
+
+Host tests cover the four RF-path regressions, raw-I2C page framing, fragmented reads, maximum-length replies,
+short replies, errors, timeouts and clock wrap. `test_codec_boot_snapshot` is an unattended HIL readback check;
+it has not run on this image yet. Audio, actual transmit frequency, deviation and PA6 tuning remain unverified.
+
+### Audio/FM/dual-watch image
+
+The owner reports audible DMR receive after the RF-path fixes, recognized DMR transmit without microphone audio,
+and no FM audio either way. A DMR channel selected at boot says "DMR modem off" until a channel change.
+Raw codec snapshots were all -1; do not interpret them as mute or power-register values.
+
+The next image is `build/d878uv2-audio-fm/rfoundry_d878uv2_codec.bin`. It adds microphone input routing, explicit
+unity digital gains, shared SCT analog-call control for FM, DMR startup deferred until baseband boot completes,
+and software dual watch. The codec/baseband now also boot with `CONFIG_DMR=n` when FM is enabled.
+
+After flashing and powering on:
+
+1. Start on a saved DMR channel. It should become active without changing channels.
+2. Confirm DMR receive still has audio. Check microphone audio in an owner-controlled TX test.
+3. Select FM and read the board view: `board.fm.enabled=1`, `board.fm.ready=1`, `board.fm.error=0`.
+   Record pending field/error/timeout values if setup fails. Check FM receive audio before a TX test.
+4. Enable dual watch with two channels and confirm it alternates, holds a received call and resumes afterward.
+   Mixed FM/DMR timing needs a separate check; it is not simultaneous reception.
+
+Host tests cover deferred DMR start and cancellation, the real codec setup profile, analog RX/TX command
+sequences, short-press cancellation, mode ownership, errors and timeouts. HIL checks for DMR boot activation and
+FM baseband readiness are added but have not run on this image. No RF tests were run by the agent.
+
+### Vocoder/FM follow-up image
+
+The owner confirms DMR startup and dual watch are working, with DMR receive audio still working. Microphone
+speech on DMR and FM audio both ways remain unresolved. The FM engine reports error 6 at its first process-mode
+command. `build/d878uv2-vocoder-fm/rfoundry_d878uv2_codec.bin` selects the analog vocoder before analog setup,
+restores AMBE+2 when leaving FM, and waits for asynchronous mode loading before scanning on. It also adds
+the restricted microphone input selector documented on the hardware page.
+
+After installing it, read the board view on an FM channel. Record `board.fm.ready`, `.error` and `.last_field`.
+Then return to DMR and confirm `board.fm.digital_ready=1` and DMR receive audio still works. Microphone input
+routing can now be compared between IN1L and IN2L while the owner tests speech; the agent must not key RF.
+The default remains IN1L. Codec snapshots still provide no usable data.
+
+Host tests cover vocoder command ordering, its longer timeout, restoring the digital library, draining a pending
+analog selection before digital selection, scan pause while busy, and rejection of microphone-route changes
+while transmitting or outside the two allowed values. These tests do not confirm hardware audio.
+
+### Vocoder image live check
+
+On the installed vocoder/FM image, a receiver-only switch from the saved DMR channel to the adjacent FM channel
+completed all six setup commands: `board.fm.ready=1`, error 0, timeouts 0, analog loaded 1. Returning to the saved
+DMR channel restored vocoder 4 and `dmr.active=1`; digital ready was 1. The agent restored the original channel
+and did not transmit. This confirms command acceptance and mode restoration, not audible FM audio.
+
+The owner still needs to compare speech input routes. The agent requested IN2L (chip 1, page 1, register 0x34,
+value 0x20) while idle for the next owner-controlled speech test. It is temporary; reboot restores IN1L (0x80).
+The volume read zero during this check; raise it before judging receive audio. Actual codec register readback
+remains unavailable.
+
+### Latest receive/transmit result
+
+FM receive is now confirmed audible by the owner. DMR receive, startup and dual watch also work. IN2L did not
+produce FM transmit speech; DMR transmit was not recognized by the other handheld, so microphone audio on DMR
+cannot be assessed yet. The agent restored IN1L without reflashing. A built-in-microphone FM test with the
+programming/audio cable unplugged is pending to separate input routing from jack contacts/accessory behavior.
+
+The DMR TX audit also found no use of the declared SCT slot-output pin and no per-burst PA gate: the PA is held
+for the whole call. Implement shared burst gating and verify timing rather than copying measured delays from
+a different RF path. Frequency and deviation still require measurement. No RF was triggered by the agent.
+
+### Owner-operated FM transmit diagnostic check
+
+With IN1L still requested, the owner reports no FM transmit speech. Before the test the radio was idle in DMR,
+with 78 analog commands and no timeouts. After the owner selected FM and spoke while holding PTT, the core
+recorded a 4,451 ms transmission on 433.500 MHz. The analog engine had 89 commands, ready 1, pending 0,
+error 0, timeouts 0 and last field 25 (CARRIER_READY), and the radio was back in receive. The eleven-command
+increase matches six FM setup commands plus TX work/start and release stop/RX work/carrier. This supports
+completion of the command sequence, but is not a packet trace or proof of microphone signal or RF modulation.
+The polling window ended before the manual test; these are before/after readings. The agent did not transmit.
+
+All codec snapshot values remain -1. ADC power/mute, microphone bias and the line-output signal therefore
+remain unmeasured. Whether the latest test used the built-in microphone with the accessory jack empty is
+not explicitly confirmed. Do not treat successful command acknowledgments as proof of working audio.
+
+### Built-in microphone still silent; next isolation test
+
+The owner confirms the same carrier-without-speech result with the harness unplugged. The next image adds
+an idle-only codec loopback, behind CONFIG_DIAG, rather than changing more gains. The engine has host tests
+for its exact documented command, no call start, restoring RX and cancellation on retune. The board test
+checks that RF TX is refused while loopback is selected.
+
+On an FM channel, with scan and dual watch stopped, set low volume and open monitor. Keep PTT released.
+Enable the loop byte using `python3 tools/rfoundry_debug.py --port /dev/ttyACM0 reg 2 0x18 0x11 --page 0`.
+Read `board.fm.loopback=1`, `.ready=1` and `.error=0` before judging audio. Speak into the built-in microphone.
+Restore with `python3 tools/rfoundry_debug.py --port /dev/ttyACM0 reg 2 0x18 0 --page 0`, or change channel.
+Hearing speech would establish microphone capture through the codec; silence with an accepted loopback
+would leave microphone setup or loopback support open. This does not test RF modulation. No agent RF TX.
+
+Built `build/d878uv2-mic-loop/rfoundry_d878uv2_codec.bin` (1,030,144 bytes). Normal, CONFIG_DIAG=n,
+CONFIG_FM=n (with its battery-save dependency off), and CONFIG_DMR=n builds passed without compiler warnings.
+Analog sequencing, board RF guard and codec-setup host tests passed; analog sequencing also passed with
+CONFIG_DIAG=0. Documentation links and generic checks passed. The opt-in HIL loopback test was added and
+syntax-checked, but not run: the connected radio still has the previous image. No hardware loopback or audio
+result is claimed. Temporary configuration build trees were removed.
+
+### Codec loopback owner result
+
+On the microphone-loop image, scan was stopped, the adjacent FM channel selected, volume set to step 2 and
+monitor opened. The loopback command completed with loopback 1, ready 1, pending 0, error 0 and state idle.
+The owner reported very loud unusual squeaking, not intelligible microphone speech. The agent immediately
+set volume 0, closed monitor and disabled loopback. Readback then showed loopback 0, ready 1, pending 0,
+error 0, state idle and monitor 0. The radio remains on FM with the speaker muted. No RF was requested.
+
+This is not a successful microphone-capture result. Acoustic feedback, an unintended internal loop or a
+mode-specific implementation of the documented loopback remain possible; no cause was measured. Do not
+repeat with the speaker open or treat command acceptance as validation of the diagnostic's signal path.
+
+### Owner reports an existing frequency correction
+
+The owner recalls needing FQCU approximately 3620 to match frequency. The original interface, band and units
+are not yet confirmed. Current calibration loading reads only the transmit power tables; PA6 tuning is not
+implemented and no FQCU correction is applied by this port. This makes oscillator alignment a concrete lead
+for the unrecognized DMR transmission, but there is no carrier-frequency measurement for this image yet.
+Do not interpret 3620 as hertz or program it into a DAC/PWM without establishing its stock meaning. The dirty
+spec-writer has been asked to trace the setting's storage and hardware destination. No radio changes or RF.
+
+### Saved DC-control output bring-up
+
+The dirty-side audit established little-endian calibration offset 0 -> PA5/DAC2, shared across bands.
+This output had never been initialized by the port. The new image reads its own saved 12-bit count and
+applies it at RF initialization and retuning. Invalid data falls back to the documented calibration-reset
+count 1900; this is an explicit RadioFoundry policy, not a proven stock invalid-data fallback. Calibration
+storage stays read-only. Host tests cover primary/mirror selection, raw 3620 decoding, 0/4095 endpoints,
+invalid or unreadable words, failed power tables, stale reload state and independent PA/control DAC writes.
+
+After flashing, read `board.control_dac.count` and `.factory`. A factory flag 1 establishes that a saved word
+was read, not that the carrier is aligned. Check receive first; an owner-controlled DMR call and a measured
+carrier offset are still needed. No FM speech fix is claimed and the squealing loopback will not be repeated.
+
+The resulting image is `build/d878uv2-control-dac/rfoundry_d878uv2_codec.bin`, 1,030,144 bytes. Normal,
+CONFIG_DIAG=n, CONFIG_FM=n (battery save off) and CONFIG_DMR=n builds passed without compiler warnings.
+Factory-reader and RF/DAC host tests passed; docs links and HIL syntax checks passed. The read-only HIL
+calibration test is added but not run until this image is installed. No carrier-alignment result is claimed.
+Temporary configuration build trees were removed.
+
+### Combined TX-path image, held for owner testing
+
+At the owner's request, the DAC-only image is not the next proposed flash. The combined image adds the
+stock-audited RF control profile, FM TX filter and microphone re-enable ordering. Host tests check custom
+and default control profiles through real driver operations, narrow/wide FM and DMR state values, receive
+restoration, mic codec ACKs before work mode/call start, refusal and early-release cancellation. The actual
+board audio profile is checked for IN1L followed by unmuted left PGA. No audible mic success is claimed.
+
+Combined image: `build/d878uv2-tx-path/rfoundry_d878uv2_codec.bin` (1,030,144 bytes). Full host suite passed.
+Normal, CONFIG_DIAG=n, CONFIG_FM=n (battery save off), CONFIG_DMR=n, and a representative default-control
+board build passed without compiler warnings. The shared analog tests also passed with CONFIG_DIAG=0.
+Documentation and generic checks passed. Temporary configuration build trees were removed. No hardware
+mic test, RF transmission or flash was performed by the agent; this image supersedes the DAC-only candidate.
+The microphone cannot be reported working until the owner tests this combined image.
+
+### Regression on combined TX-path image
+
+The owner reports unchanged silent FM TX and lost DMR RX/TX, with occasional unexplained receive blips.
+Live readings: control count 1900, factory 0; mic_writes 2, analog error/timeouts 0; DMR received calls 0.
+After a receive-only switch to DMR, active 1 and digital ready 1. The blips are not established as PC spurs.
+The unverified 1900 DAC fallback is removed. Missing calibration now leaves the control DAC untouched.
+
+A corrected stock audit found that the reader had selected the retirement marker as if it meant active,
+and had ignored the persisted NAND block map. The reader now validates the map fingerprint/log, follows
+read-only block replacements and selects an active primary or active mirror. No map reconstruction or
+writes are possible. Host tests cover retired-copy rejection, relocated calibration, malformed map bounds,
+duplicate entries, log selection, cross-block reads, stale load state and no DAC initialization without a
+valid saved word. These correct demonstrated reader bugs; hardware recovery is still unverified.
+
+### Full TX trim and calibration repair candidate
+
+The next candidate combines the corrected read-only calibration reader with the complete stock-audited TX
+trim (0x0A masked operations, FM 0x44=0x09FF / DMR 0x0BFF, 0x41=0x070F, 0x59=0x0C50). These TX writes
+were missing even after microphone-route writes were acknowledged. RX values are saved and restored explicitly
+because a cached mode table need not rewrite those registers. The host test covers release and direct RX entry.
+No owner speech or DMR recovery result exists yet for this candidate. The connected radio remains on the prior
+TX-path image; the agent left it idle on the saved DMR channel with scan stopped, and did not transmit.
+
+Final candidate is `build/d878uv2-cal-tx/rfoundry_d878uv2_codec.bin` (1,030,144 bytes), superseding the
+standalone calibration-reader and DAC-only candidates. Full host suite, normal/DIAG-off/FM-off/DMR-off builds,
+generic/doc checks and static stack check passed without compiler warnings. The UI stack is now 544 words:
+the checker found the prior 526-word allocation eight bytes short of its required safety margin. Every task
+fits after adjustment. Temporary configuration and superseded reader/DAC build trees were removed; the
+previous installed TX-path image and earlier working receive image are retained for comparison.
+
+The owner has not installed this candidate yet. After installation, read `control_dac.map_status` (4 expected),
+`.map_entries`, `.factory` (1 expected) and `.count` before any TX test. A valid map and saved word are not a
+carrier measurement or proof of microphone audio. No agent RF TX or flash was performed.
+
+### Owner refines audio result before committing
+
+On rechecking the installed image, the owner can hear FM microphone audio, but it is very quiet. This
+supersedes the earlier description of entirely absent FM speech. No measured level comparison exists, so
+whether earlier images already passed quiet audio is unknown. Low overall TX gain is plausible; it is not
+a demonstrated failure of microphone capture. The complete stock TX trim in the new candidate remains
+hardware-unverified and should be checked before changing codec gains further.
+
+The owner also reports "TS1 late" during DMR receive and no recognized DMR transmission on the peer DM-32.
+This indicates some receive-side activity, not a confirmed complete call or correct frequency alignment.
+The latest candidate's calibration map/count and the actual carrier offset still need checking.
+
+A read-only check after this report confirms the owner has already installed the new map-aware candidate:
+`map_status=4`, `map_entries=3`, `map_crc=3503888722` (0xD0D91952), `factory=0`, `count=0`. Thus the saved
+map loads, but a valid saved DAC word has not been selected. The latest quiet-FM/late-DMR observations must
+be associated with this candidate, not assumed to describe the prior TX-path image. No setting or RF change
+was made by this check. Calibration selection remains open despite the successful mapping-layer read.

@@ -5,8 +5,8 @@
 # differs in having one receiver, a battery, a key matrix on the LCD data lines, and a Bluetooth/APRS daughter
 # board on UART4 (hardware-d878uv2.md 4.5).
 #
-# WORK IN PROGRESS: the board's interface files are not written yet, so this board does not build. Do not commit it
-# until it does: tools/ci.sh builds every board whose board.mk exists.
+# Bring-up is in progress: the board builds, but TX audio and calibrated RF operation still need owner testing.
+# Hardware results and open items are recorded in docs/testing/d878uv2-bringup.md.
 PLATFORM   := gd32f30x
 MCU        := gd32f303
 # The image starts where the vendor bootloader starts the application (hardware-d878uv2.md 1.3)
@@ -16,8 +16,10 @@ BOARD_T_NAME := AT-D878UVII
 # Bench knobs (docs/testing/d878uv2-bringup.md)
 D878UV2_DEFS ?=
 MCU_DEFS   += $(D878UV2_DEFS)
+# The diagnostic menu call chain needs more than the shared UI stack allocation.
+MCU_DEFS   += -DUI_TASK_STACK_WORDS=544
 # The Bluetooth/APRS daughter board joins this list when its protocol is recorded and its glue written
-BOARD_DIRS := boards/d878uv2 drivers/display/st7735 drivers/flash/spi_nand drivers/input/quadrature \
+BOARD_DIRS := boards/d878uv2 drivers/display/st7735 drivers/flash/spi_nand drivers/flash/nand_remap drivers/input/quadrature \
               drivers/input/keymatrix drivers/modem/sct drivers/rf/rfbus drivers/rf/subaudio \
               drivers/rf/at1846s drivers/gps/nmea_line drivers/gps/gps_rx platform/gd32f30x/gps_uart \
               drivers/bcast/rda5807m drivers/bus/i2c_gpio

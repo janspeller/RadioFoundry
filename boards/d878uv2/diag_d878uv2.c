@@ -49,7 +49,7 @@ static void put_x(out_t *o, uint32_t v, int digits)
 	}
 }
 
-#if CONFIG_DMR
+#if CONFIG_DMR || CONFIG_FM
 // sct_boot_result_t in order (drivers/modem/sct/sct_host.h)
 static const char *boot_name(uint8_t r)
 {
@@ -68,8 +68,10 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 	case 0:
 		// The baseband: its boot result, then what the engine has seen
 		put(&o, "bb ");
-#if CONFIG_DMR
+#if CONFIG_DMR || CONFIG_FM
 		put(&o, boot_name((uint8_t)d878uv2_modem_boot_result()));
+#endif
+#if CONFIG_DMR
 		{
 			sct_dmr_stats_t st;
 
@@ -81,7 +83,7 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 			put(&o, " nak ");
 			put_u(&o, st.naks);
 		}
-#else
+#elif !CONFIG_FM
 		put(&o, "off");
 #endif
 		break;
@@ -163,9 +165,45 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 // Stable raw view keys for host tests and interactive bring-up.
 bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
 {
-	if (len == 0 || i >= 14u) {
+	unsigned control_at = CONFIG_FM ? 42u : CONFIG_DMR ? 30u : 14u;
+	if (len == 0 || i >= control_at + 5u) {
 		return false;
 	}
+	if (i >= control_at + 3u) {
+		dl_fmt(buf, len, "control_dac.map_%s=%u", i == control_at + 3u ? "status" : "crc",
+		       (unsigned)d878uv2_cal_map_info((uint8_t)(i - control_at - 3u)));
+		return true;
+	}
+	if (i == control_at + 2u) {
+		dl_fmt(buf, len, "control_dac.map_entries=%d", d878uv2_cal_map_count());
+		return true;
+	}
+	if (i >= control_at) {
+		uint16_t value;
+		bool valid = d878uv2_cal_control(&value);
+		dl_fmt(buf, len, "control_dac.%s=%u", i == control_at ? "count" : "factory",
+		       (unsigned)(i == control_at ? value : valid));
+		return true;
+	}
+#if CONFIG_FM
+	if (i >= 30u) {
+		static const char *const keys[] = { "enabled", "ready", "tx", "pending", "error", "commands", "timeouts",
+			"last_field", "digital_ready", "analog_loaded", "loopback", "mic_writes" };
+		dl_fmt(buf, len, "fm.%s=%u", keys[i - 30u], (unsigned)d878uv2_analog_value((uint8_t)(i - 30u)));
+		return true;
+	}
+#endif
+#if CONFIG_DMR || CONFIG_FM
+	if (i >= 14u) {
+		// Boot snapshot: converters, digital mute, output routing/power and input routing.
+		static const uint8_t pages[] = { 0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1 };
+		static const uint8_t regs[] = { 63,64,65,66,81,82,83,9,12,14,15,16,18,19,52,59 };
+		unsigned at = i - 14u;
+		dl_fmt(buf, len, "codec.%u.%u=%d", (unsigned)pages[at], (unsigned)regs[at],
+		       d878uv2_codec_snapshot(pages[at], regs[at]));
+		return true;
+	}
+#endif
 	if (i < 3u) {
 		dl_fmt(buf, len, "adc.%u=%u", 10u + i, (unsigned)mcu_adc_read((uint8_t)(10u + i)));
 	} else if (i == 3u) {

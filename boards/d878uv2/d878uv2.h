@@ -26,6 +26,10 @@ void d878uv2_gps_init(void);
 #if CONFIG_DIAG
 bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len);
 bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len);
+#if CONFIG_DMR || CONFIG_FM
+int d878uv2_codec_snapshot(uint8_t page, uint8_t reg);
+bool d878uv2_audio_reg(uint8_t chip, uint8_t page, uint8_t reg, uint32_t *value, bool write);
+#endif
 void d878uv2_diag_reset(void);
 #endif
 
@@ -79,8 +83,8 @@ void d878uv2_flash_stats(nand_sectors_stats_t *st);
 void d878uv2_flash_ext_stats(nand_blocks_stats_t *st);
 #endif
 
-#if CONFIG_DMR
-// --- The DMR baseband (modem_d878uv2.c, docs/spec/modem-sct.md) ---
+#if CONFIG_DMR || CONFIG_FM
+// --- The audio/DMR baseband (modem_d878uv2.c, docs/spec/modem-sct.md) ---
 #include "modem/sct/sct_host.h"
 bool d878uv2_modem_init(void);
 const char *d878uv2_modem_codec(void);
@@ -89,11 +93,21 @@ void d878uv2_modem_carrier(bool carrier);
 sct_boot_result_t d878uv2_modem_boot_result(void);
 // One TLV320AIC3204 register through the baseband (hardware-d878uv2.md 4.6)
 bool d878uv2_codec_write(uint8_t page, uint8_t reg, uint8_t value);
+#if CONFIG_FM
+void d878uv2_modem_analog(bool enabled, bool tx, bool narrow);
+#if CONFIG_DIAG
+bool d878uv2_modem_loopback(bool enabled);
+#endif
+uint32_t d878uv2_analog_value(uint8_t key);
+#endif
 #endif
 
 // --- Factory calibration, read from the NAND (cal_d878uv2.c, docs/spec/hardware-d878uv2.md 5) ---
 bool d878uv2_cal_load(void);
 bool d878uv2_cal_ready(void);
+bool d878uv2_cal_control(uint16_t *value);
+int d878uv2_cal_map_count(void);
+uint32_t d878uv2_cal_map_info(uint8_t key);
 bool d878uv2_cal_tx_drive(uint8_t level, uint32_t hz, uint8_t *drive);
 
 // LCD backlight, 0..100 %: TIM8 channel 2's complementary output on PB0 (power_d878uv2.c, hardware-d878uv2.md 4.3)

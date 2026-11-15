@@ -17,6 +17,12 @@ static inline void mcu_pin_out(unsigned port, unsigned pin, bool level, bool od)
 static inline void mcu_pin_in(unsigned port, unsigned pin, unsigned pull) { (void)port; (void)pin; (void)pull; }
 static inline bool mcu_pin_read(unsigned port, unsigned pin) { (void)port; (void)pin; return false; }
 static inline void mcu_pin_analog(unsigned port, unsigned pins) { (void)port; (void)pins; }
-static inline void mcu_dac_init(unsigned channel) { (void)channel; }
-static inline void mcu_dac_write(unsigned channel, uint16_t value) { (void)channel; (void)value; }
+extern unsigned host_dac_init_mask, host_dac_writes[2];
+extern uint16_t host_dac_values[2];
+static inline void mcu_dac_init(unsigned channel) { host_dac_init_mask |= 1u << channel; }
+static inline void mcu_dac_write(unsigned channel, uint16_t value)
+{
+	host_dac_values[channel] = value;
+	host_dac_writes[channel]++;
+}
 #endif

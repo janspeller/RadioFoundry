@@ -31,13 +31,11 @@ CONFIG_BT_PTT ?= n
 CONFIG_APRS_RX ?= n
 # USRP needs PCM both ways, which the baseband never gives the MCU
 CONFIG_NET_USRP ?= n
-# One receiver and no AM-capable one: both off, with the reasons in BOARD_UNSUPPORTED below
+# One receiver can alternate channels in software; no second RF chip is needed for dual watch.
 CONFIG_AM_RX ?= n
-CONFIG_DUAL_WATCH ?= n
 # What the radio's hardware can't do, one switch per line with the reason (tools/boards.py checks there is one;
 # docs/build-config.md, "Unsupported, not written, unconfirmed")
 BOARD_UNSUPPORTED += FONT_XL	# the 128x160 panel is too small for the large font (it is for 240 px and wider)
-BOARD_UNSUPPORTED += DUAL_WATCH	# one AT1846S: no second receiver (hardware-d878uv2.md 1.1)
 BOARD_UNSUPPORTED += AM_RX	# no air band receiver on the I2C bus (hardware-d878uv2.md 4.1)
 # Left out of tools/ci.sh's maximal configuration: what doesn't fit the RAM with DMR on
 MAXIMAL_SKIP := USB_NETWORK NET_PPP DMR_IP_GATEWAY NET_TCP NET_KISS NET_HTTP NET_HTTP_GZIP NET_WEBCTL NET_RIGCTL \
