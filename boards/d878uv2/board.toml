@@ -30,6 +30,17 @@ gallery = "160x128"
 knobs = 1
 # PC14 and PC15 are configured as pull-up inputs, so no 32.768 kHz crystal is fitted (hardware-d878uv2.md 3)
 clock = { rtc = "none", note = "the GD32F303 RTC has no crystal on this board (docs/spec/hardware-d878uv2.md 3)" }
+# One MCU, so one variant. The tools read the code themselves: the update mode answers the model name, and
+# [flash.anytone] models maps it to this code (hardware-d878uv2.md 1.4)
+variant_pattern = '(D878UV2)'
+variant_check = "The tools read it: tools/anytone_update.py --probe names the model in update mode. This radio has one MCU, so there is one variant."
+
+[[hardware.variants]]
+code = "GD"
+name = "GD32F303VGT6"
+level = "bring-up"
+notice = "Nothing has run on this radio yet: the port is written from the stock firmware's own pin map, and no RadioFoundry image has booted on one. To go back, write the manufacturer's firmware set through the factory update mode."
+runs = { board = "d878uv2" }
 
 [status]
 level = "bring-up"

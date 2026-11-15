@@ -6576,7 +6576,13 @@
      "io1": "PA15"
     }
    },
-   "variants": {},
+   "variants": {
+    "GD": [
+     "GD32F303VGT6",
+     "d878uv2",
+     null
+    ]
+   },
    "anytone_models": {
     "GD": [
      "D878UV2"
