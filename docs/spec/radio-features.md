@@ -698,6 +698,17 @@ watch, the battery saver, the 1750 Hz burst and the roger beep on air; TX inhibi
 state; VOX only in silence (the `mic_level` hook is unverified); whether PCM beeps play in FM mode is still open
 (`beep.no_stream` / `beep.blocks` answer that).
 
+## Deferred DMR startup
+
+A board can report asynchronous initialization through `board.boot_busy`. If it is busy when a DMR channel is
+selected, the core defers starting the call stack and retries once the board finishes. The user does not need to
+change channels. Leaving DMR cancels the pending start. This is a startup dependency, not repeated retries of a
+failed modem after initialization has completed.
+
+Scan and one-receiver dual watch pause while the board reports initialization busy, including mode-library
+changes. The receiver remains on the current channel; the settle/listen interval starts after readiness returns.
+This prevents a short dwell from changing modes again before the previous mode has finished loading.
+
 ## RF control profiles
 
 A transceiver driver may accept a board-supplied static table of control words indexed by radio state and

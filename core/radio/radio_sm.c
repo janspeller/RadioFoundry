@@ -1494,6 +1494,11 @@ static const dmr_voice_sink_t modem_voice_sink = { .frame = modem_voice_frame, .
 // On a DMR channel, after set_mode(DMR) and rx(): configure, and start the stack if it isn't running
 static void dmr_begin(radio_sm_t *sm)
 {
+	if (board.boot_busy != NULL && board.boot_busy()) {
+		sm->dmr_boot_wait = true;
+		return;
+	}
+	sm->dmr_boot_wait = false;
 #if CONFIG_SFR
 	if (sfr_rpt_begin(sm)) {
 		return;
@@ -1543,6 +1548,7 @@ static void dmr_end(radio_sm_t *sm)
 		board.radio->tx_off();
 	}
 	sm->dmr_running = false;
+	sm->dmr_boot_wait = false;
 #if CONFIG_SFR
 	sm->view.dmr.sfr_role = SFR_ROLE_OFF;	// no role in force outside DMR (the VFO keeps its stored one in FM)
 	sm->view.dmr.sfr_inbound = 0;
@@ -3084,6 +3090,12 @@ static bool dmr_strength_heard(const radio_sm_t *sm, int16_t rssi_dbm)
 static void scan_service(radio_sm_t *sm, const radio_status_t *st, uint32_t now_ms)
 {
 	scan_t *sc = &sm->scan;
+	if (board.boot_busy != NULL && board.boot_busy()) {
+		// A mode library may take longer than a scan dwell to load. Listen after it is ready.
+		scan_pause(sc, true, now_ms);
+		scan_publish(sm);
+		return;
+	}
 #if CONFIG_DUAL_WATCH
 	if (sc->kind == SCAN_DUAL && board.rx2 != NULL && rx2_service(sm, now_ms)) {
 		scan_publish(sm);
@@ -6538,6 +6550,11 @@ void radio_sm_tick(radio_sm_t *sm, uint32_t now_ms)
 	cw_service(sm, now_ms);
 #endif
 #if CONFIG_DMR
+	if (sm->dmr_boot_wait && !sm->hotspot && sm->view.ch.mode == RADIO_MODE_DMR &&
+	    (board.boot_busy == NULL || !board.boot_busy())) {
+		dmr_begin(sm);
+		changed(sm);
+	}
 	if (sm->dmr_running) {
 		dmr_call_poll(now_ms);
 		dmr_follow(sm, now_ms);

@@ -143,6 +143,8 @@ static void a_stop(void) { aud.started = false; aud.stops++; }
 static void a_pcm(bool on) { aud.pcm = on; }
 static const hal_audio_t fake_audio = { .start = a_start, .stop = a_stop, .speaker_pcm = a_pcm };
 
+static bool modem_boot_busy;
+static bool fake_boot_busy(void) { return modem_boot_busy; }
 static bool codec_present;
 static bool v_present(void) { return codec_present; }
 static void v_reset(void) {}
@@ -221,6 +223,7 @@ board_t board = {
 	.radio = &fake_radio,
 	.power = &fake_power,
 	.dmr = &sim_modem,
+	.boot_busy = fake_boot_busy,
 	.audio = &fake_audio,
 	.vocoder = &fake_vocoder,
 	.flash = &sim_flash,		// no map until test_factory_reset: RAM only, as on a radio without one
@@ -1266,6 +1269,28 @@ static void dmr_start(bool codec)
 	start();
 	req(RREQ_ZONE_POS, 3);		// channel 4: DMR, CC 2, TS 1, talk target TG 201, listen list 1
 	run(50);
+}
+
+static void test_dmr_waits_for_boot(void)
+{
+	modem_boot_busy = true;
+	dmr_start(false);
+	CHECK(!sim.started && !sm.view.dmr.active && sm.dmr_boot_wait);
+	run(100);
+	CHECK(!sim.started);
+	modem_boot_busy = false;
+	run(50);
+	CHECK(sim.started && sm.view.dmr.active && !sm.dmr_boot_wait);
+
+	// Leaving DMR while the chip boots must cancel the pending start.
+	modem_boot_busy = true;
+	dmr_start(false);
+	CHECK(sm.dmr_boot_wait);
+	req(RREQ_ZONE_POS, 0);
+	CHECK(!sm.dmr_boot_wait);
+	modem_boot_busy = false;
+	run(50);
+	CHECK(!sim.started && !sm.view.dmr.active);
 }
 
 static void test_dmr_rx(void)
@@ -3315,6 +3340,11 @@ static void test_dual_two_vfos(void)
 	CHECK(ui_svc_vfo_get(0, &c0) && c0.rx_hz == 146550000 && ui_svc_vfo_get(1, &c1) && c1.rx_hz == 446006250);
 	// The watch hops between them: each hop tunes that VFO's own frequency
 	CHECK(ui_svc_dual(vfos, 0));
+	uint32_t held_hz = hw.rx_hz, held_steps = sm.scan.steps;
+	modem_boot_busy = true;
+	poll_for(2000);
+	CHECK(hw.rx_hz == held_hz && sm.scan.steps == held_steps && sm.scan.phase == SCAN_PH_PAUSED);
+	modem_boot_busy = false;
 	bool heard0 = false, heard1 = false;
 	for (int i = 0; i < 400 && !(heard0 && heard1); i++) {
 		poll_for(RADIO_POLL_MS);
@@ -5627,6 +5657,7 @@ int main(void)
 	test_tone_squelch();
 	test_temp_bw_tone();
 	test_tone_lists();
+	test_dmr_waits_for_boot();
 	test_dmr_rx();
 	test_dmr_rssi_hold();
 	test_fm_rssi_raw();
