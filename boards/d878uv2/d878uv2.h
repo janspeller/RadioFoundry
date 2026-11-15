@@ -18,6 +18,11 @@ extern const hal_radio_t d878uv2_radio;
 void d878uv2_rf_safe(void);
 // The RF chip's GPIO shadow (register 0x1F) as last written: the band and front-end switching
 uint16_t d878uv2_rf_gpio(void);
+#if CONFIG_GPS
+// The GPS module's supply, on the RF chip's gpio2 (radio_d878uv2.c); its UART is gps_d878uv2.c
+void d878uv2_gps_power(bool on);
+void d878uv2_gps_init(void);
+#endif
 #if CONFIG_DIAG
 bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len);
 void d878uv2_diag_reset(void);

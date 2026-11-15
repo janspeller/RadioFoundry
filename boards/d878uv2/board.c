@@ -18,6 +18,9 @@
 #if CONFIG_DMR
 #include "modem/sct/sct_dmr.h"
 #endif
+#if CONFIG_GPS
+#include "gps_uart/gps_uart.h"
+#endif
 
 static const band_t bands[] = {
 	{ 136000000, 174000000, true },
@@ -41,12 +44,16 @@ static const keymap_entry_t keymap[] = {
 const board_t board = {
 	.name = BOARD_T_NAME,
 #if CONFIG_DMR
-	.caps = CAP_KEYPAD | CAP_ENCODER | CAP_DMR | CAP_MODEM_VOICE | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
+	.caps = CAP_KEYPAD | CAP_ENCODER | CAP_DMR | CAP_MODEM_VOICE | (CONFIG_GPS ? CAP_GPS : 0) | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
 	.dmr = &sct_dmr_modem,	// start() fails until the baseband has booted: FM only without the boot block
 	.modem_codec = d878uv2_modem_codec,
 	.boot_busy = d878uv2_modem_booting,
 #else
-	.caps = CAP_KEYPAD | CAP_ENCODER | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
+	.caps = CAP_KEYPAD | CAP_ENCODER | (CONFIG_GPS ? CAP_GPS : 0) | (CONFIG_BCAST_FM ? CAP_BCAST_FM : 0),
+#endif
+#if CONFIG_GPS
+	.gps_enable = mcu_gps_enable,
+	.gps_present = mcu_gps_present,	// CAP_GPS: say so only once the module has been heard
 #endif
 	.bands = bands,
 	.band_count = sizeof(bands) / sizeof(bands[0]),
@@ -104,5 +111,8 @@ void board_init(void)
 	d878uv2_cal_load();
 #if CONFIG_DMR
 	d878uv2_modem_init();
+#endif
+#if CONFIG_GPS
+	d878uv2_gps_init();
 #endif
 }

@@ -20,8 +20,6 @@ endif
 CONFIG_FONT_XL ?= n
 # The core's storage in RadioFoundry's own NAND block range
 CONFIG_NAND_STORAGE ?= y
-# Not written yet (below)
-CONFIG_GPS ?= n
 # A handheld on a battery, unlike the family's mobile: the battery monitor and its warnings are on (ADC1 channel 11,
 # hardware-d878uv2.md 4.3)
 CONFIG_BATTERY_SAVE ?= y
@@ -45,8 +43,6 @@ BOARD_UNSUPPORTED += AM_RX	# no air band receiver on the I2C bus (hardware-d878u
 MAXIMAL_SKIP := USB_NETWORK NET_PPP DMR_IP_GATEWAY NET_TCP NET_KISS NET_HTTP NET_HTTP_GZIP NET_WEBCTL NET_RIGCTL \
 	NET_APRSIS MDNS TFTP TFTP_IDDB SNMP DMR_CONTROL_STATION ZONE_SHARE APRS_RX APRS_IGATE
 # What the hardware can do but this radio's driver or glue doesn't yet
-BOARD_NOT_WRITTEN += GPS	# the module is enabled from the RF chip's gpio2; the glue isn't written
-BOARD_NOT_WRITTEN += GPS_SKY	# needs the GPS (above)
 BOARD_NOT_WRITTEN += HOTSPOT	# needs the voice frames on the MCU: the baseband's frame bypass isn't written
 BOARD_NOT_WRITTEN += HOTSPOT_SPLIT	# needs the hotspot (above)
 BOARD_NOT_WRITTEN += SFR	# needs the voice frames on the MCU (above)

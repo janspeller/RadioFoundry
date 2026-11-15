@@ -130,6 +130,15 @@ static void front_end_tx(uint32_t hz)
 	gpio_flush();
 }
 
+#if CONFIG_GPS
+// The GPS module's supply is the RF chip's gpio2, not an MCU pin (hardware-d878uv2.md 4.3)
+void d878uv2_gps_power(bool on)
+{
+	gpio_field(2, on ? GPIO_HIGH : GPIO_LOW);
+	gpio_flush();
+}
+#endif
+
 // The shadow as last written, for the diagnostics line: which front-end path is enabled
 uint16_t d878uv2_rf_gpio(void)
 {
