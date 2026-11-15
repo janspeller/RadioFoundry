@@ -489,6 +489,23 @@ documentation that has been checked against hardware.
 
 Nothing has been written back to a radio.
 
+### 7.1 What a RadioFoundry image has confirmed
+
+From a radio running this port (its diagnostics page), beyond the codeplug read above:
+
+| Fact | Evidence |
+| --- | --- |
+| **The baseband boots.** The reset sequence of 4.1, the 8-bit parallel host port and the 1024-word boot block all work as recorded | the boot reports `ok`, so the chip answered after the block and took the voice selection |
+| The SPI NAND and its identity | reads `98CB`: manufacturer 0x98 with device 0xCB, which is what the stock firmware's own check demands (4.1) |
+| The band and front-end switching through the RF chip's GPIO register | on a 145.5 MHz channel the shadow reads 0x9BF2: gpio0 low and gpio4 high (the VHF receive enables), gpio7 low, gpio2 high for the GPS, gpio6 left at its built-in function |
+| The battery divider and the panel potentiometer | 8275 mV at a full pack, and the potentiometer reads across its travel |
+| The keypad, the knob and the power key as inputs | the raw matrix, `knob` and `power` readings move as expected |
+| Receive on the AT1846S | RSSI and the noise reading follow the band; the squelch opens |
+
+**Not confirmed: audio.** A receiver that opens its squelch is silent, which is consistent with the codec never
+being configured: it is reachable only through the baseband (2.5 of the family page), and the port sends it the
+selection but no routing or gain writes. 4.6 records what the stock firmware sends.
+
 ## Sources
 
 - FCC ID T4KD878UVII (AT-D878UVII PLUS), internal photos: <https://fccid.io/T4KD878UVII>. The schematic, block

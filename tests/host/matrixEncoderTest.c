@@ -78,7 +78,7 @@ int main(void)
 	assert(encoder() == 0);
 	// and the counters agree: four valid transitions a cycle, none illegal
 	hal_encoder_stats_t st;
-	d878uv2_input.encoder_stats(&st);
+	encoder_stats(&st);	// the static function: the test includes the board source
 	assert(st.transitions == 3u * TRANSITIONS_PER_CYCLE && st.illegal == 0u);
 	assert(st.steps_per_detent == STEPS_PER_DETENT);
 	puts("matrixEncoderTest PASSED");
