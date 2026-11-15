@@ -11,14 +11,14 @@ radios have this layout: [feature-matrix.md](../feature-matrix.md) and each radi
 
 (I) marks an inferred value.
 
-**First confirmed on a radio** (an AT-D878UVII PLUS running stock 4.00, read with `tools/anytone_codeplug.py`):
-the PC mode of section 1 answers as described, and the bitmaps of 3.3 are at the right addresses with the right
-sense, the contacts' inverted bit included - their counts matched what the radio's own menus showed (104 channels,
-13 zones, 3 radio IDs, 4 receive group lists, 15 contacts, 10 scan lists). Three record layouts were checked by
-content as well: a channel is 128 bytes in two halves 0x2000 apart with a readable name at 0x23 (104 of 104), a
-zone name is a 32-byte record with the name at 0 (13 of 13), and a radio ID holds 8 BCD digits at 0 with a name at
-5 (3 of 3). The remaining tables' addresses gave the right record counts but their contents have not been checked,
-and nothing here has been written back to a radio.
+**First confirmed on a radio**, with `tools/anytone_codeplug.py`, on one handheld of this family running its
+original firmware; which radio and which build is on that radio's own page. The PC mode of section 1 answers as
+described, and the bitmaps of 3.3 are at the right addresses with the right sense, the contacts' inverted bit
+included: their counts matched what the radio's own menus showed. Three record layouts were checked by content as
+well - a channel is 128 bytes in two halves 0x2000 apart with a readable name at 0x23, a zone name is a 32-byte
+record with the name at 0, and a radio ID holds 8 BCD digits at 0 with a name at 5. The other tables' addresses
+gave the right record counts but their contents have not been checked, and nothing here has been written back to a
+radio.
 
 Code: `site/static/js/codeplug/stock_anytone.js` (the tables), `site/static/js/flasher/anytone.js` (`AnytoneProgram`,
 the PC mode), `site/static/js/flasher/migrate.js` (`readAnytone`, `convertAnytone`), `tools/rfoundry/rfoundry/anytone.py`

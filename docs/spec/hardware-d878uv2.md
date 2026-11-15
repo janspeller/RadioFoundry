@@ -472,6 +472,23 @@ A port must read this calibration from the radio's own NAND and never overwrite 
     the label-index-to-settings-offset mapping that names PF1/PF2/PF3 is the positional one assumed there.
 13. Whether a keypad scan has to be locked against LCD writes, since both drive PE7–PE14 (4.1.1).
 
+## 7. Stock codeplug, read on a radio
+
+The family's stock codeplug layout ([codeplug-stock-anytone.md](codeplug-stock-anytone.md)) was confirmed on an
+AT-D878UVII PLUS running stock 4.00, with `tools/anytone_codeplug.py`. This is the only part of this radio's
+documentation that has been checked against hardware.
+
+| What | Result |
+| --- | --- |
+| PC mode (`PROGRAM`, `R`, `END` on the USB serial port) | answers as that page describes |
+| The bitmaps, including the contacts' inverted "free" bit | at the right addresses: the counts matched the radio's own menus - 104 channels, 13 zones, 3 radio IDs, 4 receive group lists, 15 contacts, 10 scan lists |
+| Channels | 128 bytes in two halves 0x2000 apart, a readable name at 0x23: 104 of 104 |
+| Zone names | 32-byte records, the name at 0: 13 of 13 |
+| Radio IDs | 8 BCD digits at 0, a name at 5: 3 of 3 |
+| Zone members, receive group lists, contacts, scan lists | the right record counts; contents not inspected |
+
+Nothing has been written back to a radio.
+
 ## Sources
 
 - FCC ID T4KD878UVII (AT-D878UVII PLUS), internal photos: <https://fccid.io/T4KD878UVII>. The schematic, block
