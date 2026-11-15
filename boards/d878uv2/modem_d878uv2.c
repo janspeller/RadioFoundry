@@ -204,13 +204,30 @@ static void port_unlock(void *ctx)
 	}
 }
 
+// The chip looks for sync only from CARRIER_READY on (modem-sct.md 3), so a board that never sends it boots the
+// baseband and then hears nothing. It goes out two ways: from the board's own carrier reading
+// (d878uv2_modem_carrier, called by the radio's status path) and, whatever the board reads, rx_settle_ms after
+// each return to receive.
+//
+// **The value is this radio's one real unknown here.** 1 says the receiver is ready, 2 the same with the
+// demodulated phase reversed, which is what the family's mobile needs because its RF chip inverts the DMR audio
+// output. Whether this radio's AT1846S does the same is not recorded, and with the wrong one no call decodes at
+// all. Build with -DD878UV2_CR_READY=1 to try the other (docs/testing/d878uv2-bringup.md, stage 8)
+#ifndef D878UV2_CR_READY
+#define D878UV2_CR_READY	2
+#endif
+// After a transmission the receiver needs a moment before the chip should start hunting
+#define CR_SETTLE_MS		14
+
 // How the board wires the chip (modem-sct.md 4). **Taken from the family's mobile**, which runs the same baseband:
-// this radio's own wiring is not recorded, so these five bytes are the first thing to question if the chip boots
+// this radio's own wiring is not recorded, so these five bytes are the second thing to question if the chip boots
 // but no call decodes (docs/testing/d878uv2-bringup.md, stage 8)
 static const sct_dmr_port_t port = {
 	.send = port_send,
 	.call_option = { 0x01, 0x40, 0x42, 0x4F, 0x08 },
 	.report_field = 0xFF,
+	.rx_ready = D878UV2_CR_READY,
+	.rx_settle_ms = CR_SETTLE_MS,
 	.ready = port_ready,
 	.lock = port_lock,
 	.unlock = port_unlock,
@@ -269,7 +286,7 @@ bool d878uv2_modem_booting(void)
 void d878uv2_modem_carrier(bool carrier)
 {
 	if (booted) {
-		sct_dmr_carrier(carrier ? 1u : 0u);
+		sct_dmr_carrier(carrier ? (uint8_t)D878UV2_CR_READY : 0u);
 	}
 }
 

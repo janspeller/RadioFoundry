@@ -215,8 +215,11 @@ static void init(void)
 #endif
 }
 
+static radio_mode_t mode_now = RADIO_MODE_FM;
+
 static void set_mode(radio_mode_t mode)
 {
+	mode_now = mode;
 	at1846s_set_mode(&rf, mode == RADIO_MODE_DMR ? AT1846S_MODE_DMR : AT1846S_MODE_FM);
 }
 
@@ -296,6 +299,12 @@ static void status(radio_status_t *st)
 	if (at1846s_read_flags(&rf, &flags)) {
 		st->carrier = (flags & AT1846S_FLAG_SQ) != 0;
 	}
+#if CONFIG_DMR
+	// The baseband hunts for sync only once it has been told the receiver is ready (modem-sct.md 3)
+	if (mode_now == RADIO_MODE_DMR) {
+		d878uv2_modem_carrier(st->carrier);
+	}
+#endif
 }
 
 // The speaker amplifier, with the second audio switch driven the other way in the receive path (4.3)
