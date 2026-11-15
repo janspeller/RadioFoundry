@@ -31,7 +31,7 @@ and no line of the pin map has been seen on hardware.
 | --- | --- |
 | Display, backlight | written. The orientation is a guess (stage 2); the backlight is on/off, not dimmed |
 | Keypad | **the matrix map is empty**: no key reports. PTT works, as a direct input on PA10. The diagnostics `keys` line is how a bench session fills the map in |
-| Knob, battery, power key, LEDs | written. The power key's polarity is the one to check first: wrong, and the radio powers itself off at boot |
+| Knob, battery, power key, LEDs | written. The power key's polarity is read from the firmware and a pull-up implies the opposite, so the board holds the radio on for the first 8 seconds whatever the pin says (`D878UV2_POWER_KEY_GUARD_MS`). Confirm the polarity, then build with the guard at 0 |
 | NAND, the core's storage | written, in RadioFoundry's own blocks above everything the stock firmware writes |
 | Factory calibration | read, never written. The transmit power tables drive the PA; without them the transmitter stays at a low floor |
 | FM receive and transmit | written. Band and front-end switching through the RF chip's own GPIO register |

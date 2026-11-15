@@ -92,10 +92,25 @@ static int8_t volume(void)
 	return (int8_t)((raw * 100u) / 4095u);
 }
 
-// The stock firmware powers the radio down while PA0 reads high, so a press is high here
+// The stock firmware powers the radio down while PA0 reads high, so a press is high here.
+//
+// That polarity is read from the stock firmware, not from a radio, and a pull-up usually implies the opposite. If
+// it is backwards the radio would switch itself off the moment it finished booting, with no chance to reach the
+// debug link and see why. So for the first few seconds the radio stays on whatever the pin says, and the key is
+// still polled so its debounce is in step when the guard ends. Build with -DD878UV2_POWER_KEY_GUARD_MS=0 to drop
+// it once a radio has confirmed the polarity (docs/testing/d878uv2-bringup.md, stage 3)
+#ifndef D878UV2_POWER_KEY_GUARD_MS
+#define D878UV2_POWER_KEY_GUARD_MS	8000u
+#endif
+
 static bool switch_on(void)
 {
-	return pwrkey_on(&power_key, mcu_pin_read(PIN_POWER_KEY));
+	bool off = pwrkey_on(&power_key, mcu_pin_read(PIN_POWER_KEY));
+
+	if (D878UV2_POWER_KEY_GUARD_MS != 0u && hal_millis() < D878UV2_POWER_KEY_GUARD_MS) {
+		return true;
+	}
+	return off;
 }
 
 // PE3 is driven from the receive and call paths and PE5 where transmit starts, so they are the green and red
