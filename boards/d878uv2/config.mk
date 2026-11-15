@@ -52,7 +52,8 @@ BOARD_NOT_WRITTEN += HOTSPOT_SPLIT	# needs the hotspot (above)
 BOARD_NOT_WRITTEN += SFR	# needs the voice frames on the MCU (above)
 BOARD_NOT_WRITTEN += SFR_DUALPATH_RX	# needs SFR (above)
 BOARD_NOT_WRITTEN += SFR_CWID	# needs SFR (above)
-BOARD_NOT_WRITTEN += DMR_PRIVACY	# scrambles the voice frames on the MCU (above)
+BOARD_NOT_WRITTEN += DMR_PRIVACY	# the cipher runs on the 49-bit voice frames, which the baseband can route
+				# through the MCU (modem-sct.md 7); that bypass isn't written
 BOARD_NOT_WRITTEN += AUDIO_PROBE	# the probe taps an audio chip's PCM path; the voice stays in the baseband here
 BOARD_NOT_WRITTEN += NET_USRP	# needs an audio tap (PCM both ways): only receive audio reaches the MCU
 BOARD_NOT_WRITTEN += BT_PTT	# the daughter board's protocol over UART4 is not recorded (hardware-d878uv2.md 4.4)

@@ -130,6 +130,12 @@ static void front_end_tx(uint32_t hz)
 	gpio_flush();
 }
 
+// The shadow as last written, for the diagnostics line: which front-end path is enabled
+uint16_t d878uv2_rf_gpio(void)
+{
+	return gpio_shadow;
+}
+
 // --- The transmitter's gate and level ---
 
 // Placeholder drive per power level, deliberately low: the real values come from the NAND's per-MHz tables by

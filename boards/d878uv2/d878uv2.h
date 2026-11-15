@@ -16,6 +16,12 @@ extern const hal_radio_t d878uv2_radio;
 
 // board_rf_safe's part: the PA gate down and the transmit level at zero. Plain register writes only
 void d878uv2_rf_safe(void);
+// The RF chip's GPIO shadow (register 0x1F) as last written: the band and front-end switching
+uint16_t d878uv2_rf_gpio(void);
+#if CONFIG_DIAG
+bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len);
+void d878uv2_diag_reset(void);
+#endif
 
 // The keys by their printed names. The front panel is a 4 x 3 numeric keypad with MENU, EXIT and the two arrows
 // above it; PF1 and PF2 are the side keys below PTT and PF3 is the orange key on top.

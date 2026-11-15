@@ -68,6 +68,10 @@ const board_t board = {
 #if CONFIG_NAND_STORAGE
 	.flash = &d878uv2_flash,
 #endif
+#if CONFIG_DIAG
+	.diag_line = d878uv2_diag_line,
+	.diag_reset = d878uv2_diag_reset,
+#endif
 };
 
 // The 12 MHz crystal to 120 MHz, as every GD32F303 board in this family runs
