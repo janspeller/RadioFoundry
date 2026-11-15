@@ -146,7 +146,12 @@ static void init(void)
 	mcu_pin_in(PIN_KNOB_B, MCU_PULL_UP);
 	// The drive lines are the LCD's data bus and the display's init already made them outputs; leave them high
 	drive_all_high();
-	quad_init(&knob, 4, QUAD_REST_11, knob_ab());
+	// Two steps a detent, resting where the lines agree. Measured on a radio: with four steps a detent the knob
+	// took two clicks to move one channel, so the encoder emits two transitions per click, not four. If a click
+	// ever reports no detent or two, read the link view's encoder counters over ten clicks: ten detents and
+	// twenty transitions with no illegal samples is right, and resting at 01/10 instead would want
+	// QUAD_REST_DIFFER (docs/testing/d878uv2-bringup.md, stage 3)
+	quad_init(&knob, 2, QUAD_REST_EQUAL, knob_ab());
 	knob_taken = 0;
 	mcu_exti_route(GPIOC, 8);
 	mcu_exti_route(GPIOC, 9);

@@ -34,9 +34,15 @@ void mcu_exti_clear(uint32_t lines) { assert(lines == (MCU_PIN(8) | MCU_PIN(9)))
 void mcu_exti_enable(uint32_t lines) { enabled_lines |= lines; }
 void NVIC_SetPriority(unsigned irq, unsigned priority) { assert(irq == MCU_EXTI9_5_IRQn && priority >= 4); }
 void NVIC_EnableIRQ(unsigned irq) { assert(irq == MCU_EXTI9_5_IRQn); irq_enabled = true; }
+// A whole Gray-code cycle, four transitions, forward (the header's 00 -> 01 -> 11 -> 10 -> 00). The lines start
+// at 11, both released. On this radio the encoder emits two transitions per physical click and rests where the
+// lines agree, so one cycle is TWO detents, not one: a click took two turns of the knob before that was fixed
+#define TRANSITIONS_PER_CYCLE	4	// a Gray code has four states
+#define STEPS_PER_DETENT	2	// what input_d878uv2.c asks quad_init for
+#define DETENTS_PER_CYCLE	(TRANSITIONS_PER_CYCLE / STEPS_PER_DETENT)
 static void turn(void)
 {
-	static const uint8_t states[] = { 1, 0, 2, 3 };
+	static const uint8_t states[] = { 2, 0, 1, 3 };
 	for (unsigned i = 0; i < sizeof(states); i++) {
 		GPIOC->in = (uint16_t)((GPIOC->in & ~(MCU_PIN(8) | MCU_PIN(9))) |
 			((states[i] & 1u) ? MCU_PIN(8) : 0) | ((states[i] & 2u) ? MCU_PIN(9) : 0));
@@ -65,11 +71,16 @@ int main(void)
 	assert(scan() == 0);
 	turn();
 	int first = encoder();
-	assert(first == 1 || first == -1);
+	assert(first == DETENTS_PER_CYCLE || first == -DETENTS_PER_CYCLE);
 	assert(encoder() == 0);
 	turn(); turn();
 	assert(encoder() == 2 * first);
 	assert(encoder() == 0);
+	// and the counters agree: four valid transitions a cycle, none illegal
+	hal_encoder_stats_t st;
+	d878uv2_input.encoder_stats(&st);
+	assert(st.transitions == 3u * TRANSITIONS_PER_CYCLE && st.illegal == 0u);
+	assert(st.steps_per_detent == STEPS_PER_DETENT);
 	puts("matrixEncoderTest PASSED");
 	return 0;
 }
