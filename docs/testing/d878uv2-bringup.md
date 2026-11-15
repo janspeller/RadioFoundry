@@ -77,6 +77,55 @@ shares, not for flash. Measured on the AT-D578UV's default build: **flash 387,34
 92,392 of 98,032 (94 %)**, with the kept crash record full at 272 bytes. Flash has room to spare on either radio;
 RAM is what a new feature has to fit.
 
+## Building and flashing it
+
+The build merges the DMR baseband's boot block from the owner's own stock firmware: drop the vendor `.CDD` into
+`codecs/` (everything there is git-ignored) and `make` writes the merged image beside the plain one.
+
+```
+cp D878UVII_V4.00_20250725.CDD codecs/
+make BOARD=d878uv2
+# build/d878uv2/rfoundry_d878uv2.bin         the image alone, FM only
+# build/d878uv2/rfoundry_d878uv2_codec.bin   with the boot block in its slot: the one to flash
+```
+
+Before the first write, in this order:
+
+1. **Back up the codeplug with the stock CPS.** A vendor update ends with "MCU reboot" (PTT + PF1 at power-on),
+   which erases it.
+2. **Prove the radio answers.** Hold **PTT + PF3** at power-on until the red LED blinks, then:
+   `python3 tools/anytone_update.py --board d878uv2 --probe`. It writes nothing and names the model. The board
+   expects `D878UV2`, which the 4.00 update set's own `.spi` also carries; anything else and the tool refuses,
+   which is the protection working.
+3. **Check the plan without writing:**
+   `python3 tools/anytone_update.py --board d878uv2 --dry-run build/d878uv2/rfoundry_d878uv2_codec.bin`
+
+Then write it, with the radio in update mode:
+
+```
+python3 tools/anytone_update.py --board d878uv2 build/d878uv2/rfoundry_d878uv2_codec.bin
+```
+
+### The way back
+
+Keep the vendor update set together (`.CDD` with its `.CDI` and `.spi` beside it). From update mode:
+
+```
+python3 tools/anytone_update.py --board d878uv2 --restore D878UVII_V4.00_20250725.CDD
+```
+
+A failed or stopped write leaves the radio in update mode and the same command writes again. The vendor
+bootloader below 0x08004000 is never written by either tool, so update mode survives a bad image.
+
+### What a flash cannot damage
+
+The factory calibration sits at NAND block 379. RadioFoundry's NAND write window starts at block 1792 and the
+driver refuses anything outside it, so neither the firmware nor an install can reach the calibration. The vendor
+update route writes program flash only and does not touch the NAND at all.
+
+**What is still unproven**: none of this has run against a radio. The model string comes from a file, not from one
+answering, and `[flash.stub] tested = false`.
+
 ## Confirming the pin map
 
 The map in [hardware-d878uv2.md](../spec/hardware-d878uv2.md) 4 was read from this radio's own stock firmware, not from the 868's, and the
