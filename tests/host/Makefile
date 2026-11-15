@@ -1614,3 +1614,11 @@ sctAnalogTest: sctAnalogTest.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/dr
 run: run-sctanalog
 run-sctanalog: sctAnalogTest
 	./sctAnalogTest
+
+TESTS += nandRemapTest
+nandRemapTest: nandRemapTest.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c $(ROOT)/drivers/flash/nand_remap/nand_remap.h
+	$(CC) $(CFLAGS) -Wshadow -o $@ nandRemapTest.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
+.PHONY: run-nandremap
+run: run-nandremap
+run-nandremap: nandRemapTest
+	./nandRemapTest
