@@ -3,9 +3,8 @@
 // AnyTone AT-D878UVII PLUS: board descriptor, clocks and reset-time pin levels, key map
 // (docs/spec/hardware-d878uv2.md)
 //
-// What this board does **not** carry yet, so its switches are off in config.mk: the DMR baseband's glue, the GPS
-// (whose module is enabled from the RF chip's gpio2) and the Bluetooth/APRS daughter board. The radio comes up as
-// an FM handheld, which is what the first bring-up stages need (docs/testing/d878uv2-bringup.md).
+// What this board does **not** carry yet: the Bluetooth/APRS daughter board, whose protocol over UART4 is only
+// partly recorded (hardware-d878uv2.md 4.4).
 #include "board.h"
 #include "config.h"
 #include "d878uv2.h"
@@ -35,11 +34,44 @@ static const band_t bands[] = {
 // until a power meter on the bench measures them (docs/testing/d878uv2-bringup.md, stage 7)
 static const char *const power_names[] = { "L1", "L2", "L3", "L4" };
 
-// Only PTT is mapped. It is a direct input on PA10, not a matrix position, so it works before the keypad does;
-// every matrix key waits for a bench session to fill in the map (input_d878uv2.c, hardware-d878uv2.md 4.3)
+// The front keys (docs/spec/hardware-d878uv2.md 4.1.1). MENU confirms (held: the key lock, the core's long
+// QUICK) and EXIT goes back (held: Home). The arrows step the channel on Home and move a list elsewhere. P1 and P2
+// sit beside them on the matrix; PF1 and PF2 are the side keys under PTT and PF3 is the key on top. All five
+// programmable keys are reassignable in Settings > Keys and the codeplug, named as the radio prints them, in the
+// order the stock firmware's own menu lists them.
+#if CONFIG_DMR_EMERGENCY
+#define PF3_LONG	ACT_EMERGENCY
+#else
+#define PF3_LONG	ACT_POWER
+#endif
 static const keymap_entry_t keymap[] = {
+	{ KEY_MENU, ACT_SELECT, ACT_QUICK, false, false, 0 },
+	{ KEY_EXIT, ACT_BACK, ACT_BACK, false, false, 0 },
+	{ KEY_UP, ACT_NAV_UP, ACT_NAV_UP, false, true, 0 },
+	{ KEY_DOWN, ACT_NAV_DOWN, ACT_NAV_DOWN, false, true, 0 },
+	{ KEY_0, ACT_DIGIT_0, ACT_DIGIT_0, false, false, 0 },
+	{ KEY_1, ACT_DIGIT_1, ACT_DIGIT_1, false, false, 0 },
+	{ KEY_2, ACT_DIGIT_2, ACT_DIGIT_2, false, false, 0 },
+	{ KEY_3, ACT_DIGIT_3, ACT_DIGIT_3, false, false, 0 },
+	{ KEY_4, ACT_DIGIT_4, ACT_DIGIT_4, false, false, 0 },
+	{ KEY_5, ACT_DIGIT_5, ACT_DIGIT_5, false, false, 0 },
+	{ KEY_6, ACT_DIGIT_6, ACT_DIGIT_6, false, false, 0 },
+	{ KEY_7, ACT_DIGIT_7, ACT_DIGIT_7, false, false, 0 },
+	{ KEY_8, ACT_DIGIT_8, ACT_DIGIT_8, false, false, 0 },
+	{ KEY_9, ACT_DIGIT_9, ACT_DIGIT_9, false, false, 0 },
+	{ KEY_STAR, ACT_QUICK, ACT_QUICK, false, false, '*' },
+	{ KEY_HASH, ACT_CONTEXT, ACT_CONTEXT, false, false, '#' },
+	{ KEY_P1, ACT_QUICK, ACT_ZONE_UP, false, false, 0 },
+	{ KEY_P2, ACT_CONTEXT, ACT_CONTEXT, false, false, 0 },
+	{ KEY_PF1, ACT_MONITOR, ACT_MONITOR, true, false, 0 },
+	{ KEY_PF2, ACT_AB, ACT_AB, false, false, 0 },
+	{ KEY_PF3, ACT_POWER, PF3_LONG, false, false, 0 },
 	{ KEY_PTT, ACT_PTT, ACT_PTT, true, false, 0 },
 };
+
+// Reassignable in Settings > Keys and the codeplug (core/input/keyassign.h), named as printed
+static const uint8_t side_keys[] = { KEY_PF1, KEY_PF2, KEY_PF3, KEY_P1, KEY_P2 };
+static const char *const side_key_names[] = { "PF1", "PF2", "PF3", "P1", "P2" };
 
 const board_t board = {
 	.name = BOARD_T_NAME,
@@ -64,6 +96,12 @@ const board_t board = {
 	.input = &d878uv2_input,
 	.keymap = keymap,
 	.keymap_len = sizeof(keymap) / sizeof(keymap[0]),
+	.side_keys = side_keys,
+	.side_key_names = side_key_names,
+	.side_key_count = sizeof(side_keys),
+	.quick_label = "P1",
+	.context_label = "P2",
+	.lock_label = "MENU",
 	.radio = &d878uv2_radio,
 	.power = &d878uv2_power,
 	.battery_low_mv = 6100,		// the stock firmware's own warning levels (hardware-d878uv2.md 4.3)

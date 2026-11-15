@@ -1,20 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The RadioFoundry Authors
-// AT-D878UVII PLUS keys, PTT and channel knob (docs/spec/hardware-d878uv2.md 4.1, 4.3).
+// AT-D878UVII PLUS keys, PTT and channel knob (docs/spec/hardware-d878uv2.md 4.1.1, 4.3).
 //
-// The key matrix is driven on the LCD's data lines PE7-PE14, one line low at a time, and read on three pull-up
+// The matrix is driven on the LCD's data lines PE7-PE14, one line low at a time, and read on three pull-up
 // inputs; keys are active low. The stock firmware scans between LCD writes, and so does this: the scan leaves the
 // data bus high, and the display's own writes set it again on every byte.
 //
-// Four more inputs are not matrix positions at all. They are wired to ground and read with every drive line high:
-// PTT on PA10 (active low), PA14 and PE1 (pull-ups, active low), and PA13, which is read with its output register
-// cleared so it uses the internal pull-down and reads *high* when pressed. Which key PA13, PA14 and PE1 are was not
-// identified, so they are reported raw and mapped to nothing.
+// Four keys are not matrix positions: they are wired to ground and read with every drive line high. PTT is PA10,
+// PF1 is PE1 and PF2 is PA14. **PF3 shares PB2 with matrix column 1**, so while PF3 is held that column cannot be
+// scanned - which is exactly what drivers/input/keymatrix's `direct` array is for: it reports PF3 and ignores
+// column 1's two keys for as long as it is down.
 //
-// **The matrix map is empty.** Which printed key sits at which position is recorded nowhere. Until a bench session
-// fills it in, no matrix key reports, and d878uv2_key_raw() and d878uv2_key_direct() report the raw readings so
-// that session can map them in one sitting (docs/testing/d878uv2-bringup.md, stage 3). Nothing here guesses a
-// layout: a plausible-looking wrong map would be harder to find than no map at all.
+// PA13 is not a key at all. It reads through an internal pull-down and the stock firmware uses it to gate the key
+// task and pick an audio scaling, which is the shape of an accessory detect; the board leaves it alone.
 #include "d878uv2.h"
 #include "config.h"
 #include "pins.h"
@@ -29,21 +27,22 @@
 static mcu_gpio_t *const sense_port[COLS] = { GPIOB, GPIOB, GPIOC };
 static const uint16_t sense_bit[COLS] = { MCU_PIN(1), MCU_PIN(2), MCU_PIN(5) };
 
-// Not recorded: every position is KEYMATRIX_NONE until the bench fills it in (hardware-d878uv2.md 4.1). Row 0
-// (PE7) first, three columns to a row
+// The map (hardware-d878uv2.md 4.1.1). Row 0 is PE7 and row 7 is PE14; the columns are PB1, PB2, PC5 in that
+// order. Column 1 carries only P1 and P2, on the first two rows; the other six of its positions are unused
 static const uint8_t key_map[ROWS * COLS] = {
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
-	KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE,
+	KEY_MENU,	KEY_P1,		KEY_1,
+	KEY_UP,		KEY_P2,		KEY_2,
+	KEY_DOWN,	KEYMATRIX_NONE,	KEY_3,
+	KEY_7,		KEYMATRIX_NONE,	KEY_4,
+	KEY_8,		KEYMATRIX_NONE,	KEY_5,
+	KEY_9,		KEYMATRIX_NONE,	KEY_6,
+	KEY_HASH,	KEYMATRIX_NONE,	KEY_0,
+	KEY_EXIT,	KEYMATRIX_NONE,	KEY_STAR,
 };
 
-// The direct keys hang off their own pins here, not off a sense column, so the matrix has none of its own
-static const uint8_t key_direct[COLS] = { KEYMATRIX_NONE, KEYMATRIX_NONE, KEYMATRIX_NONE };
+// PF3 is wired from column 1 straight to ground: the decoder reports it and drops column 1's matrix keys while it
+// is held, which is what the hardware forces anyway
+static const uint8_t key_direct[COLS] = { KEYMATRIX_NONE, KEY_PF3, KEYMATRIX_NONE };
 
 static const keymatrix_t matrix = {
 	.rows = ROWS,
@@ -76,27 +75,28 @@ static uint8_t read_sense(void)
 	return low;
 }
 
-// The four direct inputs as "pressed" bits, each in its own polarity: bit 0 PTT (PA10, low), bit 1 PA14 (low),
-// bit 2 PE1 (low), bit 3 PA13 (high, internal pull-down)
+// The direct inputs as "pressed" bits, for the diagnostics line. PF3 is not here: the matrix decoder takes it
+// from the idle column reading, where the hardware puts it
 #define DIRECT_PTT	0x01u
-#define DIRECT_A	0x02u
-#define DIRECT_B	0x04u
-#define DIRECT_PULLDOWN	0x08u
+#define DIRECT_PF1	0x04u
+#define DIRECT_PF2	0x08u
+#define DIRECT_ACC	0x10u	// PA13, the accessory detect: not a key
 
 static uint8_t read_direct(void)
 {
 	uint8_t v = 0;
+
 	if (!mcu_pin_read(PIN_PTT)) {
 		v |= DIRECT_PTT;
 	}
-	if (!mcu_pin_read(PIN_DIRECT_A)) {
-		v |= DIRECT_A;
+	if (!mcu_pin_read(PIN_PF1)) {
+		v |= DIRECT_PF1;
 	}
-	if (!mcu_pin_read(PIN_DIRECT_B)) {
-		v |= DIRECT_B;
+	if (!mcu_pin_read(PIN_PF2)) {
+		v |= DIRECT_PF2;
 	}
-	if (mcu_pin_read(PIN_DIRECT_PULLDOWN)) {
-		v |= DIRECT_PULLDOWN;
+	if (mcu_pin_read(PIN_ACCESSORY_DETECT)) {
+		v |= DIRECT_ACC;
 	}
 	return v;
 }
@@ -131,9 +131,9 @@ static void init(void)
 		mcu_pin_in(sense_port[c], sense_bit[c], MCU_PULL_UP);
 	}
 	mcu_pin_in(PIN_PTT, MCU_PULL_UP);
-	mcu_pin_in(PIN_DIRECT_A, MCU_PULL_UP);
-	mcu_pin_in(PIN_DIRECT_B, MCU_PULL_UP);
-	mcu_pin_in(PIN_DIRECT_PULLDOWN, MCU_PULL_DOWN);
+	mcu_pin_in(PIN_PF1, MCU_PULL_UP);
+	mcu_pin_in(PIN_PF2, MCU_PULL_UP);
+	mcu_pin_in(PIN_ACCESSORY_DETECT, MCU_PULL_DOWN);
 	mcu_pin_in(PIN_KNOB_A, MCU_PULL_UP);
 	mcu_pin_in(PIN_KNOB_B, MCU_PULL_UP);
 	// The drive lines are the LCD's data bus and the display's init already made them outputs; leave them high
@@ -164,9 +164,16 @@ static uint32_t scan(void)
 	(void)quad_sample(&knob, knob_ab());
 
 	uint32_t keys = keymatrix_decode(&matrix, idle_low, row_low);
-	// PTT keys the transmitter, so it is reported only once two scans running agree, the way the stock firmware
-	// confirms a press with a second read. The other three direct inputs map to no key yet
+	// PF1 and PF2 are their own pins. PTT keys the transmitter, so it is reported only once two scans running
+	// agree, the way the stock firmware confirms a press with a second read
+	if (direct & DIRECT_PF1) {
+		keys |= 1u << KEY_PF1;
+	}
+	if (direct & DIRECT_PF2) {
+		keys |= 1u << KEY_PF2;
+	}
 	bool ptt = (direct & DIRECT_PTT) != 0;
+
 	if (ptt && ptt_prev) {
 		keys |= 1u << KEY_PTT;
 	}

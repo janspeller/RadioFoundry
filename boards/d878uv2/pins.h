@@ -32,13 +32,16 @@
 #define PIN_KEY_SENSE1		GPIOB, MCU_PIN(2)
 #define PIN_KEY_SENSE2		GPIOC, MCU_PIN(5)
 
-// The direct key inputs, read with every drive line high: they are wired to ground, not to a matrix position.
-// PTT is PA10, active low. PA13 is the odd one out: it is read with its output register cleared, so it uses the
-// internal pull-down and reads HIGH when pressed (hardware-d878uv2.md 4.3)
+// The direct keys, wired to ground and read with every drive line high (hardware-d878uv2.md 4.3). PF3 hangs off
+// PB2, which is also matrix column 1: while it is held that column cannot be scanned, which is exactly the case
+// drivers/input/keymatrix models with its `direct` array
 #define PIN_PTT			GPIOA, MCU_PIN(10)
-#define PIN_DIRECT_PULLDOWN	GPIOA, MCU_PIN(13)
-#define PIN_DIRECT_A		GPIOA, MCU_PIN(14)
-#define PIN_DIRECT_B		GPIOE, MCU_PIN(1)
+#define PIN_PF1			GPIOE, MCU_PIN(1)
+#define PIN_PF2			GPIOA, MCU_PIN(14)
+// PA13 is NOT a key: it is read with its output register cleared, so the internal pull-down is selected and it
+// reads high only when something drives it. The stock firmware gates the key task and picks an audio scaling from
+// it, which is the shape of an accessory or headset detect on the side connector (4.3, not identified)
+#define PIN_ACCESSORY_DETECT	GPIOA, MCU_PIN(13)
 
 // Channel knob: quadrature on pull-up inputs, EXTI on PC8 (both edges)
 #define PIN_KNOB_A		GPIOC, MCU_PIN(8)
