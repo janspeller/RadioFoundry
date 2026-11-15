@@ -19,9 +19,28 @@ radio**, so the bench work is confirmation, not discovery.
 [hardware-anytone.md](../spec/hardware-anytone.md), whose section numbers are in parentheses, and
 [modem-sct.md](../spec/modem-sct.md) for the baseband.
 
-The board id below (`d878uv2`) is what this page assumes; the registry settles it when the board lands. The 868 and
-878 are close enough that they will probably share a board directory the way `d578uv` and `d578uva` do, with the
-868's smaller flash and RAM as the constraint.
+The 868 and 878 are close enough that they will probably share a board directory the way the family's two mobile
+builds do, with the 868's smaller flash and RAM as the constraint.
+
+## What the board does today
+
+`make BOARD=d878uv2` builds: about 342 KB of the 1004 KB region and 92 % of RAM. **Nothing has run on a radio**,
+and no line of the pin map has been seen on hardware.
+
+| Part | State |
+| --- | --- |
+| Display, backlight | written. The orientation is a guess (stage 2); the backlight is on/off, not dimmed |
+| Keypad | **the matrix map is empty**: no key reports. PTT works, as a direct input on PA10. The diagnostics `keys` line is how a bench session fills the map in |
+| Knob, battery, power key, LEDs | written. The power key's polarity is the one to check first: wrong, and the radio powers itself off at boot |
+| NAND, the core's storage | written, in RadioFoundry's own blocks above everything the stock firmware writes |
+| Factory calibration | read, never written. The transmit power tables drive the PA; without them the transmitter stays at a low floor |
+| FM receive and transmit | written. Band and front-end switching through the RF chip's own GPIO register |
+| DMR | the baseband's glue is written. Two values are the family's and not this radio's: `DMR_CALL_OPTION` and the voice set-up |
+| GPS | written, enabled from the RF chip's gpio2 |
+| Bluetooth and APRS daughter board | **not written**: its protocol over UART4 is not recorded |
+| Privacy and AES, the hotspot, SFR | **not written**: they need the baseband's voice-frame bypass (modem-sct.md 7), which no board uses yet |
+
+So this is a bring-up image, not a replacement for the radio's own firmware: the keypad alone makes that plain.
 
 ## What this radio changes
 
