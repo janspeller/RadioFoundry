@@ -71,6 +71,12 @@ typedef void (*sct_packet_cb_t)(const uint8_t *pkt, uint16_t len, void *ctx);
 // Read what the chip has waiting and pass on each whole packet. Returns the bytes read
 uint16_t sct_host_poll(const sct_host_t *h, sct_rx_t *rx, sct_packet_cb_t cb, void *ctx);
 
+// Boot-time diagnostics only, before a runtime engine owns the receive stream. The address is the
+// eight-bit I2C write address. Page select writes register 0 and waits for status; reads expect exactly n bytes.
+bool sct_host_i2c_page(const sct_host_t *h, sct_rx_t *rx, uint8_t address, uint8_t page, uint32_t timeout_ms);
+bool sct_host_i2c_read(const sct_host_t *h, sct_rx_t *rx, uint8_t address, uint8_t reg,
+		       uint8_t *out, uint8_t n, uint32_t timeout_ms);
+
 // The ACK_MESSAGE code in a packet, -1 if it has none
 int sct_ack_code(const uint8_t *pkt, uint16_t len);
 

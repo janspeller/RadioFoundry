@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 The RadioFoundry Authors
 #include <stddef.h>
+#include <string.h>
 #include "sct_host.h"
 
 // SCT3288: start the application in the chip's flash (boot ROM command; whether the chip starts it by itself is
@@ -165,4 +166,52 @@ sct_boot_result_t sct_host_boot(const sct_host_t *h, sct_rx_t *rx, uint32_t time
 	if (r != SCT_BOOT_OK || h->voice == NULL)
 		return r;
 	return voice_setup(h, rx, h->voice);
+}
+
+// I2C_OPERATION writes carry their own byte count, unlike the fixed-length control fields.
+bool sct_host_i2c_page(const sct_host_t *h, sct_rx_t *rx, uint8_t address, uint8_t page, uint32_t timeout_ms)
+{
+	const uint8_t pkt[] = { SCT_SYNC0, SCT_SYNC1, SCT_SYNC2, 0, 5, SCT_TYPE_CONTROL,
+		SCT_F_I2C_OPERATION, address, 0, 1, page, 0 };
+	return sct_host_send(h, pkt, sizeof(pkt)) &&
+		wait_status(h, rx, SCT_F_I2C_OPERATION, h->now_ms() + timeout_ms) == SCT_ACK_OK;
+}
+
+bool sct_host_i2c_read(const sct_host_t *h, sct_rx_t *rx, uint8_t address, uint8_t reg,
+		       uint8_t *out, uint8_t n, uint32_t timeout_ms)
+{
+	if (out == NULL || n == 0 || n > SCT_PKT_MAX - SCT_HDR_BYTES - 2u) {
+		return false;
+	}
+	const uint8_t pkt[] = { SCT_SYNC0, SCT_SYNC1, SCT_SYNC2, 0, 4, SCT_TYPE_READ,
+		SCT_F_I2C_OPERATION, address, reg, n };
+	if (!sct_host_send(h, pkt, sizeof(pkt))) {
+		return false;
+	}
+	uint32_t deadline = h->now_ms() + timeout_ms;
+	while ((int32_t)(h->now_ms() - deadline) < 0) {
+		uint8_t buf[64];
+		uint16_t got = h->read(buf, sizeof(buf), h->ctx);
+		if (got == 0) {
+			h->delay_ms(1);
+			continue;
+		}
+		for (uint16_t i = 0; i < got; i++) {
+			uint16_t len;
+			if (!sct_rx_feed(rx, buf[i], &len)) {
+				continue;
+			}
+			uint16_t body = (uint16_t)((rx->buf[3] << 8) | rx->buf[4]);
+			if (body == 2 && rx->buf[6] == SCT_F_ACK && rx->buf[7] != SCT_ACK_OK) {
+				return false;
+			}
+			// I2C read responses have the requested length, not the fixed request length.
+			if (rx->buf[5] == SCT_TYPE_READ && body == (uint16_t)(n + 1u) &&
+			    rx->buf[6] == SCT_F_I2C_OPERATION) {
+				memcpy(out, &rx->buf[7], n);
+				return true;
+			}
+		}
+	}
+	return false;
 }

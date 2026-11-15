@@ -1598,3 +1598,19 @@ run: run-board-input
 run-board-input: matrixEncoderTest boardPowerStartupTest
 	./matrixEncoderTest
 	./boardPowerStartupTest
+
+TESTS += sctI2cTest
+sctI2cTest: sctI2cTest.c $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+	$(CC) $(CFLAGS) -o $@ sctI2cTest.c $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+.PHONY: run-scti2c
+run: run-scti2c
+run-scti2c: sctI2cTest
+	./sctI2cTest
+
+TESTS += sctAnalogTest
+sctAnalogTest: sctAnalogTest.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_analog.h $(ROOT)/drivers/modem/sct/sct_pkt.c
+	$(CC) $(CFLAGS) -Wshadow -o $@ sctAnalogTest.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+.PHONY: run-sctanalog
+run: run-sctanalog
+run-sctanalog: sctAnalogTest
+	./sctAnalogTest

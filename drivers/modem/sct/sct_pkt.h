@@ -50,11 +50,13 @@ enum {
 	SCT_F_Q_HW_VER		= 0x31,
 	SCT_F_Q_SW_VER		= 0x32,
 	SCT_F_Q_CID_SN		= 0x33,
+	SCT_F_ANALOG_CONFIG	= 0x3C,	// channel filters and analog TX/RX gains
 	SCT_F_VOCODER_IO_SET	= 0x3E,
 	SCT_F_MODOUT_CONFIG	= 0x41,	// two-point modulation: the delay between the two outputs, 4 reserved bytes
 	SCT_F_DATA_FRAME	= 0x43,	// DIGC_DATA_FRAME: PROP, LEN, data
 	SCT_F_DIGI_MIC_GAIN	= 0x68,	// digital mode microphone gain: u16 MSB first, Q16.11 (2048 = 0 dB)
 	SCT_F_DIGI_SPK_GAIN	= 0x69,	// digital mode speaker gain, the same
+	SCT_F_I2C_OPERATION	= 0x6A,	// raw I2C access through the baseband
 	SCT_F_SQ_LEVEL		= 0x6C,	// the chip's squelch: gains, OOBE interval and thresholds
 	SCT_F_DMR_SLC		= 0x6E,
 	SCT_F_DMR_CALL_SLOT	= 0x6F,

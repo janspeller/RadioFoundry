@@ -367,3 +367,62 @@ of any baseband field, for checking a driver value against the chip.
   Each needs the chip: a received call logged with the demodulator's output routed to the MCU, then frames fed back
   on the SDR bench.
 - Timing of `TX_DONE` against the last burst on air; checked against a fake chip only.
+
+## Boot-time codec readback
+
+With diagnostics enabled, a board can read the codec after voice setup and before handing the receive stream to
+the runtime engine. `sct_host_i2c_page` writes register 0 through `I2C_OPERATION` (field 0x6A), waiting for field
+status. `sct_host_i2c_read` sends TYPE 0x20 with the eight-bit device write address, register and byte count, then
+accepts only a response of the requested length. This response is variable-length; it is not parsed using the
+fixed request length in the normal field table. Error acknowledgments and timeouts fail the read. The caller
+must restore the codec page afterward. These synchronous helpers are for startup only and must not compete
+with a runtime engine for packets.
+
+Source: [Packet Interface of CT3258 v1.0, section 1.2.68](https://cdn.hackaday.io/files/1642237026116832/CT3258_Packet_Interface.pdf).
+
+## Analog calls through the baseband
+
+`sct_analog` is a shared, non-blocking engine for boards whose FM audio passes through the SCT codec. The
+board serializes access and chooses this engine or the DMR engine as the current packet owner. Disabling it
+cancels pending work without sending commands into the next owner's configuration.
+
+Setup sends analog `PROCESS_MODE` (0x80), `ANALOG_CONFIG` with the requested channel filters and unity gains,
+then disables baseband sub-audio because the RF driver handles tones. Receive sends `WORK_MODE` RX and
+`CARRIER_READY`; the core still gates the speaker. A requested transmission sends TX work mode followed by
+call start. Release sends call stop and restores RX work mode and carrier ready. A release before call start
+cancels the start. Each step waits for its acknowledgment; refusal, write failure or 200 ms timeout records an
+error and stops the sequence until another request. Codec acknowledgments cannot complete these steps.
+
+The selected analog channel filters are 0x00 for narrow and 0x0A for wide. Gains use the field's documented
+Q formats. These are nominal settings, not factory gain calibration. The engine is used under `CONFIG_FM`;
+the baseband and codec still boot in an FM-only build. No TX commands are issued without a TX request.
+
+### Analog vocoder ownership
+
+Select the analog vocoder (16) and wait for its answer before analog process mode. A baseband was observed to
+reject `PROCESS_MODE=0x80` with status 6 while AMBE+2 (4) was still selected. Vocoder selection allows 3 seconds;
+other analog-control steps allow 200 ms. Changing channel width while remaining analog does not reload it.
+
+When analog ownership ends, drain any pending command before selecting vocoder 4. A late answer to selecting
+16 cannot satisfy the subsequent selection of 4. The DMR engine must wait until digital readiness is restored.
+An active analog call is stopped first. Failed restoration remains unavailable until a new request retries it.
+The engine exposes its last command ID so a refusal can be attributed to a specific step.
+
+### Codec loopback diagnostic
+
+With `CONFIG_DIAG`, the analog engine can request the documented codec loopback: `WORK_MODE` full duplex
+(3), modem/audio loop byte 0x11, debug byte 0. It accepts the request only while analog receive is ready and
+no command or transmission is pending. It sends no call-start command. Disabling restores normal RX work
+mode; a channel or mode request also cancels loopback. The board must refuse RF keying while the diagnostic
+is selected, and the normal speaker gate must be open for the owner to hear the microphone. This checks
+microphone capture and speaker playback without testing the modulator output.
+
+Source: [Packet Interface of CT3258 v1.0, section 2.14.3.1](https://cdn.hackaday.io/files/1642237026116832/CT3258_Packet_Interface.pdf).
+
+### Microphone preparation before analog transmit
+
+A board may supply `tx_codec` and `tx_codec_count` after analog-engine initialization. On each TX request,
+the engine reapplies these codec writes after receive setup and vocoder loading, before TX work mode and
+call start. Each write waits for a codec-type ACK_MESSAGE; unrelated control acknowledgments cannot
+complete it. A refusal or timeout stops the sequence. Releasing during preparation cancels the remaining
+writes and call start. Boards supply wiring and gain data; packet sequencing stays in the shared engine.
