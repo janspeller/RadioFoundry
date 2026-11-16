@@ -21,10 +21,17 @@
 // transmission that the other radio can barely hear means one of its stages is too low. Both can be moved at
 // build time to find which: D878UV2_MIC_PGA is the microphone into the codec (0.5 dB steps, so 0x28 is 20 dB),
 // D878UV2_LINE_GAIN the codec's line outputs into the RF chip's modulator (two's complement dB)
+// The three per-radio gain bytes, with the factory defaults as the starting point. They are SMALL - 0x04, 0x08
+// and 0x0C, which read as 2, 4 and 6 dB in the codec's half-dB steps - and the 0x14 (10 dB) this board guessed
+// for the receive input was well above all of them, which is what a receiver that hisses sounds like. The
+// radio's own values live in the calibration record at +0x0080 (+0x12, +0x13, +0x14)
+// (docs/spec/hardware-d878uv2.md 4.6.6, 5.3)
 #ifndef D878UV2_MIC_PGA
-#define D878UV2_MIC_PGA		0x14u	// unmuted, 10 dB
+#define D878UV2_MIC_PGA		0x0Cu	// the right MICPGA: the RF chip into the codec
 #endif
 #define CODEC_MICPGA_DEFAULT	D878UV2_MIC_PGA
+#define CODEC_LOL_DEFAULT	0x04u
+#define CODEC_LOR_DEFAULT	0x08u
 #define CODEC_HPL_DEFAULT	0x0Au	// unmuted, +10 dB
 
 #define CODEC_LOL_GAIN		0x12u	// LOL Driver Gain: the line outputs feed the RF chip's modulator input
@@ -62,8 +69,8 @@ static sct_codec_write_t codec_writes[] = {
 	{ CODEC_PAGE_OUT, CODEC_HPL_GAIN, CODEC_HPL_DEFAULT },		// the speaker, unmuted
 	// Transmit audio: the codec's line outputs drive the RF chip's modulator input, so a transmission with these
 	// muted puts a carrier on the air with nothing on it (hardware-d878uv2.md 4.6, inferred there)
-	{ CODEC_PAGE_OUT, CODEC_LOL_GAIN, CODEC_LINE_DEFAULT },
-	{ CODEC_PAGE_OUT, CODEC_LOR_GAIN, CODEC_LINE_DEFAULT },
+	{ CODEC_PAGE_OUT, CODEC_LOL_GAIN, CODEC_LOL_DEFAULT },
+	{ CODEC_PAGE_OUT, CODEC_LOR_GAIN, CODEC_LOR_DEFAULT },
 };
 
 // The shared mic-gain setting supplies a dB offset; the codec uses half-dB units, with mute kept clear.
