@@ -117,3 +117,5 @@ offset before treating the problem as microphone audio. A raw calibration count 
 For quiet transmitted speech, Mic gain changes take effect on the next transmission. A radio whose modem
 captures speech directly needs a board microphone-gain hook; software vocoder gain does not affect that path.
 Compare a small adjustment first and return to the original value if speech becomes distorted.
+If the carrier hisses even while you are silent, check received signal strength and channel frequency as well
+as microphone gain.

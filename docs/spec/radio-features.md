@@ -277,6 +277,9 @@ Settings > Talk & listen > Mic gain: a step 0-10, 2 dB a step, 5 = the board's o
 The UI stores it (`settings_t.mic_gain`) and applies it at start-up and on each change with `radio_set_mic_gain()`;
 the debug link's SETTING op 29 sets it in RAM only.
 
+A hardware gain offset must not reinterpret AGC target or hysteresis bits as linear gain. When the input PGA
+and AGC gain ceiling share gain units, adjust those while preserving the configured AGC control bits.
+
 | Board | FM | DMR |
 |---|---|---|
 | with `hal_radio_t.mic_gain` | the board's microphone level plus (step - 5) x 2 dB, applied in its audio path at transmit start | the board's microphone level plus the same offset; MCU samples are not scaled |

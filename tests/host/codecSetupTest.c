@@ -15,7 +15,7 @@ static uint8_t response[8];
 static uint16_t left;
 static uint32_t now;
 static uint8_t expected_mic_gain = 0x20;
-static bool mic_routed, mic_unmuted, mic_digital_unity, reject_route;
+static bool mic_routed, mic_unmuted, mic_digital_unity, mic_agc, mic_ceiling, reject_route;
 static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 {
 	(void)ctx;
@@ -32,6 +32,14 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 			if (p[7] == 1 && p[8] == 59) {
 				assert(p[9] == expected_mic_gain);
 				mic_unmuted = !(p[9] & 0x80);
+			}
+			if (p[7] == 0 && p[8] == 86) {
+				assert(p[9] == 0xA0); // changing gain must not change AGC target or hysteresis
+				mic_agc = true;
+			}
+			if (p[7] == 0 && p[8] == 88) {
+				assert(p[9] == expected_mic_gain);
+				mic_ceiling = true;
 			}
 		} else {
 			id = p[6];
@@ -55,7 +63,7 @@ static uint16_t read_bus(uint8_t *p, uint16_t cap, void *ctx)
 }
 static void delay(uint32_t ms) { now += ms; }
 static uint32_t clock_ms(void) { return now; }
-static void reset(void *ctx) { (void)ctx; left = 0; mic_routed = mic_unmuted = mic_digital_unity = false; }
+static void reset(void *ctx) { (void)ctx; left = 0; mic_routed = mic_unmuted = mic_digital_unity = mic_agc = mic_ceiling = false; }
 int main(void)
 {
 	static uint8_t block[SCT_BOOT_BLOCK_BYTES];
@@ -71,12 +79,15 @@ int main(void)
 		.now_ms = clock_ms, .boot = SCT_BOOT_BLOCK, .boot_block = block, .voice = &voice };
 	sct_rx_t rx;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
-	assert(mic_routed && mic_unmuted && mic_digital_unity);
+	assert(mic_routed && mic_unmuted && mic_digital_unity && mic_agc && mic_ceiling);
 	assert(codec_mic_pga(0) == 32 && codec_mic_pga(10) == 52 && codec_mic_pga(-10) == 12);
 	assert(codec_mic_pga(127) == 95 && codec_mic_pga(-128) == 0);
 	codec_mic_offset(10); expected_mic_gain = 52;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
-	assert(mic_routed && mic_unmuted);
+	assert(mic_routed && mic_unmuted && mic_agc && mic_ceiling);
+	codec_mic_offset(-10); expected_mic_gain = 12;
+	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
+	assert(mic_routed && mic_unmuted && mic_agc && mic_ceiling);
 	reject_route = true;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_NO_VOICE);
 	puts("codecSetupTest PASSED");

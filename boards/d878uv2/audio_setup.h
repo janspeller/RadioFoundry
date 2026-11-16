@@ -89,13 +89,13 @@ static inline uint8_t codec_mic_pga(int8_t offset_db)
 	return tlv320aic3204_mic_gain(D878UV2_MIC_GAIN, offset_db);
 }
 
-// The Mic setting moves all three gain writes together, the way the stock table's one byte feeds all of them
+// The dB offset changes input gain and its ceiling. AGC control contains target/hysteresis bits, not PGA units;
+// moving those bits with the gain would lower the target at positive offsets and partly undo the increase.
 static inline void codec_mic_offset(int8_t offset_db)
 {
 	uint8_t g = codec_mic_pga(offset_db);
 
 	codec_writes[CODEC_AT_MICPGA_L].value = g;
-	codec_writes[CODEC_AT_AGC1].value = (uint8_t)(g | CODEC_AGC_ON);
 	codec_writes[CODEC_AT_AGC3].value = g;
 }
 

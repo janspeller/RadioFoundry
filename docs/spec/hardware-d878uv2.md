@@ -1187,10 +1187,17 @@ describe MCU command construction; they do not constitute codec register readbac
 
 The previous board had no `hal_radio_t.mic_gain` hook. The existing UI setting therefore could not change the
 native SCT microphone path. The board now stores its -10..+10 dB offset and prepares the left MICPGA value at
-the next analog or DMR transmission. The baseline remains 0x14 (10 dB); a dB adds two codec counts, clamped to
+the next analog or DMR transmission. The current baseline is 0x20 (16 dB); a dB adds two codec counts, clamped to
 0..95 with mute clear. DMR's pre-TX callback refreshes the profile and its codec-TX hook applies PGA gain;
 IN1L routing remains in the channel-start codec sequence. FM reapplies route and gain with acknowledgments.
 `mic_gain.offset_db` and `mic_gain.requested_pga` report requested settings, not codec register readback.
+
+The input PGA and AGC maximum gain use half-dB gain units, but page 0 register 0x56 contains AGC target and
+hysteresis controls. The dB offset now preserves that control byte at its baseline 0xA0 while adjusting the
+PGA and maximum gain. Previously +10 dB changed the control byte from 0xA0 to 0xB4: the target fell from
+-10 dBFS to -12 dBFS and hysteresis changed. This partly opposed the requested gain increase. These bit
+meanings come from [TI's application reference, section 5.2.81](https://www.ti.com/lit/ml/slaa557/slaa557.pdf).
+This correction is host-tested; its effect on the owner's weak transmit speech remains unverified.
 
 With CONFIG_DIAG, `cal.read_windows=1` advertises the calibration inspection interface. CHIP_REG's byte reads
 expose chip 3 only: page 0/1 selects the primary/mirror record's first

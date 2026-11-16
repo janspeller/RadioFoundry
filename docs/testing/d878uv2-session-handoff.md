@@ -68,6 +68,18 @@ On reconnection the agent disabled monitor and loopback, sent the normal IN1L se
 control. Readback showed idle, monitor=0, loopback=0, ready=1, error=0, TX=0 and no transmission since boot.
 A brief owner-operated 70 cm FM voice check in both directions is pending. No agent RF was requested.
 
+The owner subsequently confirms FM transmit speech, but it is very quiet in hiss and the peer's volume must
+be raised far. On the running `e16d7eed`, mic gain was 5. The agent set debug SETTING `mic_gain=10` in RAM
+only; the owner reports speech is "a bit louder." This is not a measured 10 dB increase and does not prove
+normal deviation. The question whether the peer hears a strong/quiet, strong/hissy or weak/hissy carrier
+while the owner is silent is pending. Gain 10 remains temporary; no setting was saved to NAND.
+
+A separate gain-control defect is corrected in source: the dB offset had also changed AGC target/hysteresis
+bits in codec register 0x56. Preserve its baseline 0xA0 while changing the PGA and AGC maximum gain. The
+profile host test now checks positive and negative offsets on the wire with the AGC control unchanged.
+The candidate artifact is `build/d878uv2-mic-gain/rfoundry_d878uv2_codec.bin`. It has not been flashed and is
+not a claim that this small control correction explains all weak-speech or carrier-noise symptoms.
+
 ## Resume here
 
 Worktree `/var/home/jan/gitrepos/RadioFoundry/.claude/worktrees/d878uv2`, branch `d878uv2-bringup`, HEAD
