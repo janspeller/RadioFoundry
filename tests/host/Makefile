@@ -1575,7 +1575,11 @@ TESTS += rfGpsStartupTest
 rfGpsStartupTest: rfGpsStartupTest.c stubs/rf_startup/mcu_io.h $(ROOT)/boards/d878uv2/radio_d878uv2.c $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS)
 	$(CC) $(CFLAGS) -I$(ROOT)/hal -Istubs/rf_startup -ffunction-sections -fdata-sections \
 		'-DRF_STARTUP_SOURCE="../../boards/d878uv2/radio_d878uv2.c"' \
-		-DRF_GPS_INIT=d878uv2_gps_init -DRF_GPS_POWER=d878uv2_gps_power -DRF_GPIO_READ=d878uv2_rf_gpio -DRF_CAL_DRIVE=d878uv2_cal_tx_drive -DRF_CAL_CONTROL=d878uv2_cal_control -DRF_ANALOG_REQUEST=d878uv2_modem_analog -DRF_CODEC_WRITE=d878uv2_codec_write -DRF_AUDIO_REG=d878uv2_audio_reg -DRF_ANALOG_VALUE=d878uv2_analog_value -DRF_MODEM_LOOPBACK=d878uv2_modem_loopback \
+		-DRF_GPS_INIT=d878uv2_gps_init -DRF_GPS_POWER=d878uv2_gps_power -DRF_GPIO_READ=d878uv2_rf_gpio \
+		-DRF_CAL_DRIVE=d878uv2_cal_tx_drive -DRF_CAL_CONTROL=d878uv2_cal_control -DRF_ANALOG_REQUEST=d878uv2_modem_analog \
+		-DRF_CODEC_WRITE=d878uv2_codec_write -DRF_AUDIO_REG=d878uv2_audio_reg -DRF_ANALOG_VALUE=d878uv2_analog_value \
+		-DRF_MODEM_LOOPBACK=d878uv2_modem_loopback -DRF_MODEM_MIC_GAIN=d878uv2_modem_mic_gain -DRF_CHIP_BYTES=d878uv2_chip_bytes \
+		-DRF_CAL_BYTES=d878uv2_cal_bytes -DRF_RADIO=d878uv2_radio \
 		-Wl,--gc-sections -o $@ rfGpsStartupTest.c $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS) $(ROOT)/drivers/rf/subaudio/subaudio.c
 .PHONY: run-rfgps
 run: run-rfgps
@@ -1616,7 +1620,7 @@ run-sctanalog: sctAnalogTest
 	./sctAnalogTest
 
 TESTS += codecSetupTest
-codecSetupTest: codecSetupTest.c $(ROOT)/boards/d878uv2/audio_setup.h $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+codecSetupTest: codecSetupTest.c $(ROOT)/boards/d878uv2/audio_setup.h $(ROOT)/drivers/audio/tlv320aic3204/tlv320aic3204.h $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
 	$(CC) $(CFLAGS) -I$(ROOT) '-DVOICE_SETUP_HEADER="boards/d878uv2/audio_setup.h"' -o $@ codecSetupTest.c \
 		$(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
 .PHONY: run-codecsetup
@@ -1627,7 +1631,7 @@ run-codecsetup: codecSetupTest
 TESTS += factoryDacTest
 factoryDacTest: factoryDacTest.c $(ROOT)/boards/d878uv2/cal_d878uv2.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
 	$(CC) $(CFLAGS) -I$(ROOT)/hal '-DFACTORY_CAL_SOURCE="../../boards/d878uv2/cal_d878uv2.c"' \
-		-DCAL_NAND_READ=d878uv2_nand_read -DCAL_LOAD=d878uv2_cal_load -DCAL_CONTROL=d878uv2_cal_control \
+		-DCAL_NAND_READ=d878uv2_nand_read -DCAL_NAND_READ_ANY=d878uv2_nand_read_any -DCAL_LOAD=d878uv2_cal_load -DCAL_CONTROL=d878uv2_cal_control -DCAL_BYTES=d878uv2_cal_bytes \
 		-o $@ factoryDacTest.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
 .PHONY: run-factorydac
 run: run-factorydac

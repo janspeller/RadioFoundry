@@ -1106,3 +1106,83 @@ identification CRC 0xD0D91952, but factory 0 and control count 0. The saved DAC 
 so no calibrated carrier alignment is established. The owner reports "TS1 late" on DMR receive and no
 recognized TX call at the peer. Neither observation establishes a measured carrier offset, calibrated
 deviation or successful complete DMR call.
+
+### Calibration selection edge cases and codec gain bytes, 2026-11-16
+
+The explicit stock calibration-reset path erases both logical calibration blocks, writes
+its defaults into the primary, then writes the primary's new-copy marker at 0x1FFFC.
+Normal calibration save erases the inactive copy, writes its data, marks it new, and then
+retires the previous copy. Losing power after marking the new copy but before retiring
+the old copy can leave both copies active; the stock loader still prefers the primary.
+Neither copy being active is not the ordinary outcome of that final save window.
+
+The stock loader's unconditional mirror fallback is established behavior, not proof that
+a mirror with unrecognized markers is intact. When a read-only port rejects both copies,
+record each resolved physical base, whether each read succeeded, both eight-byte marker
+areas and both raw first words before changing the selection rule. Do not apply a nominal
+DAC value or erase/rebuild the map to resolve missing evidence.
+
+The codec startup gains come from the first 39-byte parameter block at logical calibration
+offset 0x0080. Its RAM destination is 0x2000A08B; the startup gain pointer is 0x2000A09D,
+18 bytes into that block. Thus the logical NAND offsets are:
+
+| Logical calibration offset | Use | Stock calibration-reset default |
+| --- | --- | --- |
+| 0x0092 | Codec page 1 register 0x12, LOL driver gain | 0x04 |
+| 0x0093 | Codec page 1 register 0x13, LOR driver gain | 0x08 |
+| 0x0094 | Codec page 1 register 0x3C, right MICPGA volume | 0x0C |
+
+Each is an individual byte passed through unchanged. These addresses use the selected
+logical calibration copy and the stock block-remapping resolver. The reset values are
+not measurements of this owner's saved calibration. Left microphone gain follows its
+own settings-to-gain lookup; it must not be read by extending this three-byte list.
+
+### Left microphone, HPL and digital microphone gain sources, 2026-11-16
+
+The left MICPGA gain is a user setting, not the next byte after the three factory codec
+gains above. Byte 0x0F of the settings record at RAM 0x20008134 indexes a five-entry ROM
+map. Indices 0 through 4 produce codec gain bytes 0x18, 0x1C, 0x20, 0x24 and 0x2A. The
+selected byte becomes page 1 register 0x3B when microphone routing is enabled. This audit
+has not established its reset index or an index-validation rule. In particular, calibration
+bytes 0x0095 and 0x0096 must not be assumed to contain this left MICPGA gain.
+
+HPL gain is derived from the volume knob and the selected volume curve described in
+section 4.6.2. It is not a direct factory calibration byte. The enabled HPL operation masks
+the requested byte with 0x3F before writing page 1 register 0x10, clearing mute bit 6.
+The disabled operation writes 0x40. Negative gains use the codec's six-bit signed encoding.
+
+Digital microphone gain, field 0x68, normally takes two bytes from logical calibration
+offsets 0x009B and 0x009C. The packet value is MSB first, unlike the little-endian DAC2
+word at offset 0. The calibration-reset default is bytes 0x07, 0xD0, representing 2000.
+When settings-record byte 0x57 at RAM 0x20008134 equals 1, the setup path instead sends
+0x03, 0xE8, representing 1000. The packet field has two payload bytes in either case.
+
+The observed codec-bypass wrappers for LOL gain, LOR gain, right MICPGA gain and left
+MICPGA gain pass their eight-bit argument unchanged. They do not mask mute or sign bits
+and do not clamp gain. This differs from the enabled HPL wrapper's explicit 0x3F mask.
+The known left microphone lookup produces bytes with the PGA mute bit clear. These facts
+describe MCU command construction; they do not constitute codec register readback.
+
+### Native microphone-gain hook and calibration read windows
+
+The previous board had no `hal_radio_t.mic_gain` hook. The existing UI setting therefore could not change the
+native SCT microphone path. The board now stores its -10..+10 dB offset and prepares the left MICPGA value at
+the next analog or DMR transmission. The baseline remains 0x14 (10 dB); a dB adds two codec counts, clamped to
+0..95 with mute clear. DMR's pre-TX callback refreshes the profile and its codec-TX hook applies PGA gain;
+IN1L routing remains in the channel-start codec sequence. FM reapplies route and gain with acknowledgments.
+`mic_gain.offset_db` and `mic_gain.requested_pga` report requested settings, not codec register readback.
+
+With CONFIG_DIAG, `cal.read_windows=1` advertises the calibration inspection interface. CHIP_REG's byte reads
+expose chip 3 only: page 0/1 selects the primary/mirror record's first
+256 bytes, page 2/3 selects its eight tail-marker bytes. Register is the byte offset in that window, with at
+most 32 bytes per request. Requests crossing a window or made while keyed are refused. Reads follow the saved
+NAND map; no write interface, fallback copy selection or DAC change is added by these diagnostics.
+
+A read of the installed image's own SRAM map showed replacements 3->384, 1536->385 and 1537->386. Neither
+calibration block is relocated on this radio, and the power-calibration-loaded flag was zero. The next read
+must inspect both marker areas and raw first words; strict copy selection is not relaxed without evidence.
+
+Calibration inspection pages 4..7 mirror windows 0..3 using the NAND diagnostic reader. These replies
+prefix the bytes with an ECC-failure flag (0 means none reported, 1 means at least one page failed ECC).
+The requested length includes that flag. At most 31 data bytes follow it; for a DAC word request 3 bytes,
+for a marker area request 9. Raw diagnostic data is never applied as calibration by this interface.

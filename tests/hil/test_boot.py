@@ -205,3 +205,25 @@ def test_factory_control_dac_calibration(radio):
     if "board.control_dac.map_entries" in view:
         assert 0 <= as_int(view["board.control_dac.map_entries"]) <= 89, "factory block map unavailable"
     assert view["board.control_dac.factory"] == "1", "factory word unavailable; control DAC must remain uninitialized"
+
+
+@pytest.mark.feature("debuglink")
+def test_factory_calibration_read_windows(radio):
+    """The diagnostic exposes only small, mapped, read-only calibration record windows."""
+    state = radio.view(["board", "core"])
+    if state.get("board.cal.read_windows") != "1":
+        skip("no_hw", "board does not expose calibration read windows")
+    if state.get("board.control_dac.map_status") != "4" or state.get("state") != "idle":
+        skip("state", "mapped calibration reads need a loaded map and an idle radio")
+    for page in (0, 1):
+        raw = radio.link.chip_reg_bytes(3, 0, 3, page=page + 4)
+        assert len(raw) == 3 and raw[0] in (0, 1)
+        if raw[0] == 0:
+            assert radio.link.chip_reg_bytes(3, 0, 2, page=page) == raw[1:]
+        audio = radio.link.chip_reg_bytes(3, 0x80, 32, page=page + 4)
+        assert len(audio) == 32 and audio[0] in (0, 1)
+    for page in (2, 3):
+        raw = radio.link.chip_reg_bytes(3, 0, 9, page=page + 4)
+        assert len(raw) == 9 and raw[0] in (0, 1)
+        if raw[0] == 0:
+            assert radio.link.chip_reg_bytes(3, 0, 8, page=page) == raw[1:]

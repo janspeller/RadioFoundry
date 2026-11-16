@@ -458,6 +458,11 @@ static void audio(bool on)
 #define CODEC_GAIN_MIN_DB	(-6)
 #define CODEC_GAIN_MAX_DB	29
 
+static void mic_gain(int8_t db)
+{
+	d878uv2_modem_mic_gain(db);
+}
+
 static void volume(uint8_t percent)
 {
 	int db = CODEC_GAIN_MIN_DB + ((int)percent * (CODEC_GAIN_MAX_DB - CODEC_GAIN_MIN_DB)) / 100;
@@ -466,6 +471,14 @@ static void volume(uint8_t percent)
 	d878uv2_codec_write(CODEC_PAGE_OUT, CODEC_HPL_GAIN, reg);
 }
 
+#endif
+
+#if CONFIG_DIAG
+int d878uv2_chip_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap)
+{
+	if (keyed) return -1;
+	return d878uv2_cal_bytes(chip, page, reg, out, cap);
+}
 #endif
 
 #if CONFIG_DIAG && (CONFIG_DMR || CONFIG_FM)
@@ -502,5 +515,6 @@ const hal_radio_t d878uv2_radio = {
 
 #if CONFIG_DMR || CONFIG_FM
 	.volume = volume,
+	.mic_gain = mic_gain,
 #endif
 };

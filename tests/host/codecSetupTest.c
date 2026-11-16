@@ -9,6 +9,7 @@
 static uint8_t response[8];
 static uint16_t left;
 static uint32_t now;
+static uint8_t expected_mic_gain = CODEC_MICPGA_DEFAULT;
 static bool mic_routed, mic_unmuted, mic_digital_unity, reject_route;
 static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 {
@@ -23,7 +24,10 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 				mic_routed = true;
 				if (reject_route) status = 7;
 			}
-			if (p[7] == 1 && p[8] == 59) mic_unmuted = !(p[9] & 0x80);
+			if (p[7] == 1 && p[8] == 59) {
+				assert(p[9] == expected_mic_gain);
+				mic_unmuted = !(p[9] & 0x80);
+			}
 		} else {
 			id = p[6];
 			if (id == 0x68) {
@@ -57,6 +61,11 @@ int main(void)
 	sct_rx_t rx;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
 	assert(mic_routed && mic_unmuted && mic_digital_unity);
+	assert(codec_mic_pga(0) == 20 && codec_mic_pga(10) == 40 && codec_mic_pga(-10) == 0);
+	assert(codec_mic_pga(127) == 95 && codec_mic_pga(-128) == 0);
+	codec_mic_offset(10); expected_mic_gain = 40;
+	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
+	assert(mic_routed && mic_unmuted);
 	reject_route = true;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_NO_VOICE);
 	puts("codecSetupTest PASSED");

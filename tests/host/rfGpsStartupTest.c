@@ -10,6 +10,15 @@ uint16_t host_dac_values[2];
 static uint16_t saved_control = 3620;
 static bool control_valid;
 bool RF_CAL_CONTROL(uint16_t *value) { *value = saved_control; return control_valid; }
+static int8_t mic_offset;
+void RF_MODEM_MIC_GAIN(int8_t db) { mic_offset = db; }
+static unsigned cal_byte_reads;
+int RF_CAL_BYTES(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap)
+{
+	(void)chip; (void)page; (void)reg; (void)out;
+	cal_byte_reads++;
+	return cap;
+}
 static unsigned codec_route_writes;
 bool RF_CODEC_WRITE(uint8_t page, uint8_t reg, uint8_t value)
 {
@@ -117,13 +126,19 @@ int main(void)
 	assert(gps_started);
 	assert(host_dac_init_mask == 1u && host_dac_writes[1] == 0);
 	assert(host_dac_values[0] == 0 && !keyed);
+	assert(RF_RADIO.mic_gain != NULL);
+	RF_RADIO.mic_gain(6);
+	assert(mic_offset == 6);
 	test_audio_path();
 	uint32_t route = 0x20;
 	assert(!RF_AUDIO_REG(1, 1, 52, &route, false));
 	assert(!RF_AUDIO_REG(1, 1, 51, &route, true));
+	uint8_t bytes[2];
 	keyed = true;
+	assert(RF_CHIP_BYTES(3, 0, 0, bytes, sizeof(bytes)) == -1 && cal_byte_reads == 0);
 	assert(!RF_AUDIO_REG(1, 1, 52, &route, true));
 	keyed = false;
+	assert(RF_CHIP_BYTES(3, 0, 0, bytes, sizeof(bytes)) == 2 && cal_byte_reads == 1);
 	assert(RF_AUDIO_REG(1, 1, 52, &route, true));
 	route = 0x80;
 	assert(RF_AUDIO_REG(1, 1, 52, &route, true));

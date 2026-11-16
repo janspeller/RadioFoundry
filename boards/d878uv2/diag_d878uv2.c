@@ -166,8 +166,24 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
 {
 	unsigned control_at = CONFIG_FM ? 42u : CONFIG_DMR ? 30u : 14u;
-	if (len == 0 || i >= control_at + 5u) {
+	unsigned total = control_at + 6u;
+#if CONFIG_DMR || CONFIG_FM
+	total += 2u;
+#endif
+	if (len == 0 || i >= total) {
 		return false;
+	}
+#if CONFIG_DMR || CONFIG_FM
+	if (i >= control_at + 6u) {
+		int db = d878uv2_modem_mic_offset();
+		if (i == control_at + 6u) dl_fmt(buf, len, "mic_gain.offset_db=%d", db);
+		else dl_fmt(buf, len, "mic_gain.requested_pga=%u", (unsigned)d878uv2_modem_mic_pga());
+		return true;
+	}
+#endif
+	if (i == control_at + 5u) {
+		dl_fmt(buf, len, "cal.read_windows=1");
+		return true;
 	}
 	if (i >= control_at + 3u) {
 		dl_fmt(buf, len, "control_dac.map_%s=%u", i == control_at + 3u ? "status" : "crc",

@@ -149,3 +149,28 @@ def test_mic_gain_deviation(fm_vfo, sdr_bench, pytestconfig):
     wrong = [r for r in rows if r["back"] != str(r["step"])]
     assert not wrong, "the step read back after the over differs (did the radio restart?): " + ", ".join(
         f"set {r['step']}, read {r['back']}" for r in wrong)
+
+
+@pytest.mark.feature("fm")
+def test_native_mic_gain_setting(radio):
+    """The native microphone hook receives settings without starting a transmission."""
+    view = radio.view(["board", "core", "features"])
+    if "board.mic_gain.offset_db" not in view:
+        skip("no_hw", "board does not expose native microphone gain diagnostics")
+    if view.get("state") != "idle":
+        skip("state", "microphone gain check needs an idle radio")
+    assert view.get("set.mic_gain_board") == "1", "native modem voice requires a hardware gain hook"
+    original = as_int(view["set.mic_gain"])
+    try:
+        radio.link.setting("mic_gain", 5)
+        base = radio.wait_for(lambda v: v.get("board.mic_gain.offset_db") == "0",
+                              sections=("board",), what="native mic gain baseline")
+        baseline = as_int(base["board.mic_gain.requested_pga"])
+        for step, offset in ((3, -4), (8, 6)):
+            radio.link.setting("mic_gain", step)
+            state = radio.wait_for(lambda v: v.get("board.mic_gain.offset_db") == str(offset),
+                                   sections=("board",), what="native mic gain offset")
+            assert as_int(state["board.mic_gain.requested_pga"]) == max(0, min(95, baseline + offset * 2))
+            assert radio.view(["core"])["state"] == "idle"
+    finally:
+        radio.link.setting("mic_gain", original)

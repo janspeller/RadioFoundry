@@ -126,6 +126,7 @@ const board_t board = {
 #endif
 #if CONFIG_DIAG
 	.diag_line = d878uv2_diag_line,
+	.chip_reg_bytes = d878uv2_chip_bytes,
 #if CONFIG_DMR || CONFIG_FM
 	.chip_reg = d878uv2_audio_reg,
 #endif

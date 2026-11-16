@@ -180,3 +180,24 @@ uint32_t d878uv2_cal_map_info(uint8_t key)
 {
 	return key == 0 ? map_status : signature_crc;
 }
+
+#if CONFIG_DIAG
+// Restricted read-only windows: two calibration headers and their active/retired marker areas.
+int d878uv2_cal_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap)
+{
+	if (chip != 3u || page > 7u || out == NULL || cap == 0 || cap > 32u) return -1;
+	bool raw = page >= 4u;
+	uint8_t n = raw ? (uint8_t)(cap - 1u) : cap;
+	uint8_t window = page & 3u;
+	uint32_t base = (window & 1u) ? CAL_B : CAL_A;
+	unsigned limit = window < 2u ? 256u : 8u;
+	if (n == 0 || (unsigned)reg + n > limit) return -1;
+	if (window >= 2u) base += CAL_RETIRE_OFF;
+	if (!raw) return cal_read(base + reg, out, n) ? n : -1;
+	uint32_t physical, failed = 0;
+	if (!nand_remap_address(&calibration_map, base + reg, &physical) ||
+	    !d878uv2_nand_read_any(physical, out + 1, n, &failed)) return -1;
+	out[0] = failed != 0; // Raw bytes are diagnostic only; preserve their ECC failure status.
+	return cap;
+}
+#endif

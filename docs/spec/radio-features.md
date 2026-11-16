@@ -279,12 +279,13 @@ the debug link's SETTING op 29 sets it in RAM only.
 
 | Board | FM | DMR |
 |---|---|---|
-| with `hal_radio_t.mic_gain` (HR_C7000 boards) | the board's FM level for the channel bandwidth plus (step - 5) x 2 dB, written into the modem's mic gain at each FM transmit start | the board's DMR level plus the same offset, at each DMR entry and DMR transmit start; the samples to the vocoder are not scaled |
-| without it | not changed | the mic samples are scaled before the vocoder (`ambeVoiceSetMicGain`, with saturation) |
+| with `hal_radio_t.mic_gain` | the board's microphone level plus (step - 5) x 2 dB, applied in its audio path at transmit start | the board's microphone level plus the same offset; MCU samples are not scaled |
+| without it | not changed | MCU mic samples are scaled before a software vocoder (`ambeVoiceSetMicGain`, with saturation); this cannot change a native modem's microphone input |
 
-The board only stores the offset in the hook; a change takes effect at the next transmission. On an HR_C7000 radio
-the register is clamped to 0-42 dB (`hrc7000_mic_db`). The VOX meter reads the same codec ADC, so on these radios
-the mic gain also moves the VOX level. Without `CONFIG_DMR` and without the hook the row is dimmed.
+The board only stores the offset in the hook; a change takes effect at the next transmission. It clamps the
+result to its codec's supported range. A native modem that captures audio without MCU samples needs this hook
+for the setting to work. The VOX level follows microphone gain only when its meter reads the same adjusted
+signal. Without `CONFIG_DMR` and without the hook the row is dimmed.
 
 ### 3.7 DTMF transmit (CONFIG_DTMF)
 

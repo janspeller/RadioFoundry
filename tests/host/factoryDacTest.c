@@ -13,7 +13,7 @@ uint32_t storage_crc32(uint32_t crc, const void *buf, uint32_t n)
 	assert(crc == 0 && n == 25);
 	return ((const uint8_t *)buf)[0] == 0xA5 ? 0xD0D91952u : 0;
 }
-static bool fail_control_read;
+static bool fail_control_read, raw_ecc_failed;
 bool CAL_NAND_READ(uint32_t addr, void *out, uint32_t n)
 {
 	if (addr < sizeof(metadata) && n <= sizeof(metadata) - addr) {
@@ -30,6 +30,11 @@ bool CAL_NAND_READ(uint32_t addr, void *out, uint32_t n)
 		memcpy(out, mirror + addr - CAL_B, n); return true;
 	}
 	return false;
+}
+bool CAL_NAND_READ_ANY(uint32_t addr, void *out, uint32_t n, uint32_t *failed)
+{
+	*failed = raw_ecc_failed ? 1 : 0;
+	return CAL_NAND_READ(addr, out, n);
 }
 static void record(uint8_t *bank, uint16_t value)
 {
@@ -84,9 +89,26 @@ int main(void)
 	metadata[0xFA] = 0x80; metadata[0xFB] = 1; metadata[0x1F6] = 1;
 	assert(CAL_LOAD()); expect(true, 3620);
 	assert(calibration_map.count == 1 && map_status == 4);
+	uint8_t window[32];
+	assert(CAL_BYTES(3, 0, 0, window, 2) == 2 && window[0] == 0x24 && window[1] == 0x0E);
+	assert(CAL_BYTES(3, 2, 0, window, 8) == 8);
+	assert(memcmp(window + 4, cal_mark, 4) == 0);
+	assert(CAL_BYTES(2, 0, 0, window, 2) == -1);
+	assert(CAL_BYTES(3, 8, 0, window, 2) == -1);
+	assert(CAL_BYTES(3, 4, 0, window, 3) == 3 && window[0] == 0 && window[1] == 0x24 && window[2] == 0x0E);
+	raw_ecc_failed = true;
+	assert(CAL_BYTES(3, 6, 0, window, 9) == 9 && window[0] == 1);
+	raw_ecc_failed = false;
+	assert(CAL_BYTES(3, 4, 0, window, 1) == -1);
+	assert(CAL_BYTES(3, 0, 255, window, 2) == -1);
+	assert(CAL_BYTES(3, 2, 7, window, 2) == -1);
+	assert(CAL_BYTES(3, 0, 0, window, 0) == -1);
+	assert(CAL_BYTES(3, 0, 0, window, 33) == -1);
+	assert(CAL_BYTES(3, 0, 0, NULL, 2) == -1);
 	metadata[0x1FF00] = 0;
 	assert(!CAL_LOAD()); expect(false, 0);
 	assert(!calibration_map.ready && map_status == 2);
+	assert(CAL_BYTES(3, 0, 0, window, 2) == -1);
 	metadata[0x1FF00] = 0xA5;
 	metadata[0x1F6] = 90;
 	assert(!CAL_LOAD()); expect(false, 0);

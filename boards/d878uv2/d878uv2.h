@@ -26,6 +26,8 @@ void d878uv2_gps_init(void);
 #if CONFIG_DIAG
 bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len);
 bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len);
+int d878uv2_cal_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap);
+int d878uv2_chip_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap);
 #if CONFIG_DMR || CONFIG_FM
 int d878uv2_codec_snapshot(uint8_t page, uint8_t reg);
 bool d878uv2_audio_reg(uint8_t chip, uint8_t page, uint8_t reg, uint32_t *value, bool write);
@@ -87,6 +89,9 @@ void d878uv2_flash_ext_stats(nand_blocks_stats_t *st);
 // --- The audio/DMR baseband (modem_d878uv2.c, docs/spec/modem-sct.md) ---
 #include "modem/sct/sct_host.h"
 bool d878uv2_modem_init(void);
+void d878uv2_modem_mic_gain(int8_t db);
+int8_t d878uv2_modem_mic_offset(void);
+uint8_t d878uv2_modem_mic_pga(void);
 const char *d878uv2_modem_codec(void);
 bool d878uv2_modem_booting(void);
 void d878uv2_modem_carrier(bool carrier);

@@ -113,3 +113,7 @@ microphone capture from modulation; follow the board's bring-up instructions wit
 A carrier on the expected channel does not establish enough frequency accuracy for digital decoding.
 When digital calls are not recognized, check the board's saved calibration status and measure the carrier
 offset before treating the problem as microphone audio. A raw calibration count is not a frequency in hertz.
+
+For quiet transmitted speech, Mic gain changes take effect on the next transmission. A radio whose modem
+captures speech directly needs a board microphone-gain hook; software vocoder gain does not affect that path.
+Compare a small adjustment first and return to the original value if speech becomes distorted.

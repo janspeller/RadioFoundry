@@ -536,3 +536,28 @@ A read-only check after this report confirms the owner has already installed the
 map loads, but a valid saved DAC word has not been selected. The latest quiet-FM/late-DMR observations must
 be associated with this candidate, not assumed to describe the prior TX-path image. No setting or RF change
 was made by this check. Calibration selection remains open despite the successful mapping-layer read.
+
+### Native mic-gain control and calibration inspection
+
+The new work connects the existing Mic gain setting to the board's codec path. It previously had no board
+hook, so raising the menu value could not affect native FM/DMR microphone capture. Gain is stored and applied
+on the next transmission; the default stays unchanged. Host tests check half-dB conversion, saturation, actual
+voice-setup packets and the board hook. A no-RF HIL test checks the setting/diagnostic path and restores it.
+
+Read-only calibration inspection is chip 3: byte-read pages 0/1 for each copy's first 256 bytes, 2/3 for its
+eight marker bytes. The next installed image can report the raw DAC words, audio calibration bytes and both
+marker sets without another firmware edit. It refuses reads while keyed and cannot write factory data.
+Host tests cover mapped reads, limits, missing maps and the keyed guard. Saved calibration selection is still
+strict; no guessed DAC value or unvalidated mirror is applied.
+
+The installed image reports Mic gain step 5 and hardware hook 0, confirming the setting did not reach the
+native audio path. The new hook makes step 8 request +6 dB (PGA 0x20) relative to the unchanged default.
+Pages 4..7 of the read-only calibration inspection add an ECC-failure byte before the same windows, so
+normal-read errors can be investigated without silently accepting failed-ECC data. No calibration selection
+or DAC override is introduced. The owner must still compare speech level and decoding after installation.
+
+Candidate: `build/d878uv2-mic-control/rfoundry_d878uv2_codec.bin` (1,030,144 bytes). Codec-profile, RF-board,
+factory-reader and remapping host tests pass. Normal, DIAG-off, FM-off (battery save off) and DMR-off firmware
+builds pass without compiler warnings; static stack check passes. Doc/generic/license checks pass. HIL tests
+were syntax-checked but not run; pytest is absent from the available Python environment. Temporary build
+configurations were removed. The agent did not flash, transmit or alter the owner's gain setting.

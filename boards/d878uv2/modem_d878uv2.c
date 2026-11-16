@@ -203,7 +203,28 @@ static bool port_send(const uint8_t *buf, uint16_t len, void *ctx)
 	return sct_host_send(&host, buf, len);
 }
 
+static volatile int8_t mic_offset_db;
+
+void d878uv2_modem_mic_gain(int8_t db)
+{
+	if (db < -10) db = -10;
+	if (db > 10) db = 10;
+	mic_offset_db = db;
+}
+
+int8_t d878uv2_modem_mic_offset(void) { return mic_offset_db; }
+uint8_t d878uv2_modem_mic_pga(void) { return codec_mic_pga(mic_offset_db); }
+
 #if CONFIG_DMR
+// The engine calls this before codec_tx; prepare the next write without touching the bus here.
+static uint8_t port_tx_fields(const sct_field_t **fields, void *ctx)
+{
+	(void)ctx;
+	codec_mic_offset(mic_offset_db);
+	*fields = NULL;
+	return 0;
+}
+
 static bool port_ready(void *ctx)
 {
 	(void)ctx;
@@ -255,7 +276,8 @@ static const sct_dmr_port_t port = {
 	.call_option = { 0x01, 0x40, 0x42, 0x4F, 0x08 },
 	.codec_start = codec_writes,
 	.codec_start_count = CODEC_MIC_COUNT,
-	.codec_tx = &codec_writes[0],
+	.codec_tx = &codec_writes[1],
+	.tx_fields = port_tx_fields,
 	.report_field = 0xFF,
 	.rx_ready = D878UV2_CR_READY,
 	.rx_settle_ms = CR_SETTLE_MS,
@@ -364,6 +386,7 @@ void d878uv2_modem_carrier(bool carrier)
 void d878uv2_modem_analog(bool enabled, bool tx, bool narrow)
 {
 	port_lock(NULL);
+	if (enabled && tx) codec_mic_offset(mic_offset_db);
 	sct_analog_request(&analog, enabled, tx, narrow);
 	port_unlock(NULL);
 }
