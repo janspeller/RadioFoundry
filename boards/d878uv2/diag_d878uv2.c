@@ -15,7 +15,7 @@
 
 #if CONFIG_DIAG
 
-#define DIAG_LINES	7u
+#define DIAG_LINES	8u
 
 typedef struct {
 	char *p, *end;
@@ -154,6 +154,18 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 		put_u(&o, mcu_pin_read(PIN_KEY_SENSE0));
 		put_u(&o, mcu_pin_read(PIN_KEY_SENSE1));
 		put_u(&o, mcu_pin_read(PIN_KEY_SENSE2));
+		break;
+	case 7:
+		// The frequency trim's converter, read back from the hardware rather than from what we meant to write:
+		// whether its clock is on, whether channel 2 is enabled (DAC_CTL bit 16) and what it is holding. With
+		// the channel enabled the pin is connected to the converter on this part, so this is as close to a
+		// meter on PA5 as the radio can get (docs/spec/hardware-d878uv2.md 5.1.1)
+		put(&o, "fqcu clk ");
+		put_u(&o, mcu_dac_clocked() ? 1u : 0u);
+		put(&o, " en ");
+		put_u(&o, (DAC_CTL & DAC_CTL_DEN1) ? 1u : 0u);
+		put(&o, " hold ");
+		put_u(&o, DAC1_R12DH & 0xFFFu);
 		break;
 	default:
 		return false;
