@@ -34,11 +34,30 @@
 #endif
 #define CODEC_LINE_DEFAULT	D878UV2_LINE_GAIN
 
-// The first two writes are also the documented microphone-enable sequence at TX entry.
-#define CODEC_MIC_COUNT 2u
+// The microphone's own gain is FOUR codec writes, not one (docs/spec/hardware-d878uv2.md 4.6): the routing, the
+// PGA gain, and the AGC with its ceiling. Without the AGC the microphone runs at whatever the PGA alone gives,
+// which is why a transmission was barely audible at the other radio. The stock firmware takes `g` from a
+// five-entry table indexed by its Mic setting - 0x18, 0x1C, 0x20, 0x24, 0x2A - and writes:
+//   page 1 reg 0x34 = 0x80   route IN1L into the left MICPGA (gain alone does not connect it)
+//   page 1 reg 0x3B = g      the left MICPGA's gain
+//   page 0 reg 0x56 = g|0x80 the AGC, enabled
+//   page 0 reg 0x58 = g      the AGC's maximum gain
+#define CODEC_PAGE_AGC		0u
+#define CODEC_AGC_CTL1		0x56u
+#define CODEC_AGC_CTL3		0x58u
+#define CODEC_AGC_ON		0x80u
+// The middle of the stock table; the Mic setting moves it (codec_mic_offset)
+#ifndef D878UV2_MIC_GAIN
+#define D878UV2_MIC_GAIN	0x20u
+#endif
+
+// The first four writes are the microphone-enable sequence at TX entry.
+#define CODEC_MIC_COUNT 4u
 static sct_codec_write_t codec_writes[] = {
 	{ CODEC_PAGE_OUT, 0x34, 0x80 },	// microphone on IN1L; gain alone does not connect it
-	{ CODEC_PAGE_OUT, CODEC_MICPGA_L, CODEC_MICPGA_DEFAULT },	// the microphone
+	{ CODEC_PAGE_OUT, CODEC_MICPGA_L, D878UV2_MIC_GAIN },		// the microphone's PGA gain
+	{ CODEC_PAGE_AGC, CODEC_AGC_CTL1, D878UV2_MIC_GAIN | CODEC_AGC_ON },	// its AGC, on
+	{ CODEC_PAGE_AGC, CODEC_AGC_CTL3, D878UV2_MIC_GAIN },		// the AGC's ceiling
 	{ CODEC_PAGE_OUT, CODEC_MICPGA_R, CODEC_MICPGA_DEFAULT },	// the RF chip into the codec
 	{ CODEC_PAGE_OUT, CODEC_HPL_GAIN, CODEC_HPL_DEFAULT },		// the speaker, unmuted
 	// Transmit audio: the codec's line outputs drive the RF chip's modulator input, so a transmission with these
@@ -50,12 +69,17 @@ static sct_codec_write_t codec_writes[] = {
 // The shared mic-gain setting supplies a dB offset; the codec uses half-dB units, with mute kept clear.
 static inline uint8_t codec_mic_pga(int8_t offset_db)
 {
-	return tlv320aic3204_mic_gain(CODEC_MICPGA_DEFAULT, offset_db);
+	return tlv320aic3204_mic_gain(D878UV2_MIC_GAIN, offset_db);
 }
 
+// The Mic setting moves all three gain writes together, the way the stock table's one byte feeds all of them
 static inline void codec_mic_offset(int8_t offset_db)
 {
-	codec_writes[1].value = codec_mic_pga(offset_db);
+	uint8_t g = codec_mic_pga(offset_db);
+
+	codec_writes[1].value = g;
+	codec_writes[2].value = (uint8_t)(g | CODEC_AGC_ON);
+	codec_writes[3].value = g;
 }
 
 static const uint8_t unity_gain[] = { 0x08, 0x00 };

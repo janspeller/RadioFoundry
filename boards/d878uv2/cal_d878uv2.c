@@ -48,6 +48,7 @@ static bool control_valid;
 static nand_remap_t calibration_map;
 static uint8_t map_status;
 static uint32_t signature_crc;
+static uint32_t cal_base;
 
 // The factory's regions are read with the chip's on-die ECC off: a checked read refuses them, which is what a
 // region written without that ECC looks like (nand_d878uv2.c). The diagnostic inspection further down keeps the
@@ -111,6 +112,7 @@ bool d878uv2_cal_load(void)
 	if (base == 0) {
 		return false;
 	}
+	cal_base = base;
 	uint8_t word[2];
 	if (cal_read(base, word, sizeof(word))) {
 		uint16_t raw = (uint16_t)(word[0] | ((uint16_t)word[1] << 8));
@@ -130,6 +132,31 @@ bool d878uv2_cal_load(void)
 	}
 	loaded = true;
 	return true;
+}
+
+// The modulator's gain, which is this radio's deviation: the 16-bit big-endian word at +0x10 of the band record,
+// sent to the baseband unchanged, with no arithmetic (docs/spec/hardware-d878uv2.md 4.6, 5.3). The UHF record
+// serves above 300 MHz and the VHF one below. 0x0DAC is the factory default, used when the calibration has not
+// been read
+#define CAL_BAND_UHF		0x0000u
+#define CAL_BAND_VHF		0x0020u
+#define CAL_BAND_MOD_GAIN	0x0080u		// +0x10 of the audio record at +0x0080 / +0x00C0
+#define CAL_AUDIO_UHF		0x0080u
+#define CAL_AUDIO_VHF		0x00C0u
+#define CAL_MOD_GAIN_OFF	0x10u
+#define CAL_MOD_GAIN_DEFAULT	0x0DACu
+
+uint16_t d878uv2_cal_mod_gain(uint32_t hz)
+{
+	uint8_t w[2];
+	uint32_t rec = hz > 300000000u ? CAL_AUDIO_UHF : CAL_AUDIO_VHF;
+
+	if (!loaded || !cal_read(cal_base + rec + CAL_MOD_GAIN_OFF, w, sizeof(w))) {
+		return CAL_MOD_GAIN_DEFAULT;
+	}
+	uint16_t v = (uint16_t)((w[0] << 8) | w[1]);	// big-endian in the record, sent as it stands
+
+	return v != 0u && v != 0xFFFFu ? v : CAL_MOD_GAIN_DEFAULT;
 }
 
 bool d878uv2_cal_ready(void)

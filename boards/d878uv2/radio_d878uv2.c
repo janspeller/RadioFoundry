@@ -445,6 +445,9 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 		ok &= at1846s_set_tx_tone(&rf, AT1846S_TONE_NONE, 0);
 	}
 	ok &= apply_tx_audio();
+#if CONFIG_DMR
+	d878uv2_modem_set_deviation(hz);	// this radio's own deviation, before the carrier goes up
+#endif
 	front_end_tx(hz);
 	ok &= at1846s_set_state(&rf, mode_now == RADIO_MODE_DMR ? AT1846S_STATE_DMR_TX : AT1846S_STATE_FM_TX);
 #if CONFIG_FM

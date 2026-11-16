@@ -267,13 +267,21 @@ static void port_unlock(void *ctx)
 // **A guess in the right units.** The radio's own deviation lives in its calibration (the band record's MOD
 // byte, docs/spec/hardware-d878uv2.md 5), and how that reaches the modulator is not established, so this is a
 // build knob to find the level by experiment: -DD878UV2_MOD_GAIN=<q16.11>
-#ifndef D878UV2_MOD_GAIN
-#define D878UV2_MOD_GAIN	2048u
-#endif
-static const uint8_t mod_gain[] = { (uint8_t)(D878UV2_MOD_GAIN >> 8), (uint8_t)(D878UV2_MOD_GAIN & 0xFFu) };
+// The value is the radio's own, from its calibration, sent unchanged: no arithmetic, big-endian, band-selected
+// (docs/spec/hardware-d878uv2.md 4.6). The factory default stands in when the calibration has not been read
+static uint8_t mod_gain[2] = { 0x0D, 0xAC };
 static const sct_field_t tx_gain_fields[] = {
 	{ SCT_F_MOD_GAIN, sizeof(mod_gain), mod_gain },
 };
+
+// Called as a transmission begins, with the frequency about to be keyed
+void d878uv2_modem_set_deviation(uint32_t hz)
+{
+	uint16_t v = d878uv2_cal_mod_gain(hz);
+
+	mod_gain[0] = (uint8_t)(v >> 8);
+	mod_gain[1] = (uint8_t)(v & 0xFFu);
+}
 
 static uint8_t port_gain_fields(const sct_field_t **fields, void *ctx)
 {

@@ -101,6 +101,8 @@ const char *d878uv2_modem_codec(void);
 bool d878uv2_modem_booting(void);
 void d878uv2_modem_carrier(bool carrier);
 sct_boot_result_t d878uv2_modem_boot_result(void);
+// The modulator's gain for the frequency about to be keyed, from this radio's calibration
+void d878uv2_modem_set_deviation(uint32_t hz);
 // One TLV320AIC3204 register through the baseband (hardware-d878uv2.md 4.6)
 bool d878uv2_codec_write(uint8_t page, uint8_t reg, uint8_t value);
 #if CONFIG_FM
@@ -119,6 +121,8 @@ bool d878uv2_cal_control(uint16_t *value);
 int d878uv2_cal_map_count(void);
 uint32_t d878uv2_cal_map_info(uint8_t key);
 bool d878uv2_cal_tx_drive(uint8_t level, uint32_t hz, uint8_t *drive);
+// The modulator's gain for a frequency: the radio's own deviation, or the factory default
+uint16_t d878uv2_cal_mod_gain(uint32_t hz);
 
 // LCD backlight, 0..100 %: TIM8 channel 2's complementary output on PB0 (power_d878uv2.c, hardware-d878uv2.md 4.3)
 void d878uv2_backlight(uint8_t percent);
