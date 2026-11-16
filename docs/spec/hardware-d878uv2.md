@@ -1387,3 +1387,20 @@ These keys describe accepted commands, not ADC samples or a measurement of intel
 Host tests cover coupled gain updates, volume ACK ordering, each mic-write rejection, timeout, late ACK,
 early release, abort, stop, mode restart, data queued before preparation and fresh-call PA gating. The
 other SCT board retains its legacy mute/restore path. Hardware speech results remain pending.
+
+### Physical microphone path: evidence boundary
+
+The owner still reports white noise and quiet FM speech on `4dff8084`. Live diagnostics confirm four
+acknowledged mic writes, PGA=ceiling=32, no codec errors/faults/timeouts, FM ready, and analog configuration
+`804650057809c405dc010e` acknowledged. Accepted commands do not establish intelligible microphone capture.
+
+The fresh isolated stock audit confirms codec-bypass encoding and the Mic-setting route/PGA/AGC command
+chain. The traced accessory flag selects speaker gain/volume behavior; no microphone mux or bias GPIO was
+established. Capsule-to-IN1L continuity, actual bias/ADC mute, I2S microphone samples, and modulation-output
+continuity remain unproven. Earlier wording implying that entire physical chain was confirmed was too strong.
+The resident modem application's converter configuration is not established by the MCU trace.
+
+The missing evidence is verified codec readback or a passive stock-versus-RadioFoundry I2C/I2S capture
+with a known microphone stimulus. If ADC samples are absent, measure capsule bias/audio and the codec input;
+if samples are present, follow the DAC modulation output. No further gain/routing patch is justified by
+this audit. The supplied owner folder has no schematic; public board photos do not establish these nets.

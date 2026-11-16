@@ -8,6 +8,13 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Latest result: FM on `4dff8084` still produces white noise and quiet speech. All four mic writes and the
+saved analog-gain packet are acknowledged, with PGA=ceiling=32 and no errors/faults/timeouts. The new dirty
+audit explicitly withdraws any claim that the complete physical microphone path was proven. Codec-bypass
+encoding and command builders match; actual capsule/input continuity, bias/ADC state, I2S samples and
+modulation-output continuity remain unknown. Require real codec readback or passive stock-versus-clean
+I2C/I2S capture before further gain/routing patches. See the hardware page's physical-path boundary section.
+
 Current running image: **`4dff8084`**, verified through USB after the owner's manual update from
 `build/d878uv2-mic-prepare/rfoundry_d878uv2_codec.bin`. Immediately after boot on DMR simplex 433.450 MHz,
 read-only diagnostics show idle, no TX since boot, mic offset=0/requested PGA=32, codec acked=0, error=0,
