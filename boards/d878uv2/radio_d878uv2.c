@@ -204,6 +204,31 @@ static void tx_dac(uint8_t level8)
 	mcu_dac_write(0, (uint16_t)level8 << 4);
 }
 
+// The transmit power is ramped, not switched (docs/spec/hardware-d878uv2.md 4.3). The stock firmware drives the
+// DAC through a 124-entry envelope, rising 0 -> 511 and falling back, applied as (entry x target) >> 9 with a
+// short delay a step. Those tables are the radio's own and not available here, so this is a straight line across
+// the same number of steps and the same scale: the envelope's shape sets how much the transmission splatters into
+// the neighbouring channel, while the ramp's presence is what keeps the PA from being switched into its load.
+//
+// Slamming the DAC to the target makes the PA draw a surge that a ramped turn-on does not, and this radio has
+// been seen to brown out its own USB while keyed without changing its MCU state - the shape of a supply dip
+#define RAMP_STEPS		124u
+#define RAMP_FULL		511u	// the envelope's top; the stock scale is (entry x target) >> 9
+#define RAMP_STEP_US		5u
+
+static void tx_ramp(uint8_t from8, uint8_t to8)
+{
+	for (unsigned i = 1; i <= RAMP_STEPS; i++) {
+		uint32_t env = RAMP_FULL * i / RAMP_STEPS;		// 0 -> 511 across the steps
+		uint32_t a = (uint32_t)from8 * (RAMP_FULL - env);
+		uint32_t b = (uint32_t)to8 * env;
+
+		mcu_dac_write(0, (uint16_t)(((a + b) / RAMP_FULL) << 4));
+		hal_delay_us(RAMP_STEP_US);
+	}
+	tx_dac(to8);	// land exactly on the target rather than a step short of it
+}
+
 static radio_mode_t mode_now = RADIO_MODE_FM;
 
 // --- The per-slot PA gate ---
@@ -268,15 +293,23 @@ static void pa_on(uint8_t power, uint32_t hz)
 		keyed = true;
 		return;
 	}
+	// The gate first, then the power ramped up into it
 	mcu_pin_write(PIN_PA_EN0, true);
 	mcu_pin_write(PIN_PA_EN1, true);
-	tx_dac(drive);
+	tx_ramp(0, drive);
 	keyed = true;
 }
 
+// The ramp down, then the gate: the reverse of keying (4.3). The per-slot gate does not ramp - it runs from an
+// interrupt every slot and must not delay there - so only a whole transmission's end is ramped
 static void pa_off(void)
 {
+	bool ramp = keyed && !slot_gate && tx_drive_now != 0u;
+
 	slot_gate = false;
+	if (ramp) {
+		tx_ramp(tx_drive_now, 0);
+	}
 	tx_dac(0);
 	mcu_pin_write(PIN_PA_EN1, false);
 	mcu_pin_write(PIN_PA_EN0, false);
