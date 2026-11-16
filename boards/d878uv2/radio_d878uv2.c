@@ -353,6 +353,11 @@ static void init(void)
 	mcu_exti_enable(MCU_PIN(0));
 	NVIC_SetPriority(MCU_EXTI0_IRQn, 0);
 	NVIC_EnableIRQ(MCU_EXTI0_IRQn);
+	// This board's saved PA4/PA5 calibration uses unbuffered, software-updated DAC outputs (stock setup).
+	RCU_APB1EN |= RCU_APB1EN_DACEN;
+	(void)RCU_APB1EN;
+	DAC_CTL = 0;
+	DAC_CTL = DAC_CTL_DBOFF0 | DAC_CTL_DBOFF1;
 	mcu_dac_init(0);
 	tx_dac(0);
 	control_dac();

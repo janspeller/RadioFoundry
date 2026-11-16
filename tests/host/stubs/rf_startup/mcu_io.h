@@ -56,7 +56,18 @@ static inline void NVIC_SetPriority(unsigned irq, unsigned priority) { (void)irq
 static inline void NVIC_EnableIRQ(unsigned irq) { (void)irq; }
 extern unsigned host_dac_init_mask, host_dac_writes[2];
 extern uint16_t host_dac_values[2];
-static inline void mcu_dac_init(unsigned channel) { host_dac_init_mask |= 1u << channel; }
+extern uint32_t host_dac_control, host_dac_clock;
+#define RCU_APB1EN host_dac_clock
+#define RCU_APB1EN_DACEN (1u << 29)
+#define DAC_CTL host_dac_control
+#define DAC_CTL_DBOFF0 (1u << 1)
+#define DAC_CTL_DBOFF1 (1u << 17)
+static inline void mcu_dac_init(unsigned channel)
+{
+	host_dac_clock |= RCU_APB1EN_DACEN;
+	host_dac_init_mask |= 1u << channel;
+	host_dac_control |= 1u << (channel * 16u);
+}
 static inline void mcu_dac_write(unsigned channel, uint16_t value)
 {
 	host_dac_values[channel] = value;

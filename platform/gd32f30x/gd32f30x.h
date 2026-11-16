@@ -330,6 +330,7 @@ typedef struct {
 #define DAC_CTL_DEN0		(1u << 0)
 #define DAC_CTL_DBOFF0		(1u << 1)
 #define DAC_CTL_DEN1		(1u << 16)
+#define DAC_CTL_DBOFF1		(1u << 17)
 
 // ADC0: regular sequence, the layout of the STM32F1's ADC
 #define ADC0_BASE		0x40012400u

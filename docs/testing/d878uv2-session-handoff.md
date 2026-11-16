@@ -18,6 +18,29 @@ The owner is repeating the short 70 cm FM voice/carrier comparison with the prog
 same power/distance/peer volume as before. The earlier image's carrier was weak and hissy. DMR and VHF
 outcomes on the timer-corrected image remain untested. SQ5's intermittent false openings remain open.
 
+The owner subsequently reports no improvement: the weak/hissy symptom remains. The targeted read-only HIL
+test `test_tuning_pwm_matches_calibration` now passes on the connected radio, using an isolated environment
+at `/tmp/rfoundry-sdr`; do not mistake this register check for a carrier-power or frequency measurement.
+
+A Nooelec NESDR initially failed USB enumeration with descriptor errors -71. Moving it to another USB port
+resolved enumeration (0BDA:2838). Receiver tools are installed only in `/tmp/rfoundry-sdr`. The temporary,
+receive-only `/tmp/rfoundry_carrier_probe.py` saves numeric spectral summaries, no IQ or audio, and temporarily
+detaches/restores only the SDR's DVB interface. Its synthetic frequency/relative-power checks pass. The first
+3-second idle capture was unclipped. A subsequent UV878 carrier capture near 433.500 MHz heavily clipped the SDR;
+the received peak was around 433.502175 MHz, but the SDR's own frequency error is unresolved.
+Do not infer absolute RF power or a calibrated transmitter offset from this capture. The owner offered a
+dummy load and is preparing the repeat with a power-rated 50-ohm load on the UV878, leaving the SDR on its
+own separate antenna. Wait for readiness and a running capture before asking for the short silent carrier.
+No remote PTT was used. The radio was selected to FM 433.500 MHz and effective power L1 for this comparison.
+
+While waiting for the receiver, a separate stock mismatch was corrected in source: both RF-control DAC output
+buffers must be disabled before enable, with triggers/waves/DMA off. The saved calibration counts remain
+unchanged. The RF host test fails the old channel control fields and passes the new ones; normal firmware
+builds and the normal stack check passes. The candidate artifact is
+`build/d878uv2-dac-mode/rfoundry_d878uv2_codec.bin`. This DAC-mode candidate is not flashed and needs an RF comparison. The running baseline remains
+`8d1b53bc`. Stock RF init and conditional stored `1846N` metadata findings are on the hardware page; their
+register differences are not applied.
+
 ## Continuation: missing mode controls implemented
 
 The current candidate is `build/d878uv2-mode-audio/rfoundry_d878uv2_codec.bin`. It adds mode-entry 0x6C and

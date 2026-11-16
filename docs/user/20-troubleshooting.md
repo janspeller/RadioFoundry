@@ -122,3 +122,5 @@ as microphone gain.
 For a weak-signal bring-up report, include the tuning-output status, expected calibration count and actual
 timer compare count when available. These check the firmware setup; measuring the control voltage checks the
 analog output path.
+For a carrier comparison between firmware images, keep the same power setting, load or antenna, position
+and receiver settings. Record frequency and signal level before changing microphone gain again.

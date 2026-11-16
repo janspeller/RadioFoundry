@@ -7,6 +7,7 @@
 
 unsigned host_dac_init_mask, host_dac_writes[2];
 uint16_t host_dac_values[2];
+uint32_t host_dac_control, host_dac_clock;
 unsigned host_af_mask[5], host_timer_clocks;
 uint32_t host_timer_regs[6][16];
 static bool tune_valid;
@@ -90,6 +91,7 @@ static void test_audio_path(void)
 	assert(TIMER_CH0CV(0x40000400u) == 1644 && (host_af_mask[GPIOA] & MCU_PIN(6)));
 	assert(RF_TUNING_VALUE(0) == 1 && RF_TUNING_VALUE(1) == 1644 && RF_TUNING_VALUE(2) == 1644);
 	assert(host_dac_values[1] == saved_control && host_dac_values[0] == 0);
+	assert(host_dac_control == 0x00030003u); // both channels enabled, buffers off, triggers/waves/DMA off
 	assert((rf.cache[0][0x3A] & 0x7000u) == 0x4000u);
 	assert(rf.cache[0][0x44] == RF_AUDIO_TRIM_FM);
 	assert(analog_enabled && !analog_tx);
@@ -145,7 +147,14 @@ static void test_audio_path(void)
 int main(void)
 {
 	assert(!gps_started);
-	init();
+	const uint32_t initial_modes[] = { 0, UINT32_MAX };
+	for (unsigned i = 0; i < 2; i++) {
+		gps_started = false;
+		host_dac_control = initial_modes[i]; // cold reset and stale trigger/wave/DMA settings
+		init();
+		assert(host_dac_clock & RCU_APB1EN_DACEN);
+		assert(host_dac_control == 0x00020003u); // PA5 stays disabled until calibration is available
+	}
 	assert(gps_started);
 	assert(host_dac_init_mask == 1u && host_dac_writes[1] == 0);
 	assert(host_dac_values[0] == 0 && !keyed);

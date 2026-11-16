@@ -301,7 +301,7 @@ parallel transport serves both radios.
 path. The AT1846S's own eight GPIO pins do that work: the firmware uses them as plain outputs through the chip's
 register 0x1F, two bits per pin (`00` high impedance, `01` the pin's built-in function, `10` drive low, `11` drive
 high), keeps a shadow copy of the register in RAM and rewrites the whole register for every change. The value
-written when the RF chip is set up is 0x5AE2 — gpio0 low, gpio1 built-in function, gpio2 low, gpio3 high, gpio4
+written when the RF chip is set up is 0x5AE2 — gpio0 low, gpio1 high impedance, gpio2 low, gpio3 high, gpio4
 low, gpio5 low, gpio6 and gpio7 built-in function. Frequencies in the comparisons below are in units of 10 Hz, and
 the thresholds are plain constants in the code, not calibration.
 
@@ -1255,3 +1255,20 @@ On the owner's `8d1b53bc` image, FM receive at 433.500 MHz reports PWM ready=1 a
 equal to the calibrated expected value. FM setup is ready with no errors or timeouts. This establishes the
 timer register state; PA6 voltage and RF output were not measured.
 The hardware power, carrier alignment and speech outcome remain unverified on the corrected image.
+
+### Stock DAC modes and remaining RF setup differences
+
+The stock MCU setup writes each DAC channel's control field as 0x0002 before enabling it. Output buffers,
+triggers, waveform generation and DMA are off; enabling gives 0x0003 per channel. PA4 power writes remain
+12-bit right-aligned with the calibration byte shifted left four. The generic platform initializer had left
+output buffering enabled. This board now establishes both unbuffered channel modes before enabling PA4;
+PA5 remains disabled until its calibration is available. The saved power and frequency counts are unchanged.
+Host tests check both channel fields and clearing of stale mode bits. RF and voltage effects are unverified.
+
+The audit also found stock RF boot values 0x54 = 0x2A18, 0x5A = 0x0CDD and 0x63 = 0x3FFF, differing from the
+shared driver's 0x2A3C, 0x06DB and 0x16AD. Those differences and the extra calibration sequences are not yet
+applied. The alternate 0x0F = 0x8C24 / 0x13 = 0xB100 path is conditional on saved five-byte metadata matching
+ASCII `1846N`, read from logical NAND 0x02FA0120 or the selected mirror at 0x02FC0120. It is not established
+as RF-chip autodetection. No extra GPIO change was justified: GPIO1 remains unchanged in the traced normal
+TX/RX-return path, and GPIO3 is high in ordinary TX. Live register 0x79 = 0x1932 and 0x7A = 0x204B already
+have the stock source helper's cleared high bits, so those bits do not establish a missing routing change.
