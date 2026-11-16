@@ -6,6 +6,18 @@
 Supersedes the 2026-11-15 handoff. The bring-up history is in [d878uv2-bringup.md](d878uv2-bringup.md); this file
 is only what the next session needs to continue.
 
+## Current hardware checkpoint
+
+The owner flashed `8d1b53bc` from `build/d878uv2-tuning/rfoundry_d878uv2_codec.bin`; USB version confirms it.
+On FM 433.500 MHz / 12.5 kHz, read-only diagnostics show PWM ready=1, actual compare=1972 and expected=1972.
+FM ready=1, error=0, timeouts=0, loopback=0, monitor=0 and state=idle. No TX occurred since that boot at the
+checkpoint. Mic gain is back at 5, requested offset 0 dB and PGA count 32. This verifies timer register setup;
+physical control voltage, radiated power and carrier alignment are not measured.
+
+The owner is repeating the short 70 cm FM voice/carrier comparison with the programming cable removed,
+same power/distance/peer volume as before. The earlier image's carrier was weak and hissy. DMR and VHF
+outcomes on the timer-corrected image remain untested. SQ5's intermittent false openings remain open.
+
 ## Continuation: missing mode controls implemented
 
 The current candidate is `build/d878uv2-mode-audio/rfoundry_d878uv2_codec.bin`. It adds mode-entry 0x6C and
@@ -95,11 +107,12 @@ It now simulates timer clocks/registers, fails against the old address and missi
 corrected code, including split-frequency TX/RX restoration.
 
 The candidate is `build/d878uv2-tuning/rfoundry_d878uv2_codec.bin`, including the prior AGC-control correction.
-It is not flashed. New leading board view keys `tuning.pwm_ready`, `tuning.pwm_compare` and
+It is now flashed; see the hardware checkpoint above. New leading board view keys `tuning.pwm_ready`, `tuning.pwm_compare` and
 `tuning.pwm_expected` expose actual timer enable/compare versus the requested RX calibration. Microphone
 gain diagnostics also precede the verbose codec snapshot so reply truncation no longer hides them.
 The new HIL check reads these keys without retuning or transmitting. It is syntax-checked only: pytest is
-not installed in this shell, and the radio still has the earlier image. Direct SoC register reads on that
+not installed in this shell. The checkpoint above manually verifies the same register comparison on the new
+image without running pytest. Direct SoC register reads on the earlier
 image were refused, so no live timer-register or analog-voltage result is claimed.
 
 Validation: the RF startup/regression and codec-profile host tests pass. Normal firmware, CONFIG_DIAG=n,

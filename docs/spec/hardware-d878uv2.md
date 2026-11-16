@@ -1251,4 +1251,7 @@ calibration is unavailable. Ready checks clock, counter enable and output-channe
 PA6 voltage or radiated power. The keys precede the codec snapshot to fit the debug reply's size limit.
 
 The host RF test catches both the mismatched clock/register block and omitted RX/restoration updates.
+On the owner's `8d1b53bc` image, FM receive at 433.500 MHz reports PWM ready=1 and actual compare=1972,
+equal to the calibrated expected value. FM setup is ready with no errors or timeouts. This establishes the
+timer register state; PA6 voltage and RF output were not measured.
 The hardware power, carrier alignment and speech outcome remain unverified on the corrected image.
