@@ -64,6 +64,19 @@ reference handheld using the same receive-only setup before changing gains. The 
 still active; restoration remains owed.
 The NESDR interface driver was restored after capture. All PTT operation was manual by the owner.
 
+Spoken-count captures are `/tmp/rfoundry-dut-offset-voice.jsonl` and
+`/tmp/rfoundry-reference-voice.jsonl`. The owner confirmed the reference was the DM32 with no cables.
+Both captures have little sustained voice-band modulation, so they do not establish a relative microphone
+gain deficit. The UV878's stable samples are mostly 70–90 Hz RMS; its large excursions coincide with
+keying transitions. Synthetic two-tone FM also passes the measurement check (expected 632 Hz RMS).
+
+A longer DM32 capture, `/tmp/rfoundry-reference-sustained-voice-long.jsonl`, captures the requested silence
+followed by sustained "ah." At 42–43 seconds, seven accepted frames have median 10.8 Hz RMS and 30 Hz
+99.5th-percentile absolute deviation in the 300–3000 Hz measurement band. At 43–47 seconds, 18 accepted
+frames have medians 244.6 Hz RMS and 796.4 Hz percentile deviation. Clipped frames were excluded. These
+are descriptive window statistics, not calibrated full-band peak deviation. A matching sustained-sound
+UV878 test is pending. The first 55-second attempt ended without a carrier; allow a longer readiness window.
+
 While waiting for the receiver, a separate stock mismatch was corrected in source: both RF-control DAC output
 buffers must be disabled before enable, with triggers/waves/DMA off. The saved calibration counts remain
 unchanged. The RF host test fails the old channel control fields and passes the new ones; normal firmware
