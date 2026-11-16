@@ -15,6 +15,16 @@ added. Default, DMR-off and FM-off (with battery save off) builds pass without w
 needed a retry. Default stack check passes, and documentation links and generic-doc checks pass.
 Full CI was not run. The radio remains on `8d1b53bc`; voice improvement and DMR operation are unverified.
 
+Later checkpoint: after the owner reported flashing and then missing button behavior, no TX and 0% battery,
+read-only USB `version` reports **`31ba6278-dirty`**, not the supplied candidate `273d7c23`. The supplied
+file embeds `273d7c23`; its SHA-256 is
+`f872cae6f71f78c19448bac511ece046b3d4f55ed46a58d34c710f337b5bc7dd`.
+A fresh build of the same source differs only in four bytes encoding the CPS compile-time timestamp.
+Do not attribute these reports to the new gain/DAC changes before the running candidate version is verified.
+The attempted agent flash stopped at serial-port permission denial and wrote nothing. The owner has been
+asked to enter update mode and grant temporary per-device access; flash the verified image and read the
+running version afterward. The intended candidate has not yet been verified running.
+
 The owner flashed `8d1b53bc` from `build/d878uv2-tuning/rfoundry_d878uv2_codec.bin`; USB version confirms it.
 On FM 433.500 MHz / 12.5 kHz, read-only diagnostics show PWM ready=1, actual compare=1972 and expected=1972.
 FM ready=1, error=0, timeouts=0, loopback=0, monitor=0 and state=idle. No TX occurred since that boot at the
