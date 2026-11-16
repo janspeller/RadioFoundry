@@ -58,7 +58,10 @@ and return to channel mode after the comparison. No flash or saved factory-calib
 The owner keyed the offset VFO into the dummy load. Under the same receiver settings, 66 accepted frames
 in `/tmp/rfoundry-dut-offset-carrier.jsonl` have median carrier 433,499,996.3 Hz: 36.4 Hz below the reference,
 versus 2,169.5 Hz above it before. No clipping was observed in those frames. This confirms that the tuning
-offset aligns the carrier. A normal-antenna FM voice comparison has been requested; its outcome is pending.
+offset aligns the carrier. The owner repeated the normal-antenna FM voice test and reports **still weak and
+hissy**. Carrier alignment alone did not resolve the symptom. Next compare spoken FM deviation against the
+reference handheld using the same receive-only setup before changing gains. The temporary VFO offset is
+still active; restoration remains owed.
 The NESDR interface driver was restored after capture. All PTT operation was manual by the owner.
 
 While waiting for the receiver, a separate stock mismatch was corrected in source: both RF-control DAC output
