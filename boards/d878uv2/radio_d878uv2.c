@@ -638,6 +638,18 @@ int d878uv2_chip_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, ui
 // A write-only bring-up selector, not codec readback. Only the documented microphone inputs are allowed.
 bool d878uv2_audio_reg(uint8_t chip, uint8_t page, uint8_t reg, uint32_t *value, bool write)
 {
+	// Reads of the RF chip (chip 0) and of the board's own decisions (chip 1) go through here too, so a plain
+	// `reg 0 0x30` works and not only the --len form that reaches chip_reg_bytes
+	if (!write && chip < 2u && value != NULL) {
+		uint8_t b[2];
+
+		if (d878uv2_chip_bytes(chip, page, reg, b, sizeof(b)) != 2) {
+			return false;
+		}
+		*value = (uint32_t)((b[0] << 8) | b[1]);
+		return true;
+	}
+
 #if CONFIG_FM
 	// Chip 2 exposes the SCT WORK_MODE loop byte, restricted to normal or codec loopback.
 	if (chip == 2u && page == 0u && reg == 0x18u && value != NULL) {
