@@ -8,7 +8,15 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
-New combined candidate in preparation: `build/d878uv2-mic-prepare/rfoundry_d878uv2_codec.bin`. It includes
+Current running image: **`4dff8084`**, verified through USB after the owner's manual update from
+`build/d878uv2-mic-prepare/rfoundry_d878uv2_codec.bin`. Immediately after boot on DMR simplex 433.450 MHz,
+read-only diagnostics show idle, no TX since boot, mic offset=0/requested PGA=32, codec acked=0, error=0,
+fault=0, timeouts=0 and rejected=0. Zero acknowledged mic values here mean no batch has run, not a measured
+mute. FM config is `-` because analog mode has not run; the requested template is
+`804650057809c405dc010e`. An owner-operated FM speech test on normal antennas, 433.500 MHz and L1 has
+been requested, with USB reconnected afterward to check acknowledgments. Speech improvement is pending.
+
+The combined image includes
 the FM gain fix and complete, acknowledged microphone preparation for both modes. A shared runtime codec
 owner serializes volume and mic writes. DMR TX work mode and bursts wait for all four ACKs, and the PA slot
 gate requires the new call's completed batch generation. Early PTT release cancels preparation; queued
