@@ -219,7 +219,11 @@ static void init(void)
 	mcu_pin_out(PIN_PA_EN1, false, false);
 	mcu_pin_out(PIN_SPK_EN, false, false);
 	mcu_pin_out(PIN_AUDIO_SW, false, false);
-	mcu_pin_analog(GPIOA, MCU_PIN(4));	// the TX power DAC
+	// Both DAC outputs: PA4 the transmit power level, **PA5 the frequency trim**. A DAC pin has to be in analog
+	// mode or its output buffer never properly reaches the pin, so writing the calibration count alone did
+	// nothing - which is why the radio ran with no frequency calibration at all
+	// (docs/spec/hardware-d878uv2.md 5.1.1, the service screen's FQCU)
+	mcu_pin_analog(GPIOA, MCU_PIN(4) | MCU_PIN(5));
 	mcu_dac_init(0);
 	tx_dac(0);
 	control_dac();
