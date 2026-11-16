@@ -8,22 +8,32 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
-Latest prepared candidate: `build/d878uv2-fm-mod/rfoundry_d878uv2_codec.bin`, adding calibrated FM
-`MOD_GAIN` setup to the unbuffered-DAC candidate. This image is not flashed. Targeted codec-profile,
+Current running image: **`273d7c23`**, verified through USB after the owner's manual update from
+`build/d878uv2-fm-mod/rfoundry_d878uv2_codec.bin`. It adds calibrated FM `MOD_GAIN` setup and the
+unbuffered-DAC correction. The owner reports a slight overall improvement and somewhat better 70 cm
+DMR transmission. Whether the peer plays intelligible speech, and whether button/battery behavior is
+normal again, are awaiting clarification; do not mark microphone audio fixed.
+
+Read-only diagnostics on DMR simplex 433.450 MHz, L2, CC1/TS1, TG99 show idle, TX error=ok, underruns=0,
+modem stalls=0 and stuck=0. PWM ready=1, actual=expected=1972; mic offset=0, requested PGA=32.
+ADC channel 11 reads 2387 (about 7.69 V by the board conversion). Codec snapshots remain unavailable (-1).
+Native modem voice has no MCU microphone sample tap, so zero MCU mic metrics do not establish silence.
+No settings were changed and no RF was initiated during these checks. Targeted codec-profile,
 analog-engine and RF-startup host tests pass. The profile regression fails before the missing field is
 added. Default, DMR-off and FM-off (with battery save off) builds pass without warnings; the FM-off link
 needed a retry. Default stack check passes, and documentation links and generic-doc checks pass.
-Full CI was not run. The radio remains on `8d1b53bc`; voice improvement and DMR operation are unverified.
+Full CI was not run. SQ5 false openings and VHF transmit behavior remain unresolved.
 
-Later checkpoint: after the owner reported flashing and then missing button behavior, no TX and 0% battery,
-read-only USB `version` reports **`31ba6278-dirty`**, not the supplied candidate `273d7c23`. The supplied
+Before this confirmed update, the owner reported missing button behavior, no TX and 0% battery.
+Read-only USB `version` then reported **`31ba6278-dirty`**, not the supplied candidate `273d7c23`. The supplied
 file embeds `273d7c23`; its SHA-256 is
 `f872cae6f71f78c19448bac511ece046b3d4f55ed46a58d34c710f337b5bc7dd`.
 A fresh build of the same source differs only in four bytes encoding the CPS compile-time timestamp.
-Do not attribute these reports to the new gain/DAC changes before the running candidate version is verified.
+Those reports must not be attributed to the new gain/DAC changes.
 The attempted agent flash stopped at serial-port permission denial and wrote nothing. The owner has been
-asked to enter update mode and grant temporary per-device access; flash the verified image and read the
-running version afterward. The intended candidate has not yet been verified running.
+asked to enter update mode and grant temporary per-device access, then chose to update manually.
+
+## Earlier hardware checkpoints
 
 The owner flashed `8d1b53bc` from `build/d878uv2-tuning/rfoundry_d878uv2_codec.bin`; USB version confirms it.
 On FM 433.500 MHz / 12.5 kHz, read-only diagnostics show PWM ready=1, actual compare=1972 and expected=1972.
