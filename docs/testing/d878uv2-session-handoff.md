@@ -33,6 +33,25 @@ dummy load and is preparing the repeat with a power-rated 50-ohm load on the UV8
 own separate antenna. Wait for readiness and a running capture before asking for the short silent carrier.
 No remote PTT was used. The radio was selected to FM 433.500 MHz and effective power L1 for this comparison.
 
+The repeat used a dummy load on each transmitter in turn, nominal FM 433.500 MHz, lowest power, and the
+same NESDR settings: center 433.750 MHz, 1.024 MS/s, manual gain 0 dB, digital AGC off. The owner operated
+PTT. Numeric summaries are `/tmp/rfoundry-dut-load-carrier.jsonl` and
+`/tmp/rfoundry-reference-load-carrier.jsonl`; no IQ or audio was saved. Keeping frames with SNR >20 dB,
+clipping fraction <0.0001 and band level between -30 and -3 dBFS gives:
+
+| Transmitter | Accepted frames | Median carrier | Accepted range |
+| --- | --- | --- | --- |
+| UV878, running `8d1b53bc` | 137 | 433,502,202.2 Hz | 433,502,197.3–433,502,203.7 Hz |
+| Reference handheld | 166 | 433,500,032.7 Hz | 433,500,031.5–433,500,035.3 Hz |
+
+The UV878 is **2,169.5 Hz higher relative to the reference**, about 5 ppm. The SDR clock is uncalibrated;
+these are relative measurements, not calibrated absolute frequencies. Received levels were comparable,
+but dummy-load leakage and coupling do not measure transmitter power. Frequency alignment now needs a
+controlled comparison before further microphone gain changes. A temporary VFO offset can test this without
+a flash; preserve the existing VFO frequency, mode, tones and channel selection, and restore them afterward.
+This comparison has not yet been performed. The owner has been asked to power the UV878 back on and
+reconnect its programming cable; the reference radio should be unkeyed and off.
+
 While waiting for the receiver, a separate stock mismatch was corrected in source: both RF-control DAC output
 buffers must be disabled before enable, with triggers/waves/DMA off. The saved calibration counts remain
 unchanged. The RF host test fails the old channel control fields and passes the new ones; normal firmware
