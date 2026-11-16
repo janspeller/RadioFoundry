@@ -1233,7 +1233,7 @@ reader retains reset values 80 00 80 00 00 when that record is unavailable or er
 
 The stock startup API updates ten bytes but its emitter sends twelve from persistent storage. The final two
 stock bytes are not established by that producer. Reserved zeros are a public-manual choice, not recovered
-stock values. Existing ANALOG_CONFIG remains nominal, not a reconstruction of the unknown ten stock RAM bytes.
+stock values. The initial ANALOG_CONFIG used nominal gains; its calibration source is now established below.
 The new controls are mode-entry data; call-start/stop signaling is retained. Hardware audio is unverified.
 
 ### Tuning-output timer correction
@@ -1289,3 +1289,32 @@ gain and passes with the field present. This corrects an omission; restored spee
 The ordinary microphone setting 0x20 produces codec writes 1:34=80, 1:3B=20, 0:56=A0 and 0:58=20, each
 acknowledged separately. Their completion does not establish ADC power, bias or sample routing. Pure FM
 uses processing mode 0x80; mixed/digital paths using 0x82 do not justify changing the pure-FM value.
+
+### Recovered FM analog gain calibration
+
+The earlier conclusion that ANALOG_CONFIG's ten gain bytes were unavailable was incorrect. The reachable
+boot audio producer copies the first fifteen bytes from calibration +0x0040. Audio store id 0x15 takes the
+first ten, and its setter copies them to the RAM buffer used for field 0x3C bytes 1–10. Pure FM sends those
+bytes unchanged. The digital-channel branch's addition of 40 to the final big-endian word does not apply to FM.
+The five remaining bytes are the MISC_GAIN calibration already used by this board.
+
+Both saved calibration copies on the owner's radio match these factory defaults:
+
+| Stage | Calibration word | Linear gain format | Previously sent |
+| --- | --- | --- | --- |
+| TX before limiter | 0x4650 (18000) | Q16.11 | 0x0800 (unity) |
+| TX after limiter | 0x0578 (1400) | Q16.12 | 0x1000 (unity) |
+| CTCSS | 0x09C4 (2500) | Q16.12 | 0x1000 |
+| DCS | 0x05DC (1500) | Q16.12 | 0x1000 |
+| RX volume | 0x010E (270) | Q16.11 | 0x0800 (unity) |
+
+The port now reads calibration +0x0040..+0x0049 through the selected, remapped calibration copy. An unreadable
+or wholly erased field uses these factory defaults; zero gain bytes are preserved. Mode byte 0 starts at
+0x80, matching the stock emitter's forced bit 7. The shared engine selects narrow/wide bits without replacing
+the board gains. Packet, primary/mirror selection, relocated-block and failed-read tests cover this path.
+
+`board.fm.analog_requested` reports the board template and `board.fm.analog_config` the latest acknowledged
+eleven-byte field, as hexadecimal strings. The latter is `-` until acknowledged. These are baseband command
+diagnostics, not codec readback. The receive-only HIL check compares their gains and channel-width bits.
+Microphone PGA and saved calibration are unchanged. Hardware confirmation of transmit speech is pending;
+the restored RX gain is lower than the former unity setting, so receive volume can also change.

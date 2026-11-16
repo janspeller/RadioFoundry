@@ -8,6 +8,22 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+New FM gain candidate: `build/d878uv2-fm-gains/rfoundry_d878uv2_codec.bin`. The trace recovered
+ANALOG_CONFIG bytes 1–10 from calibration
++0x40..+0x49. The old claim that those bytes were unavailable RAM data was wrong. Both owner calibration
+copies match factory words 4650/0578/09C4/05DC/010E. The port now supplies these through a shared analog
+configuration template instead of unity gains, with mode bit 7 set and width bits selected by the engine.
+This changes TX pre/post-limiter gain and RX gain; it does not change microphone PGA or factory data.
+The candidate is not flashed. After the owner updates, verify its running version first, then compare
+`board.fm.analog_config` and `board.fm.analog_requested` while receiving FM before an owner-operated speech
+test. RX volume may be lower. The register snapshots remain unavailable and the codec-I2C address convention
+is unresolved. The trace did not prove a need to reapply line-output gains after vocoder selection.
+Codec-profile, analog-engine and factory-calibration host tests pass; the packet regression fails before
+the fix. Default, DMR-off, FM-off (battery save off) and diagnostics-off firmware builds pass without warnings.
+Two alternate LTO links needed retries after compiler internal errors. The default stack check passes.
+The new read-only analog-calibration HIL test collects cleanly but has not run on this unflashed image.
+Documentation links and generic-doc checks pass. Full CI was not run. The owner prefers to flash manually.
+
 Current running image: **`273d7c23`**, verified through USB after the owner's manual update from
 `build/d878uv2-fm-mod/rfoundry_d878uv2_codec.bin`. It adds calibrated FM `MOD_GAIN` setup and the
 unbuffered-DAC correction. The owner reports a slight overall improvement and somewhat better 70 cm
@@ -137,7 +153,7 @@ The current candidate is `build/d878uv2-mode-audio/rfoundry_d878uv2_codec.bin`. 
 12-byte 0x6B, using calibration +0x4A..+0x4E for known bytes and zero reserved trailing bytes. The ten-byte
 startup store update is not the twelve-byte wire length. Digital setup uses the shared engine's existing
 control-field classification; analog setup now accepts acknowledged board control fields. Per-call signaling
-is retained. Existing ANALOG_CONFIG remains nominal rather than claimed stock RAM reconstruction.
+is retained. At that checkpoint ANALOG_CONFIG still used nominal gains; the later trace above recovers its source.
 
 Targeted host tests, four build configurations and stack checks pass. The owner flashed `e3acd148` and
 reports no improvement in transmit speech. Do not describe 0x6B/0x6C as a proven microphone fix.
@@ -284,9 +300,9 @@ calibration), and the six codec registers the emitter maps — page 1 0x10, 0x12
 
 Two further things §4.6.8 says that this port does not yet honor:
 
-- **`ANALOG_CONFIG`** (field 0x3C, store 0x1F) is 11 bytes: a mode byte with bit 7 forced set, then ten bytes
-  from RAM that are **not available from the image**. It cannot be reproduced faithfully; say so rather than
-  inventing ten bytes.
+- **`ANALOG_CONFIG`** (field 0x3C, store 0x1F) is 11 bytes. The original handoff incorrectly called its ten
+  RAM gain bytes unrecoverable. The later trace follows their producer to calibration +0x40..+0x49; the
+  current candidate now uses them unchanged for pure FM, with mode bit 7 set.
 - **The moment is wrong.** §4.7.4 states the FM transmit entry sends *no* baseband field at all: everything goes
   out at the **channel or mode change**, not at PTT. This board calls `d878uv2_modem_analog()` from `tx()`. Moving
   baseband configuration to mode entry is the structurally correct fix.

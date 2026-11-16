@@ -386,7 +386,7 @@ Source: [Packet Interface of CT3258 v1.0, section 1.2.68](https://cdn.hackaday.i
 board serializes access and chooses this engine or the DMR engine as the current packet owner. Disabling it
 cancels pending work without sending commands into the next owner's configuration.
 
-Setup sends analog `PROCESS_MODE` (0x80), `ANALOG_CONFIG` with the requested channel filters and unity gains,
+Setup sends analog `PROCESS_MODE` (0x80), `ANALOG_CONFIG` with the requested channel filters and board gains,
 then disables baseband sub-audio because the RF driver handles tones. Receive sends `WORK_MODE` RX and
 `CARRIER_READY`; the core still gates the speaker. A requested transmission sends TX work mode followed by
 call start. Release sends call stop and restores RX work mode and carrier ready. A release before call start
@@ -398,8 +398,10 @@ receive work mode; supplying the field only to the digital engine does not confi
 The board updates frequency-dependent calibration under its modem lock and restarts analog setup if the
 selected gain changes.
 
-The selected analog channel filters are 0x00 for narrow and 0x0A for wide. Gains use the field's documented
-Q formats. These are nominal settings, not factory gain calibration. The engine is used under `CONFIG_FM`;
+The selected analog channel filters occupy bits 1 and 3: 0x00 for narrow and 0x0A for wide. A board can supply
+an eleven-byte `config` template containing mode flags and its five calibrated gains. The engine replaces
+only those bandwidth bits and preserves every gain byte. Without a template it uses nominal unity gains in
+the field's documented Q formats. The engine is used under `CONFIG_FM`;
 the baseband and codec still boot in an FM-only build. No TX commands are issued without a TX request.
 
 ### Analog vocoder ownership
@@ -438,3 +440,8 @@ The analog engine accepts `setup_fields`/`setup_count` and sends them as acknowl
 process-mode selection. Setup runs on mode initialization or reconfiguration, not each PTT press. Failure stops
 receive readiness. Digital mode uses the existing start-field classification to send the same control field
 IDs in TYPE 0 packets. Library switching therefore reapplies each mode's own thresholds.
+
+With diagnostics enabled, `config_sent` holds the latest analog-config packet payload. `config_valid` becomes
+true only after that field is acknowledged; a new send clears it and a refusal leaves it false. A board can
+expose this snapshot and its requested template through debug-link view keys for a receive-only HIL check.
+An acknowledged baseband field is not codec register readback or an RF deviation measurement.

@@ -143,9 +143,17 @@ void sct_analog_poll(sct_analog_t *a, uint32_t now_ms)
 		a->phase = CONFIG;
 		// fall through
 	case CONFIG:
-		// Standard narrow/wide channel filters, unity TX/RX gains in their documented Q formats.
-		data[0] = a->narrow ? 0x00 : 0x0A;
-		data[1] = 0x08; data[3] = 0x10; data[5] = 0x10; data[7] = 0x10; data[9] = 0x08;
+		if (a->config != NULL) {
+			memcpy(data, a->config, sizeof(data));
+		} else {
+			// Without board calibration, use unity gains in the field's documented Q formats.
+			data[1] = 0x08; data[3] = 0x10; data[5] = 0x10; data[7] = 0x10; data[9] = 0x08;
+		}
+		data[0] = (uint8_t)((data[0] & ~0x0Au) | (a->narrow ? 0 : 0x0A));
+#if CONFIG_DIAG
+		a->config_valid = false;
+		memcpy(a->config_sent, data, sizeof(data));
+#endif
 		command(a, SCT_TYPE_CONTROL, SCT_F_ANALOG_CONFIG, data, 11, SUBAUDIO, now_ms);
 		break;
 	case SUBAUDIO:
@@ -230,6 +238,9 @@ void sct_analog_packet(sct_analog_t *a, const uint8_t *pkt, uint16_t len)
 		if (n != 1 || ((!ack || id != a->pending) && id != SCT_F_ACK)) continue;
 		if (id == SCT_F_ACK && data[0] == SCT_ACK_OK && !a->pending_codec) continue;
 		a->error = data[0];
+#if CONFIG_DIAG
+		if (a->pending == SCT_F_ANALOG_CONFIG) a->config_valid = a->error == 0;
+#endif
 		if (a->error == 0 && a->pending == SCT_F_VOCODER_SEL) {
 			a->analog_loaded = a->next == MODE;
 			a->digital_ready = a->next == DIGITAL_READY;

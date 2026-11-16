@@ -110,6 +110,7 @@ bool d878uv2_codec_write(uint8_t page, uint8_t reg, uint8_t value);
 void d878uv2_modem_analog(bool enabled, bool tx, bool narrow);
 #if CONFIG_DIAG
 bool d878uv2_modem_loopback(bool enabled);
+bool d878uv2_modem_analog_config(uint8_t out[11], bool acknowledged);
 #endif
 uint32_t d878uv2_analog_value(uint8_t key);
 #endif
@@ -130,6 +131,7 @@ uint16_t d878uv2_cal_mod_gain(uint32_t hz);
 typedef struct {
 	uint8_t lol, lor, mic_r;
 	uint8_t misc[5];	// calibration +0x4A..+0x4E for MISC_GAIN
+	uint8_t analog[10];	// calibration +0x40..+0x49 for ANALOG_CONFIG gains
 	uint16_t demod, spk_gain, mic_gain;
 	bool from_radio;
 } d878uv2_cal_audio_t;

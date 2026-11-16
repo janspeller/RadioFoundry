@@ -13,7 +13,7 @@ uint32_t storage_crc32(uint32_t crc, const void *buf, uint32_t n)
 	assert(crc == 0 && n == 25);
 	return ((const uint8_t *)buf)[0] == 0xA5 ? 0xD0D91952u : 0;
 }
-static bool fail_control_read, raw_ecc_failed;
+static bool fail_control_read, fail_analog_read, raw_ecc_failed;
 bool CAL_NAND_READ(uint32_t addr, void *out, uint32_t n)
 {
 	if (addr < sizeof(metadata) && n <= sizeof(metadata) - addr) {
@@ -23,6 +23,7 @@ bool CAL_NAND_READ(uint32_t addr, void *out, uint32_t n)
 		memcpy(out, replacement + addr - 0x03000000u, n); return true;
 	}
 	if (fail_control_read && (addr == CAL_A || addr == CAL_B)) return false;
+	if (fail_analog_read && (addr == CAL_A + 0x40u || addr == CAL_B + 0x40u)) return false;
 	if (addr >= CAL_A && addr - CAL_A + n <= sizeof(primary)) {
 		memcpy(out, primary + addr - CAL_A, n); return true;
 	}
@@ -61,15 +62,34 @@ int main(void)
 	metadata[0x1F6] = 0; metadata[0x1F7] = 0;
 	record(primary, 3620); record(mirror, 1901);
 	const uint8_t misc_values[5] = { 0x12,0x34,0x56,0x78,9 };
+	const uint8_t analog_values[10] = { 0x12,0x34,0x56,0x78,0x9A,0xBC,0xDE,0xF0,0x01,0x23 };
+	const uint8_t mirror_analog[10] = { 0x23,0x01,0xF0,0xDE,0xBC,0x9A,0x78,0x56,0x34,0x12 };
+	const uint8_t analog_defaults[10] = { 0x46,0x50,0x05,0x78,0x09,0xC4,0x05,0xDC,0x01,0x0E };
 	memcpy(primary + 0x4A, misc_values, sizeof(misc_values));
+	memcpy(primary + 0x40, analog_values, sizeof(analog_values));
+	memcpy(mirror + 0x40, mirror_analog, sizeof(mirror_analog));
 	assert(CAL_LOAD()); expect(true, 3620);
 	CAL_AUDIO_TYPE audio;
 	CAL_AUDIO_READ(&audio);
 	assert(memcmp(audio.misc, misc_values, sizeof(misc_values)) == 0);
+	assert(memcmp(audio.analog, analog_values, sizeof(analog_values)) == 0);
+	fail_analog_read = true;
+	CAL_AUDIO_READ(&audio);
+	assert(memcmp(audio.analog, analog_defaults, sizeof(analog_defaults)) == 0);
+	fail_analog_read = false;
 	assert(!CAL_CONTROL(NULL));
 	primary[CAL_MARK_OFF] = 0;
 	assert(CAL_LOAD()); expect(true, 1901);
+	CAL_AUDIO_READ(&audio);
+	assert(memcmp(audio.analog, mirror_analog, sizeof(mirror_analog)) == 0);
 	record(primary, 3620);
+	assert(CAL_LOAD());
+	memset(primary + 0x40, 0xFF, 10);
+	CAL_AUDIO_READ(&audio);
+	assert(memcmp(audio.analog, analog_defaults, sizeof(analog_defaults)) == 0);
+	memset(primary + 0x40, 0, 10);
+	CAL_AUDIO_READ(&audio);
+	for (unsigned i = 0; i < 10; i++) assert(audio.analog[i] == 0); // zero is an intentional gain, not erased data
 	memcpy(primary + CAL_RETIRE_OFF, retire_mark, sizeof(retire_mark));
 	assert(CAL_LOAD()); expect(true, 1901); // the old reader incorrectly selected this retired primary
 	memcpy(mirror + CAL_RETIRE_OFF, retire_mark, sizeof(retire_mark));
@@ -94,10 +114,13 @@ int main(void)
 	assert(!CAL_LOAD()); expect(false, 0); // reload must not retain a stale value
 	// A relocated factory block must be read through the saved map, never through the stale raw address.
 	record(primary, 1000); record(replacement, 3620);
+	memcpy(replacement + 0x40, analog_values, sizeof(analog_values));
 	metadata[0] = (uint8_t)(CAL_A >> 17); metadata[1] = (uint8_t)(CAL_A >> 25);
 	metadata[0xFA] = 0x80; metadata[0xFB] = 1; metadata[0x1F6] = 1;
 	assert(CAL_LOAD()); expect(true, 3620);
 	assert(calibration_map.count == 1 && map_status == 4);
+	CAL_AUDIO_READ(&audio);
+	assert(memcmp(audio.analog, analog_values, sizeof(analog_values)) == 0);
 	uint8_t window[32];
 	assert(CAL_BYTES(3, 0, 0, window, 2) == 2 && window[0] == 0x24 && window[1] == 0x0E);
 	assert(CAL_BYTES(3, 2, 0, window, 8) == 8);

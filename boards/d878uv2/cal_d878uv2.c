@@ -175,6 +175,15 @@ uint16_t d878uv2_cal_mod_gain(uint32_t hz)
 void d878uv2_cal_audio(d878uv2_cal_audio_t *a)
 {
 	uint8_t r[0x1Du];
+	static const uint8_t analog_defaults[10] = { 0x46,0x50,0x05,0x78,0x09,0xC4,0x05,0xDC,0x01,0x0E };
+	for (unsigned i = 0; i < sizeof(analog_defaults); i++) a->analog[i] = analog_defaults[i];
+#if CONFIG_FM
+	if (loaded && cal_read(cal_base + 0x40u, r, sizeof(a->analog))) {
+		bool erased = true;
+		for (unsigned i = 0; i < sizeof(a->analog); i++) if (r[i] != 0xFFu) erased = false;
+		if (!erased) for (unsigned i = 0; i < sizeof(a->analog); i++) a->analog[i] = r[i];
+	}
+#endif
 
 	a->lol = 0x04;
 	a->lor = 0x08;

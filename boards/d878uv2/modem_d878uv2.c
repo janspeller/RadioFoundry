@@ -13,6 +13,7 @@
 // the radio runs FM only and the boot reports "no block".
 #include "d878uv2.h"
 #include "config.h"
+#include <string.h>
 #if CONFIG_DMR || CONFIG_FM	// both modes use the baseband's codec path
 #include "pins.h"
 #include "mcu_io.h"
@@ -372,6 +373,7 @@ bool d878uv2_modem_init(void)
 	sct_analog_init(&analog, port_send, NULL);
 	analog.setup_fields = analog_setup;
 	analog.setup_count = sizeof(analog_setup) / sizeof(analog_setup[0]);
+	analog.config = analog_config;
 	analog.tx_codec = codec_writes;
 	analog.tx_codec_count = CODEC_MIC_COUNT;
 #endif
@@ -423,6 +425,15 @@ void d878uv2_modem_analog(bool enabled, bool tx, bool narrow)
 }
 
 #if CONFIG_DIAG
+bool d878uv2_modem_analog_config(uint8_t out[11], bool acknowledged)
+{
+	port_lock(NULL);
+	bool valid = !acknowledged || analog.config_valid;
+	if (valid) memcpy(out, acknowledged ? analog.config_sent : analog_config, 11);
+	port_unlock(NULL);
+	return valid;
+}
+
 bool d878uv2_modem_loopback(bool enabled)
 {
 	port_lock(NULL);

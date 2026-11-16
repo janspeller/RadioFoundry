@@ -33,7 +33,16 @@ static void expect(sct_analog_t *a, uint32_t now, uint8_t type, uint8_t id, cons
 	assert(p[3] == 0 && p[4] == n + 1 && p[5] == type && p[6] == id);
 	assert(sizes[before] == ((7 + n + 1) & ~1u));
 	assert(n == 0 || memcmp(p + 7, data, n) == 0);
+#if CONFIG_DIAG
+	if (id == SCT_F_ANALOG_CONFIG) {
+		assert(!a->config_valid && n == sizeof(a->config_sent));
+		assert(memcmp(a->config_sent, data, n) == 0);
+	}
+#endif
 	ack(a, id, 0);
+#if CONFIG_DIAG
+	if (id == SCT_F_ANALOG_CONFIG) assert(a->config_valid);
+#endif
 }
 static void expect_codec(sct_analog_t *a, uint32_t now, uint8_t reg, uint8_t value, uint8_t status)
 {
@@ -226,6 +235,33 @@ int main(void)
 	before = count;
 	sct_analog_poll(&a,6);
 	assert(a.error==6 && !a.ready && count==before);
+	// Board calibration survives channel-width changes; width selection cannot erase other mode flags.
+	count = 0;
+	sct_analog_init(&a, send_packet, NULL);
+	static const uint8_t config[] = {0xA7,0x12,0x34,0x56,0x78,0x9A,0xBC,0xDE,0xF0,0x01,0x23};
+	a.config = config;
+	for (unsigned wide = 0; wide < 2; wide++) {
+		uint8_t calibrated[] = {0xA5,0x12,0x34,0x56,0x78,0x9A,0xBC,0xDE,0xF0,0x01,0x23};
+		calibrated[0] = wide ? 0xAF : 0xA5;
+		sct_analog_request(&a, true, false, !wide);
+		if (!wide) expect(&a,0,0,0x10,av,1);
+		expect(&a,2,0,0x1A,am,1);
+		expect(&a,4,0,0x3C,calibrated,sizeof(calibrated));
+		uint8_t sub[] = {0x40,0};
+		expect(&a,6,0,0x26,sub,2);
+		expect(&a,8,0,0x18,rx,3);
+		expect(&a,10,0,0x19,carrier,1);
+		sct_analog_poll(&a,12);
+		assert(a.ready && !a.error && config[0] == 0xA7);
+	}
+#if CONFIG_DIAG
+	sct_analog_request(&a, true, false, true);
+	expect(&a,14,0,0x1A,am,1);
+	sct_analog_poll(&a,16);
+	assert(!a.config_valid);
+	ack(&a,SCT_F_ANALOG_CONFIG,6);
+	assert(!a.config_valid && !a.ready && a.error == 6);
+#endif
 	puts("sctAnalogTest PASSED");
 	return 0;
 }

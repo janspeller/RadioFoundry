@@ -126,3 +126,5 @@ For a carrier comparison between firmware images, keep the same power setting, l
 and receiver settings. Record frequency and signal level before changing microphone gain again.
 If carrier alignment does not improve quiet speech, report that result separately. Modulation calibration
 and microphone gain control different stages; matching carrier frequency does not verify either stage.
+For boards with calibrated analog processing, a firmware correction can change both transmit speech and
+receive volume. Compare transmit clarity and receiver volume separately at the same channel width.

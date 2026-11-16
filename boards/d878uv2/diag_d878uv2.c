@@ -200,6 +200,23 @@ bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
 	}
 	i -= 2u;
 #endif
+#if CONFIG_FM
+	if (i < 2u) {
+		uint8_t config[11];
+		bool valid = d878uv2_modem_analog_config(config, i == 0u);
+		unsigned at = (unsigned)dl_fmt(buf, len, "fm.analog_%s=", i == 0u ? "config" : "requested");
+		if (valid) {
+			for (unsigned j = 0; j < sizeof(config) && at + 2u < len; j++) {
+				dl_fmt(buf + at, (uint8_t)(len - at), "%02x", (unsigned)config[j]);
+				at += 2;
+			}
+		} else if (at + 1u < len) {
+			buf[at] = '-'; buf[at + 1u] = '\0';
+		}
+		return true;
+	}
+	i -= 2u;
+#endif
 	unsigned control_at = CONFIG_FM ? 42u : CONFIG_DMR ? 30u : 14u;
 	unsigned total = control_at + 6u;
 	if (len == 0 || i >= total) {

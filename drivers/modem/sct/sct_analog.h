@@ -14,6 +14,8 @@ typedef struct {
 	// Board control fields sent once at each analog mode setup, before receive work mode.
 	const sct_field_t *setup_fields;
 	uint8_t setup_count, setup_index;
+	// Optional 11-byte ANALOG_CONFIG template. Requests select bandwidth bits 1 and 3; other bits/gains persist.
+	const uint8_t *config;
 	// Optional board microphone routing/gain, reapplied and acknowledged before each TX work-mode request.
 	const sct_codec_write_t *tx_codec;
 	uint8_t tx_codec_count, tx_codec_index;
@@ -21,6 +23,8 @@ typedef struct {
 	bool enabled, want_tx, narrow, restart, ready, digital_ready, analog_loaded;
 #if CONFIG_DIAG
 	bool loopback;
+	bool config_valid;
+	uint8_t config_sent[11];	// Valid only after ANALOG_CONFIG is acknowledged.
 #endif
 	uint8_t phase, pending, next, error, last_id;
 	uint32_t sent_ms, commands, timeouts;

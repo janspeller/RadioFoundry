@@ -18,14 +18,8 @@
 #define CODEC_MICPGA_R		0x3Cu	// Right MICPGA Volume Control: bit 7 mute, bits 6:0 in 0.5 dB steps
 #define CODEC_MICPGA_L		0x3Bu	// Left MICPGA Volume Control: the microphone's side
 #define CODEC_HPL_GAIN		0x10u	// HPL Driver Gain: bit 6 mute, bits 5:0 two's complement dB
-// The microphone chain's gains are placeholders until the calibration's own audio bytes are identified, and a
-// transmission that the other radio can barely hear means one of its stages is too low. Both can be moved at
-// build time to find which: D878UV2_MIC_PGA is the microphone into the codec (0.5 dB steps, so 0x28 is 20 dB),
-// D878UV2_LINE_GAIN the codec's line outputs into the RF chip's modulator (two's complement dB)
-// The three per-radio gain bytes, with the factory defaults as the starting point. They are SMALL - 0x04, 0x08
-// and 0x0C, which read as 2, 4 and 6 dB in the codec's half-dB steps - and the 0x14 (10 dB) this board guessed
-// for the receive input was well above all of them, which is what a receiver that hisses sounds like. The
-// radio's own values live in the calibration record at +0x0080 (+0x12, +0x13, +0x14)
+// The factory defaults stand in until calibration is available: LOL/LOR use 1 dB steps (+4/+8 dB), while the
+// right MICPGA uses half-dB steps (0x0C = +6 dB). These values live at calibration +0x0080 (+0x12..+0x14)
 // (docs/spec/hardware-d878uv2.md 4.6.6, 5.3)
 #ifndef D878UV2_MIC_PGA
 #define D878UV2_MIC_PGA		0x0Cu	// the right MICPGA: the RF chip into the codec
@@ -42,9 +36,8 @@
 #endif
 #define CODEC_LINE_DEFAULT	D878UV2_LINE_GAIN
 
-// The microphone's own gain is FOUR codec writes, not one (docs/spec/hardware-d878uv2.md 4.6): the routing, the
-// PGA gain, and the AGC with its ceiling. Without the AGC the microphone runs at whatever the PGA alone gives,
-// which is why a transmission was barely audible at the other radio. The stock firmware takes `g` from a
+// Microphone preparation is four codec writes: routing, PGA gain, AGC control and its ceiling
+// (docs/spec/hardware-d878uv2.md 4.6). The stock firmware takes `g` from a
 // five-entry table indexed by its Mic setting - 0x18, 0x1C, 0x20, 0x24, 0x2A - and writes:
 //   page 1 reg 0x34 = 0x80   route IN1L into the left MICPGA (gain alone does not connect it)
 //   page 1 reg 0x3B = g      the left MICPGA's gain
@@ -107,6 +100,10 @@ static uint8_t spk_gain_v[2] = { 0x05, 0x46 };
 static uint8_t mic_gain_v[2] = { 0x07, 0xD0 };
 // Shared by analog mode setup and digital TX setup; selected from the band's calibration.
 static uint8_t mod_gain[2] = { 0x0D, 0xAC };
+// Mode bit 7 matches the board's analog setup; the ten gain bytes come from calibration.
+#if CONFIG_FM
+static uint8_t analog_config[11] = { 0x80 };
+#endif
 // Mode-entry squelch thresholds from the board's audio setup, not microphone gain controls.
 static const uint8_t sq_digital[12] = { 0,0,0,0x3C, 0x0F,0x3C,0x0A,0x8C, 0x0F,0x3C,0x0A,0x8C };
 static const uint8_t sq_analog[12] = { 0,0,0,0x3C, 0x0F,0x3C,0x0A,0x8C, 0xFF,0xFF,0xFF,0xFF };
@@ -130,6 +127,9 @@ static inline void codec_audio_from_cal(void)
 	d878uv2_cal_audio_t a;
 
 	d878uv2_cal_audio(&a);
+#if CONFIG_FM
+	for (unsigned i = 0; i < sizeof(a.analog); i++) analog_config[1 + i] = a.analog[i];
+#endif
 	for (unsigned i = 0; i < 4; i++) misc_gain[4 + i] = a.misc[i];
 	misc_gain[9] = a.misc[4];
 	codec_writes[CODEC_AT_LOL].value = a.lol;

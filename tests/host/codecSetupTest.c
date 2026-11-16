@@ -10,7 +10,7 @@
 void AUDIO_CAL_READ(AUDIO_CAL_TYPE *a)
 {
 	*a = (AUDIO_CAL_TYPE){ .lol=4, .lor=8, .mic_r=12, .spk_gain=1350, .mic_gain=2000,
-		.misc={ 0x80,0,0x80,0,0 } };
+		.misc={ 0x80,0,0x80,0,0 }, .analog={ 0x12,0x34,0x56,0x78,0x9A,0xBC,0xDE,0xF0,0x01,0x23 } };
 }
 static uint8_t response[8];
 static uint16_t left;
@@ -18,6 +18,7 @@ static uint32_t now;
 static uint8_t expected_mic_gain = 0x20;
 static bool mic_routed, mic_unmuted, mic_digital_unity, mic_agc, mic_ceiling, reject_route;
 static bool analog_test, modulation_sent;
+static const uint8_t expected_analog[] = { 0x80,0x12,0x34,0x56,0x78,0x9A,0xBC,0xDE,0xF0,0x01,0x23 };
 static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 {
 	(void)ctx;
@@ -50,6 +51,9 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 				modulation_sent = true;
 			}
 			if (analog_test && id == SCT_F_WORK_MODE) assert(modulation_sent);
+			if (analog_test && id == SCT_F_ANALOG_CONFIG) {
+				assert(p[4] == 12 && memcmp(p + 7, expected_analog, sizeof(expected_analog)) == 0);
+			}
 			assert(id != SCT_F_CODEC_SELECT); // keep the resident codec selection while applying the board gains
 			if (id == 0x68) {
 				assert(n == 10 && p[7] == 0x07 && p[8] == 0xD0);
@@ -103,6 +107,7 @@ int main(void)
 	sct_analog_init(&a, write_bus, NULL);
 	a.setup_fields = analog_setup;
 	a.setup_count = sizeof(analog_setup) / sizeof(analog_setup[0]);
+	a.config = analog_config;
 	sct_analog_request(&a, true, false, true);
 	for (unsigned i = 0; i < 32 && !a.ready; i++) {
 		sct_analog_poll(&a, now++);
