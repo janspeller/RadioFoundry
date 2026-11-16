@@ -8,6 +8,12 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Owner follow-up: the codec-selection image appears to improve audio. This is a subjective improvement,
+not confirmation of normal microphone level or intelligible DMR voice. The owner requested continued
+offline dirty-worker extraction of the resident baseband image overnight, prioritizing the TI codec
+initialization table and FM/DMR microphone routing. Results belong in the dirty specification as prose;
+no connected-radio work or additional gain changes are part of that extraction task.
+
 Firmware-only follow-up, November 17: the dirty agent traced the complete normal startup and withdrew its
 previous no-caller claim. Stock sends and acknowledges `CODEC_SELECT = 1` before selecting the vocoder.
 The board profile now restores that command. A host regression requires its successful ACK before any
@@ -17,7 +23,7 @@ scope nor logic analyzer; continue stock-firmware analysis without requiring cap
 checking remaining microphone initialization. Do not repeat gain changes without evidence.
 
 
-Latest result: FM on `4dff8084` still produces white noise and quiet speech. All four mic writes and the
+Previous result: FM on `4dff8084` still produces white noise and quiet speech. All four mic writes and the
 saved analog-gain packet are acknowledged, with PGA=ceiling=32 and no errors/faults/timeouts. The new dirty
 audit explicitly withdraws any claim that the complete physical microphone path was proven. Codec-bypass
 encoding and command builders match; actual capsule/input continuity, bias/ADC state, I2S samples and
