@@ -446,10 +446,10 @@ register as constants in a literal pool and the value either a constant or an ar
 codec-bypass packets" the family page records. One more call site takes the three bytes from a host command, so the
 PC tool can write any codec register.
 
-**No `CODEC_SELECT`, `SET_I2C_ADDRESS` or `I2C_OPERATION` field is sent to the codec in this image.** No I2C device
-address appears as a constant anywhere in the baseband driver. Codec access is the bypass packet above and nothing
-else, which is a correction to the family page's note (hardware-anytone.md 2.5) for this firmware version
-(unverified).
+Normal startup sends TYPE 0 `CODEC_SELECT` (field 0x2D), value 1, after the boot-block ACK and waits for
+zero status before vocoder selection. The earlier claim that this sender had no reachable caller was wrong.
+The MCU then adjusts codec registers through the bypass packets above. No live `SET_I2C_ADDRESS` sequence
+has been established.
 
 **4.6.2 The codec registers the firmware writes.** Register names are the TLV320AIC3204 datasheet's (SLOS602).
 
@@ -825,11 +825,13 @@ with 0x34 = 0x80 and then writes the left PGA gain. The accessory-state latch af
 a microphone route controlled by that latch was not established. No missing reachable codec write has yet
 been shown to explain the transmit speech failure.
 
-The stock CODEC_SELECT sender also has no established direct callers or stored function pointers. No
-alternative live SET_I2C_ADDRESS initialization was established. The next bring-up comparison omits the
-explicit CODEC_SELECT = 1 command that RadioFoundry previously sent, while retaining VOCODER_SEL, calibrated
-gains and codec-bypass writes. This tests whether reselection disturbs resident codec setup. It does not prove
-the resident default, a side effect of reselection, or a repair for silent speech.
+A complete normal-startup reachability audit supersedes the earlier codec-selection comparison. Stock sends
+`CODEC_SELECT = 1` and waits for zero status. It then sends TYPE-5 `DMR_CALL_OPTION`, selects vocoder 4
+(AMBE+2), waits for its status, and selects vocoder 16 (Analog), before the normal configuration flush.
+The call options configure call/squelch/reporting behavior; they are not evidence of codec/I2S wiring.
+RadioFoundry restores the explicit TI codec selection before its vocoder and gain setup. Its mode engine
+selects analog on entering FM. This corrects a proven startup omission; a microphone repair remains untested.
+The physical converter state and the effect of the remaining startup-order differences are not established.
 
 Stock register 0x48 thresholds differ between bandwidth branches. At saved squelch level 5, the branch
 writing RF register 0x30 = 0x4006/0x4046 uses high threshold 42, and the 0x7006/0x7046 branch uses 52.
@@ -1332,7 +1334,7 @@ The shared protocol sequence is described in [modem-sct.md](modem-sct.md).
 
 | Stage | Current RadioFoundry path | Audit result |
 | --- | --- | --- |
-| Boot and common audio | Boot block, vocoder 4, calibrated DEMOD_GAIN and digital mic/speaker gains, then codec input/output trims | Sources match the identified calibration. Explicit CODEC_SELECT and additional MCU ADC/MICBIAS setup are not established stock requirements |
+| Boot and common audio | Boot block, vocoder 4, calibrated DEMOD_GAIN and digital mic/speaker gains, then codec input/output trims | Sources match the identified calibration. Explicit TI CODEC_SELECT is a proven stock startup step; additional MCU ADC/MICBIAS setup is not established |
 | Return from FM | Drain analog ownership and select vocoder 4 before digital readiness | Analog gain calibration belongs to the analog engine; do not copy field 0x3C into ordinary DMR on the strength of the +40 branch |
 | Digital start | Processing mode 2, report fields, channel CC/own ID/call options, board start fields, RX work mode and slot selection; microphone start writes and band MOD_GAIN follow | Shared layer handles signaling; a board provides wiring and calibration. A call recognized through dummy-load leakage is not full validation of this path |
 | Receive | RF band enables and tuned frequency, CARRIER_READY, sync/slot/LC reports, native modem voice playback and HPL/speaker gating | The codec's receive side working does not prove microphone capture. Slot timing and codec delay remain separate RF measurements |

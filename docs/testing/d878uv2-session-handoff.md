@@ -8,12 +8,20 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Firmware-only follow-up, November 17: the dirty agent traced the complete normal startup and withdrew its
+previous no-caller claim. Stock sends and acknowledges `CODEC_SELECT = 1` before selecting the vocoder.
+The board profile now restores that command. A host regression requires its successful ACK before any
+vocoder/gain writes and proves a rejected selection stops audio setup. The old image fails this regression.
+This is a proven missing startup command, not proof that the microphone is repaired. The owner has neither
+scope nor logic analyzer; continue stock-firmware analysis without requiring captures. The dirty agent is
+checking remaining microphone initialization. Do not repeat gain changes without evidence.
+
+
 Latest result: FM on `4dff8084` still produces white noise and quiet speech. All four mic writes and the
 saved analog-gain packet are acknowledged, with PGA=ceiling=32 and no errors/faults/timeouts. The new dirty
 audit explicitly withdraws any claim that the complete physical microphone path was proven. Codec-bypass
 encoding and command builders match; actual capsule/input continuity, bias/ADC state, I2S samples and
-modulation-output continuity remain unknown. Require real codec readback or passive stock-versus-clean
-I2C/I2S capture before further gain/routing patches. See the hardware page's physical-path boundary section.
+modulation-output continuity remain unknown. Further gain/routing changes need new evidence from firmware analysis or real codec readback. See the hardware page's physical-path boundary section.
 
 Current running image: **`4dff8084`**, verified through USB after the owner's manual update from
 `build/d878uv2-mic-prepare/rfoundry_d878uv2_codec.bin`. Immediately after boot on DMR simplex 433.450 MHz,
@@ -233,7 +241,8 @@ capture. There is still no actual codec readback, so neither physical input wiri
 After reconnection the agent disabled monitor/loopback, sent the normal 0x34 = 0x80 input selection, and
 confirmed volume.src=knob with override=-1. No RF was requested.
 
-A controlled boot comparison is prepared: omit CODEC_SELECT = 1, which has no established caller in
+Historical comparison, now superseded by the November 17 reachability correction: omit CODEC_SELECT = 1,
+which the earlier incomplete audit reported had no established caller in
 the stock MCU image. Leave vocoder selection, gains and bypass writes intact. This is a candidate experiment,
 not a proven microphone fix. The previous image remains the hardware baseline. No squelch tuning is included.
 The comparison artifact is `build/d878uv2-resident-codec/rfoundry_d878uv2_codec.bin`; the unmodified hardware

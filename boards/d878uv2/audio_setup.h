@@ -144,9 +144,8 @@ static inline void codec_audio_from_cal(void)
 }
 
 static const sct_voice_t voice = {
-	// Stock reaches the codec through bypass writes without an explicit CODEC_SELECT. Preserve the resident
-	// application's selection for this bring-up comparison; converter state still needs hardware verification.
-	.codec = 0,
+	// Normal startup selects the TI codec and waits for its ACK before selecting the vocoder or trimming gains.
+	.codec = 1,
 	.vocoder = 4,
 	.fields = voice_fields,
 	.field_count = sizeof(voice_fields) / sizeof(voice_fields[0]),

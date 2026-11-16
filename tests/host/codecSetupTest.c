@@ -17,7 +17,7 @@ static uint16_t left;
 static uint32_t now;
 static uint8_t expected_mic_gain = 0x20;
 static bool mic_routed, mic_unmuted, mic_digital_unity, mic_agc, mic_ceiling, reject_route;
-static bool analog_test, modulation_sent;
+static bool analog_test, modulation_sent, codec_selected, reject_select;
 static const uint8_t expected_analog[] = { 0x80,0x12,0x34,0x56,0x78,0x9A,0xBC,0xDE,0xF0,0x01,0x23 };
 static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 {
@@ -26,6 +26,7 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 	if (n != SCT_BOOT_BLOCK_BYTES) {
 		type = p[5]; status = 0;
 		if (type == 0x40) {
+			assert(codec_selected);
 			assert(n == 12 && p[4] == 6);
 			if (p[7] == 1 && p[8] == 52) {
 				assert(p[9] == 0x80); // IN1L must be connected to the left MICPGA
@@ -54,7 +55,13 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 			if (analog_test && id == SCT_F_ANALOG_CONFIG) {
 				assert(p[4] == 12 && memcmp(p + 7, expected_analog, sizeof(expected_analog)) == 0);
 			}
-			assert(id != SCT_F_CODEC_SELECT); // keep the resident codec selection while applying the board gains
+			if (id == SCT_F_CODEC_SELECT) {
+				assert(!codec_selected && !mic_routed && !mic_digital_unity);
+				assert(type == 0 && n == 8 && p[4] == 2 && p[7] == 1);
+				if (reject_select) status = 7;
+			} else {
+				assert(codec_selected);
+			}
 			if (id == 0x68) {
 				assert(n == 10 && p[7] == 0x07 && p[8] == 0xD0);
 				mic_digital_unity = true;
@@ -70,11 +77,12 @@ static uint16_t read_bus(uint8_t *p, uint16_t cap, void *ctx)
 	(void)ctx;
 	uint16_t n = left < cap ? left : cap;
 	memcpy(p, response + sizeof(response) - left, n); left -= n;
+	if (!left && response[6] == SCT_F_CODEC_SELECT && response[7] == 0) codec_selected = true;
 	return n;
 }
 static void delay(uint32_t ms) { now += ms; }
 static uint32_t clock_ms(void) { return now; }
-static void reset(void *ctx) { (void)ctx; left = 0; mic_routed = mic_unmuted = mic_digital_unity = mic_agc = mic_ceiling = false; }
+static void reset(void *ctx) { (void)ctx; left = 0; codec_selected = false; mic_routed = mic_unmuted = mic_digital_unity = mic_agc = mic_ceiling = false; }
 int main(void)
 {
 	static uint8_t block[SCT_BOOT_BLOCK_BYTES];
@@ -101,6 +109,12 @@ int main(void)
 	assert(mic_routed && mic_unmuted && mic_agc && mic_ceiling);
 	reject_route = true;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_NO_VOICE);
+	reject_route = false;
+	reject_select = true;
+	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_NO_VOICE);
+	assert(!codec_selected && !mic_routed && !mic_digital_unity);
+	reject_select = false;
+	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
 	// Exercise the real mode setup: a ready receiver must already have sent its modulation calibration.
 	analog_test = true;
 	sct_analog_t a;
