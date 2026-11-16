@@ -1402,7 +1402,13 @@ established. Capsule-to-IN1L continuity, actual bias/ADC mute, I2S microphone sa
 continuity remain unproven. Earlier wording implying that entire physical chain was confirmed was too strong.
 The resident modem application's converter configuration is not established by the MCU trace.
 
-The missing evidence is verified codec readback or a passive stock-versus-RadioFoundry I2C/I2S capture
-with a known microphone stimulus. If ADC samples are absent, measure capsule bias/audio and the codec input;
-if samples are present, follow the DAC modulation output. No further gain/routing patch is justified by
-this audit. The supplied owner folder has no schematic; public board photos do not establish these nets.
+The subsequent full startup trace established a missing `CODEC_SELECT = 1`; this is restored in
+`8a566a6a`. A re-audit of the MCU codec-write builders found no additional normal ADC, bias, digital-mute,
+clock or input-routing writes. The remaining initialization table and mode-dependent sample routing are
+inside the undecoded resident BA payload. The trace does not establish whether codec selection resets or
+reinitializes those registers. No further register patch is supported by this evidence.
+
+Continue firmware-only analysis of that resident initialization when possible. Codec readback or passive
+I2C/I2S capture would provide independent evidence, but the owner has no scope or logic analyzer; capture
+is not a prerequisite for further firmware analysis. The supplied owner folder has no schematic; public
+board photos do not establish capsule continuity. The new image has not been flashed or speech-tested.
