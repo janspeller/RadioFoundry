@@ -57,6 +57,17 @@ The comparison artifact is `build/d878uv2-resident-codec/rfoundry_d878uv2_codec.
 baseline is preserved at `build/d878uv2-mode-audio-e3acd148/rfoundry_d878uv2_codec.bin`. Codec-profile and shared
 SCT tests pass (636 shared checks), as do the normal firmware build, generic check and documentation links.
 
+The owner flashed the comparison; USB version confirms `e16d7eed`. The modem booted successfully and FM
+setup completed ready=1, error=0, timeouts=0. Codec register snapshots remain -1. In the normal-input local
+loopback on this image, the owner reported a feedback loop after unplugging the cable and raising the knob.
+This is consistent with an acoustic microphone path, but no intelligible speech was confirmed and internal
+oscillation has not been excluded. Earlier bring-up images also produced squealing, so this observation alone
+does not establish an improvement caused by omitting CODEC_SELECT.
+
+On reconnection the agent disabled monitor and loopback, sent the normal IN1L selection, and restored knob
+control. Readback showed idle, monitor=0, loopback=0, ready=1, error=0, TX=0 and no transmission since boot.
+A brief owner-operated 70 cm FM voice check in both directions is pending. No agent RF was requested.
+
 ## Resume here
 
 Worktree `/var/home/jan/gitrepos/RadioFoundry/.claude/worktrees/d878uv2`, branch `d878uv2-bringup`, HEAD
