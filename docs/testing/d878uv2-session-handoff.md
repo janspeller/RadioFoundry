@@ -14,10 +14,28 @@ startup store update is not the twelve-byte wire length. Digital setup uses the 
 control-field classification; analog setup now accepts acknowledged board control fields. Per-call signaling
 is retained. Existing ANALOG_CONFIG remains nominal rather than claimed stock RAM reconstruction.
 
-Targeted host tests, four build configurations and stack checks pass. Hardware speech remains unverified.
+Targeted host tests, four build configurations and stack checks pass. The owner flashed `e3acd148` and
+reports no improvement in transmit speech. Do not describe 0x6B/0x6C as a proven microphone fix.
 This candidate includes the earlier ramp; first test is 70 cm. Further dirty-side VHF/table findings need a
 separate review. The sections below preserve the original handoff and hardware observations; use git log for
 the latest implementation commit.
+
+Read-only follow-up confirmed `e3acd148` on the radio. The FM engine reported zero timeouts and four completed
+microphone writes. All codec boot-snapshot registers still reported -1, so successful command completion does
+not establish converter, routing or output-power state. The owner also reports SQ5 opening on noise. The
+shared software threshold is 52 noise counts at SQ5; the board currently supplies raw noise without bandwidth
+normalization. Stock squelch uses bandwidth-dependent thresholds; verify the level mapping before changing it.
+
+On FM 433.500 MHz, 12.5 kHz, SQ5, two read-only samples totaling 500 polls stayed idle with noise 56..63.
+The intermittent false opening was not captured. RF register 0x48 was 0x19B1 and 0x49 was 0x0C15.
+The dirty-side audit corrected an earlier swapped bandwidth label, but did not establish a mapping between
+the stock hardware thresholds and the software noise scale. No noise-offset change is justified by that audit.
+
+The owner-approved local microphone loopback reached ready with no command error, TX false and loopback true.
+At fixed volume 1 the owner unplugged the cable to hear the internal speaker and heard faint white noise;
+speech was too quiet to distinguish. This is inconclusive. USB removal prevented the cleanup commands, so
+loopback and fixed volume must not be assumed restored. Reconnect and restore knob control before a repeat;
+changing channel cancels loopback. No RF was initiated by the agent.
 
 ## Resume here
 

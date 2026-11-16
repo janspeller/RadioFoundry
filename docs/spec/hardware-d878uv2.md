@@ -818,6 +818,19 @@ This is a static audit of the V4.00 MCU payload identified in section 1.2. No ra
 Observed command bytes below have high confidence; their electrical effects remain unverified. The codec's
 resident baseband-controlled initialization is not present as an MCU register-write sequence in this image.
 
+The follow-up reachability audit found no established callers of the codec page 1 register 0x09 power
+wrappers. Their 0x20, 0x0C and 0x2C payloads are not evidence for adding a power write at PTT. Likewise, no
+stock producer of TYPE 0x60 codec readback was established. The normal microphone-enable path selects IN1L
+with 0x34 = 0x80 and then writes the left PGA gain. The accessory-state latch affects speaker gain selection;
+a microphone route controlled by that latch was not established. No missing reachable codec write has yet
+been shown to explain the transmit speech failure.
+
+Stock register 0x48 thresholds differ between bandwidth branches. At saved squelch level 5, the branch
+writing RF register 0x30 = 0x4006/0x4046 uses high threshold 42, and the 0x7006/0x7046 branch uses 52.
+Both low thresholds are three counts smaller. This does not establish a conversion from hardware detector
+thresholds to the low byte of register 0x1B used by RadioFoundry's software squelch. Do not derive a software
+noise offset from these constants without verifying that conversion.
+
 - The microphone-enable operation writes codec page 1 register 0x34 = 0x80, then page 1 register 0x3B =
   the configured microphone gain. Its disable operation writes register 0x34 = 0x00 and leaves register
   0x3B alone. The image has callers of both enable and disable through its audio-control dispatcher.

@@ -14,7 +14,7 @@ void AUDIO_CAL_READ(AUDIO_CAL_TYPE *a)
 static uint8_t response[8];
 static uint16_t left;
 static uint32_t now;
-static uint8_t expected_mic_gain = D878UV2_MIC_GAIN;
+static uint8_t expected_mic_gain = 0x20;
 static bool mic_routed, mic_unmuted, mic_digital_unity, reject_route;
 static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 {
