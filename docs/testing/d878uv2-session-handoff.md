@@ -49,8 +49,17 @@ these are relative measurements, not calibrated absolute frequencies. Received l
 but dummy-load leakage and coupling do not measure transmitter power. Frequency alignment now needs a
 controlled comparison before further microphone gain changes. A temporary VFO offset can test this without
 a flash; preserve the existing VFO frequency, mode, tones and channel selection, and restore them afterward.
-This comparison has not yet been performed. The owner has been asked to power the UV878 back on and
-reconnect its programming cable; the reference radio should be unkeyed and off.
+The temporary VFO comparison is now in progress. Original channel and VFO views are saved in
+`/tmp/rfoundry-offset-original-channel.json` and `/tmp/rfoundry-offset-original-vfo.json`. Original selection
+was zone 3, position 2, FM simplex 433.500 MHz, effective L2; the VFO was already FM simplex 433.500 MHz,
+12.5 kHz, L1, no tones. Only its frequency was changed, to 433,497,812 Hz. Restore the VFO to 433,500,000 Hz
+and return to channel mode after the comparison. No flash or saved factory-calibration change was made.
+
+The owner keyed the offset VFO into the dummy load. Under the same receiver settings, 66 accepted frames
+in `/tmp/rfoundry-dut-offset-carrier.jsonl` have median carrier 433,499,996.3 Hz: 36.4 Hz below the reference,
+versus 2,169.5 Hz above it before. No clipping was observed in those frames. This confirms that the tuning
+offset aligns the carrier. A normal-antenna FM voice comparison has been requested; its outcome is pending.
+The NESDR interface driver was restored after capture. All PTT operation was manual by the owner.
 
 While waiting for the receiver, a separate stock mismatch was corrected in source: both RF-control DAC output
 buffers must be disabled before enable, with triggers/waves/DMA off. The saved calibration counts remain
