@@ -582,8 +582,53 @@ static void volume(uint8_t percent)
 #endif
 
 #if CONFIG_DIAG
+// chip 0 is the AT1846S, read-only, and readable **while keyed** on purpose: what the chip is doing during a
+// transmission is exactly what a band that will not transmit needs to show. Nothing here writes the chip
 int d878uv2_chip_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap)
 {
+	if (chip == 0u) {
+		uint16_t v = 0;
+
+		if (cap < 2u || page != 0u || !at1846s_read(&rf, 0, reg, &v)) {
+			return -1;
+		}
+		out[0] = (uint8_t)(v >> 8);
+		out[1] = (uint8_t)v;
+		return 2;
+	}
+	// chip 1: what the board itself decided for this frequency, which no register shows
+	if (chip == 1u) {
+		uint16_t duty = 0;
+
+		if (cap < 2u) {
+			return -1;
+		}
+		switch (reg) {
+		case 0:				// the RF chip's GPIO shadow: the band and front-end switching
+			duty = gpio_shadow;
+			break;
+		case 1:				// the tuning PWM's duty for the frequency last tuned
+			if (!d878uv2_cal_tune_duty(rx_hz, &duty)) {
+				duty = 0xFFFFu;	// no calibration: the pin is left alone
+			}
+			break;
+		case 2:				// the transmit drive the calibration gives for this frequency
+			{
+				uint8_t drive = 0;
+
+				duty = d878uv2_cal_tx_drive(0, rx_hz, &drive) ? drive : 0xFFFFu;
+			}
+			break;
+		case 3:				// the modulator gain sent for this frequency
+			duty = d878uv2_cal_mod_gain(rx_hz);
+			break;
+		default:
+			return -1;
+		}
+		out[0] = (uint8_t)(duty >> 8);
+		out[1] = (uint8_t)duty;
+		return 2;
+	}
 	if (keyed) return -1;
 	return d878uv2_cal_bytes(chip, page, reg, out, cap);
 }
