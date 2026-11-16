@@ -20,3 +20,7 @@ the offset within it. Reads crossing block boundaries are split and each block i
 Address overflow and reads beyond device size are refused. The board serializes raw device access.
 
 See [nand-blocks.md](nand-blocks.md) for the separate writable block layer used by RadioFoundry storage.
+
+`nand_remap_address` resolves a single address without reading it. A board may use this for an explicitly
+flagged diagnostic read that reports ECC failure alongside returned bytes. Such bytes do not become valid
+calibration merely because an address resolved; normal reads continue to use the checked raw reader.

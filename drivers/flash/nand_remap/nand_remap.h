@@ -20,5 +20,7 @@ typedef struct {
 bool nand_remap_load(nand_remap_t *map,
 	bool (*read)(uint32_t, void *, uint32_t, void *), void *ctx,
 	uint16_t blocks, uint16_t replacement_first, uint16_t replacement_end);
+// Resolve one address without issuing a read (also for explicitly flagged diagnostic reads).
+bool nand_remap_address(const nand_remap_t *map, uint32_t logical, uint32_t *physical);
 bool nand_remap_read(const nand_remap_t *map, uint32_t addr, void *out, uint32_t len);
 #endif

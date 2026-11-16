@@ -45,11 +45,16 @@ int main(void)
 	assert(load(&m) && m.count == 0);
 	assert(nand_remap_read(&m, 0x2F60000, out, 1));
 	assert(addresses[0] == 0x2F60000);
+	uint32_t resolved;
+	assert(nand_remap_address(&m, 0x2F60000, &resolved) && resolved == 0x2F60000);
+	assert(!nand_remap_address(&m, 0x10000000, &resolved));
+	assert(!nand_remap_address(&m, 0, NULL));
 	uint8_t *p = slot(1, 2);
 	pair(p, 0, 0x17B, 0x180); pair(p, 1, 0x17C, 0x181);
 	assert(load(&m) && m.count == 2);
 	reads = 0;
 	assert(nand_remap_read(&m, 0x2F7FFFE, out, 4));
+	assert(nand_remap_address(&m, 0x2F60000, &resolved) && resolved == 0x3000000);
 	assert(reads == 2 && addresses[0] == 0x301FFFE && addresses[1] == 0x3020000);
 	assert(lengths[0] == 2 && lengths[1] == 2);
 	assert(out[0] == 0x80 && out[2] == 0x81);

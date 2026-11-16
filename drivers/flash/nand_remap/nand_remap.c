@@ -40,19 +40,28 @@ bool nand_remap_load(nand_remap_t *m,
 	return true;
 }
 
+bool nand_remap_address(const nand_remap_t *m, uint32_t addr, uint32_t *physical)
+{
+	if (!m->ready || physical == NULL || addr >= (uint32_t)m->blocks * NAND_REMAP_BLOCK) return false;
+	uint32_t block = addr / NAND_REMAP_BLOCK;
+	for (unsigned i = 0; i < m->count; i++) {
+		if (m->source[i] == block) { block = m->target[i]; break; }
+	}
+	*physical = block * NAND_REMAP_BLOCK + addr % NAND_REMAP_BLOCK;
+	return true;
+}
+
 bool nand_remap_read(const nand_remap_t *m, uint32_t addr, void *out, uint32_t len)
 {
 	uint32_t size = (uint32_t)m->blocks * NAND_REMAP_BLOCK;
 	if (!m->ready || out == NULL || addr > size || len > size - addr) return false;
 	uint8_t *p = out;
 	while (len != 0) {
-		uint32_t block = addr / NAND_REMAP_BLOCK, offset = addr % NAND_REMAP_BLOCK;
-		uint32_t n = NAND_REMAP_BLOCK - offset;
+		uint32_t physical;
+		if (!nand_remap_address(m, addr, &physical)) return false;
+		uint32_t n = NAND_REMAP_BLOCK - addr % NAND_REMAP_BLOCK;
 		if (n > len) n = len;
-		for (unsigned i = 0; i < m->count; i++) {
-			if (m->source[i] == block) { block = m->target[i]; break; }
-		}
-		if (!m->read(block * NAND_REMAP_BLOCK + offset, p, n, m->ctx)) return false;
+		if (!m->read(physical, p, n, m->ctx)) return false;
 		addr += n; p += n; len -= n;
 	}
 	return true;
