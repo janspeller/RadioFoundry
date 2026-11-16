@@ -161,6 +161,33 @@ uint16_t d878uv2_rf_gpio(void)
 #define TX_DRIVE_UNCALIBRATED	0x20u
 
 static bool control_initialized;
+// The frequency-dependent tuning voltage on PA6: TIMER2 channel 0's PWM, period 4095, the duty interpolated from
+// the radio's calibration at every frequency change (docs/spec/hardware-d878uv2.md 5.1.2). It tracks the VCO or
+// the front end, so leaving it undriven detunes one band more than the other - which is what a radio that
+// transmits on one band and not the other looks like
+#define TUNE_TIMER		TIMER_BASE(3u)		// TIMER2 in the part's numbering: PA6 is its channel 0
+static bool tune_initialized;
+
+static void tune_pwm(uint32_t hz)
+{
+	uint16_t duty;
+
+	if (!d878uv2_cal_tune_duty(hz, &duty)) {
+		return;
+	}
+	if (!tune_initialized) {
+		mcu_tim_clock_on(3u);
+		TIMER_PSC(TUNE_TIMER) = 0;
+		TIMER_CAR(TUNE_TIMER) = 4095u;
+		TIMER_CHCTL0(TUNE_TIMER) = TIMER_CHCTL0_CH0_PWM1 | TIMER_CHCTL0_CH0_PRELOAD;
+		TIMER_CHCTL2(TUNE_TIMER) |= TIMER_CHCTL2_CH0EN;
+		TIMER_CTL0(TUNE_TIMER) |= TIMER_CTL0_CEN;
+		mcu_pin_af(GPIOA, MCU_PIN(6), 0, false);
+		tune_initialized = true;
+	}
+	TIMER_CH0CV(TUNE_TIMER) = duty;
+}
+
 static void control_dac(void)
 {
 	uint16_t value;
@@ -448,6 +475,7 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 #if CONFIG_DMR
 	d878uv2_modem_set_deviation(hz);	// this radio's own deviation, before the carrier goes up
 #endif
+	tune_pwm(hz);
 	front_end_tx(hz);
 	ok &= at1846s_set_state(&rf, mode_now == RADIO_MODE_DMR ? AT1846S_STATE_DMR_TX : AT1846S_STATE_FM_TX);
 #if CONFIG_FM

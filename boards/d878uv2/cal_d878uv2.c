@@ -92,6 +92,8 @@ static bool table_plausible(const uint8_t *t, unsigned n)
 	return ff != n && zero != n;
 }
 
+static void tune_build(void);	// defined below, called as the block is loaded
+
 bool d878uv2_cal_load(void)
 {
 	loaded = false;
@@ -121,6 +123,7 @@ bool d878uv2_cal_load(void)
 			control_valid = true;
 		}
 	}
+	tune_build();
 	for (unsigned l = 0; l < CAL_LEVELS; l++) {
 		if (!cal_read(base + CAL_UHF_0 + l * CAL_UHF_STRIDE, uhf[l], CAL_UHF_LEN) ||
 		    !cal_read(base + CAL_VHF_0 + l * CAL_VHF_STRIDE, vhf[l], CAL_VHF_LEN)) {
@@ -207,6 +210,99 @@ void d878uv2_cal_audio(d878uv2_cal_audio_t *a)
 		a->mic_gain = mic;
 	}
 	a->from_radio = true;
+}
+
+// The PA6 tuning voltage (docs/spec/hardware-d878uv2.md 5.1.2). Each band record carries three 12-bit PWM
+// duties - at the bottom, middle and top of its band - and the firmware expands them into a straight line
+// between the points, then interpolates inside it at every frequency change. The duty is NOT one constant
+// across a band, and a port that never drives PA6 leaves the VCO or front-end untuned.
+#define CAL_TUNE_LOW		0x0Au	// u16 little-endian in the band record
+#define CAL_TUNE_MID		0x0Cu
+#define CAL_TUNE_HIGH		0x0Eu
+#define TUNE_UHF_POINTS		13u	// 400..520 MHz on a 10 MHz grid, the last point 0x1000
+#define TUNE_VHF_POINTS		39u	// 136..174 MHz on a 1 MHz grid
+#define TUNE_UHF_BASE_HZ	400000000u
+#define TUNE_VHF_BASE_HZ	136000000u
+
+static uint16_t tune_uhf[TUNE_UHF_POINTS];
+static uint16_t tune_vhf[TUNE_VHF_POINTS];
+static bool tune_ready;
+
+static uint16_t band_word(uint32_t band_rec, uint8_t off)
+{
+	uint8_t w[2];
+
+	if (!cal_read(cal_base + band_rec + off, w, sizeof(w))) {
+		return 0;
+	}
+	return (uint16_t)(w[0] | ((uint16_t)w[1] << 8));	// little-endian in the record
+}
+
+// A straight line from a to b across n steps, written into t[0..n]
+static void tune_span(uint16_t *t, uint16_t a, uint16_t b, unsigned n)
+{
+	for (unsigned i = 0; i <= n; i++) {
+		t[i] = (uint16_t)((int32_t)a + ((int32_t)b - (int32_t)a) * (int32_t)i / (int32_t)n);
+	}
+}
+
+static void tune_build(void)
+{
+	uint16_t lo = band_word(CAL_BAND_UHF, CAL_TUNE_LOW);
+	uint16_t mid = band_word(CAL_BAND_UHF, CAL_TUNE_MID);
+	uint16_t hi = band_word(CAL_BAND_UHF, CAL_TUNE_HIGH);
+
+	tune_ready = false;
+	if (lo == 0u || mid == 0u || hi == 0u || lo > 4095u || mid > 4095u || hi > 4095u) {
+		return;
+	}
+	tune_span(tune_uhf, lo, mid, 4);		// point 0 low, point 4 mid
+	tune_span(&tune_uhf[4], mid, hi, 4);		// point 8 high
+	tune_span(&tune_uhf[8], hi, 0x1000u > 4095u ? 4095u : 0x1000u, 4);	// point 12
+
+	lo = band_word(CAL_BAND_VHF, CAL_TUNE_LOW);
+	mid = band_word(CAL_BAND_VHF, CAL_TUNE_MID);
+	hi = band_word(CAL_BAND_VHF, CAL_TUNE_HIGH);
+	if (lo == 0u || mid == 0u || hi == 0u || lo > 4095u || mid > 4095u || hi > 4095u) {
+		return;
+	}
+	tune_span(tune_vhf, lo, mid, 19);		// point 0 low, point 0x13 mid
+	tune_span(&tune_vhf[19], mid, hi, 19);		// point 0x26 high
+	tune_ready = true;
+}
+
+// The duty for a frequency, interpolated inside its band's table in tenths of a step
+bool d878uv2_cal_tune_duty(uint32_t hz, uint16_t *duty)
+{
+	if (!tune_ready) {
+		return false;
+	}
+	const uint16_t *t;
+	uint32_t idx, frac, last;
+
+	if (hz >= TUNE_UHF_BASE_HZ) {
+		uint32_t mhz = (hz - TUNE_UHF_BASE_HZ) / 1000000u;
+
+		t = tune_uhf;
+		last = TUNE_UHF_POINTS - 1u;
+		idx = mhz / 10u;
+		frac = mhz % 10u;
+	} else if (hz >= TUNE_VHF_BASE_HZ) {
+		t = tune_vhf;
+		last = TUNE_VHF_POINTS - 1u;
+		idx = (hz - TUNE_VHF_BASE_HZ) / 1000000u;
+		frac = ((hz - TUNE_VHF_BASE_HZ) / 100000u) % 10u;
+	} else {
+		return false;
+	}
+	if (idx >= last) {
+		*duty = t[last];
+		return true;
+	}
+	int32_t a = t[idx], b = t[idx + 1u];
+
+	*duty = (uint16_t)(a + (b - a) * (int32_t)frac / 10);
+	return true;
 }
 
 bool d878uv2_cal_ready(void)

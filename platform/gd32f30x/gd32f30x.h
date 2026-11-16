@@ -263,6 +263,8 @@ typedef struct {
 #define TIMER_CNT(b)		GD32_REG((b) + 0x24u)
 #define TIMER_PSC(b)		GD32_REG((b) + 0x28u)
 #define TIMER_CAR(b)		GD32_REG((b) + 0x2Cu)
+#define TIMER_CHCTL0(b)		GD32_REG((b) + 0x18u)
+#define TIMER_CH0CV(b)		GD32_REG((b) + 0x34u)
 #define TIMER_CH3CV(b)		GD32_REG((b) + 0x40u)
 #define TIMER_CTL0_CEN		(1u << 0)
 #define TIMER_CTL0_UPS		(1u << 2)	// only an overflow raises the update interrupt, not SWEVG
@@ -271,6 +273,9 @@ typedef struct {
 #define TIMER_CHCTL1_CH3_PWM1	(7u << 12)	// CH3 compare mode 111: PWM mode 1
 #define TIMER_CHCTL1_CH3_PRELOAD	(1u << 11)
 #define TIMER_CHCTL2_CH3EN	(1u << 12)
+#define TIMER_CHCTL0_CH0_PWM1	(6u << 4)	// CH0 compare mode 110: PWM mode 1
+#define TIMER_CHCTL0_CH0_PRELOAD	(1u << 3)
+#define TIMER_CHCTL2_CH0EN	(1u << 0)
 #define TIMER_DMAINTEN_UPIE	(1u << 0)
 #define TIMER_SWEVG_UPG		(1u << 0)	// loads PSC and CAR
 

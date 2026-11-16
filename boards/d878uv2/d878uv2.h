@@ -132,6 +132,8 @@ typedef struct {
 	bool from_radio;
 } d878uv2_cal_audio_t;
 void d878uv2_cal_audio(d878uv2_cal_audio_t *a);
+// The PA6 tuning voltage's duty for a frequency (hardware-d878uv2.md 5.1.2)
+bool d878uv2_cal_tune_duty(uint32_t hz, uint16_t *duty);
 
 // LCD backlight, 0..100 %: TIM8 channel 2's complementary output on PB0 (power_d878uv2.c, hardware-d878uv2.md 4.3)
 void d878uv2_backlight(uint8_t percent);
