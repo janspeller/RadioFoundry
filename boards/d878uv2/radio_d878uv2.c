@@ -455,6 +455,19 @@ static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 	return ok;
 }
 
+#if CONFIG_DIAG
+// What the transmitter looked like during the last transmission. Two clients cannot share the one serial port,
+// so the state that matters - the chip while it is keyed - has to be captured here and read back afterwards.
+// The frequency registers 0x29 and 0x2A do not read back on this chip, so the word the board computed is kept
+static struct {
+	uint16_t freq_hi, freq_lo;	// the frequency word the chip was given: f_kHz x 16
+	uint16_t gpio;			// the RF chip's GPIO register as the board wrote it
+	uint16_t reg30, reg1f;		// read back from the chip while it was keyed
+	uint16_t duty, drive, mod_gain;
+	uint16_t mode, ok;
+} tx_snap;
+#endif
+
 static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_tone)
 {
 #if CONFIG_DIAG && CONFIG_FM
@@ -482,6 +495,25 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 	if (mode_now == RADIO_MODE_FM) d878uv2_modem_analog(true, true, bw != RADIO_BW_25K);
 #endif
 	pa_on(power, hz);
+#if CONFIG_DIAG
+	{
+		uint32_t word = (hz / 1000u) * 16u;
+		uint16_t v = 0;
+
+		tx_snap.freq_hi = (uint16_t)(word >> 16);
+		tx_snap.freq_lo = (uint16_t)word;
+		tx_snap.gpio = gpio_shadow;
+		tx_snap.reg30 = at1846s_read(&rf, 0, 0x30u, &v) ? v : 0xFFFFu;
+		tx_snap.reg1f = at1846s_read(&rf, 0, 0x1Fu, &v) ? v : 0xFFFFu;
+		if (!d878uv2_cal_tune_duty(hz, &tx_snap.duty)) {
+			tx_snap.duty = 0xFFFFu;
+		}
+		tx_snap.drive = tx_drive_now;
+		tx_snap.mod_gain = d878uv2_cal_mod_gain(hz);
+		tx_snap.mode = (uint16_t)mode_now;
+		tx_snap.ok = ok ? 1u : 0u;
+	}
+#endif
 	return ok;
 }
 
@@ -621,6 +653,38 @@ int d878uv2_chip_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, ui
 			break;
 		case 3:				// the modulator gain sent for this frequency
 			duty = d878uv2_cal_mod_gain(rx_hz);
+			break;
+		// 4 and up: the snapshot taken during the last transmission, which is the state a band that will
+		// not transmit has to show. All zero means nothing has keyed since this start
+		case 4:
+			duty = tx_snap.freq_hi;
+			break;
+		case 5:
+			duty = tx_snap.freq_lo;
+			break;
+		case 6:
+			duty = tx_snap.gpio;
+			break;
+		case 7:
+			duty = tx_snap.reg30;
+			break;
+		case 8:
+			duty = tx_snap.reg1f;
+			break;
+		case 9:
+			duty = tx_snap.duty;
+			break;
+		case 10:
+			duty = tx_snap.drive;
+			break;
+		case 11:
+			duty = tx_snap.mod_gain;
+			break;
+		case 12:
+			duty = tx_snap.mode;
+			break;
+		case 13:
+			duty = tx_snap.ok;
 			break;
 		default:
 			return -1;
