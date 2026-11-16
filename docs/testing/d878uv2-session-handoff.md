@@ -11,8 +11,11 @@ is only what the next session needs to continue.
 Current running image: **`273d7c23`**, verified through USB after the owner's manual update from
 `build/d878uv2-fm-mod/rfoundry_d878uv2_codec.bin`. It adds calibrated FM `MOD_GAIN` setup and the
 unbuffered-DAC correction. The owner reports a slight overall improvement and somewhat better 70 cm
-DMR transmission. Whether the peer plays intelligible speech, and whether button/battery behavior is
-normal again, are awaiting clarification; do not mark microphone audio fixed.
+DMR transmission. The owner clarified that the peer mainly recognizes calls more reliably, without
+intelligible voice, while the UV878 still has its 10 W dummy load fitted. This leakage-path test does not
+establish voice-link quality. Battery display and button behavior are confirmed normal again. A brief
+70 cm DMR voice test with normal antennas, a few meters separation, L1 and programming cable unplugged
+has been requested. Do not mark microphone audio fixed or infer its failure from the dummy-load result.
 
 Read-only diagnostics on DMR simplex 433.450 MHz, L2, CC1/TS1, TG99 show idle, TX error=ok, underruns=0,
 modem stalls=0 and stuck=0. PWM ready=1, actual=expected=1972; mic offset=0, requested PGA=32.
