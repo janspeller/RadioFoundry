@@ -166,6 +166,13 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 		put_u(&o, (DAC_CTL & DAC_CTL_DEN1) ? 1u : 0u);
 		put(&o, " hold ");
 		put_u(&o, DAC1_R12DH & 0xFFFu);
+		// The baseband's slot-timing line: its edges since start, and its level now. **If this never moves
+		// while transmitting DMR, the per-slot PA gate never keys the PA at all** and nothing goes on the
+		// air - the baseband's PIO3 slot output has to be enabled for it to toggle
+		put(&o, " slot ");
+		put_u(&o, d878uv2_slot_edges());
+		put(&o, "/");
+		put_u(&o, mcu_pin_read(PIN_SCT_SLOT) ? 1u : 0u);
 		break;
 	default:
 		return false;

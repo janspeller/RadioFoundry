@@ -229,7 +229,12 @@ static void pa_on(uint8_t power, uint32_t hz)
 		drive = TX_DRIVE_UNCALIBRATED;
 	}
 	tx_drive_now = drive;
-	if (mode_now == RADIO_MODE_DMR) {
+	// -DD878UV2_SLOT_GATE=0 keys the whole transmission instead, the way this board did before the gate: a way
+	// back if the baseband's slot output turns out not to toggle on this radio
+#ifndef D878UV2_SLOT_GATE
+#define D878UV2_SLOT_GATE 1
+#endif
+	if (D878UV2_SLOT_GATE && mode_now == RADIO_MODE_DMR) {
 		// Let the slot line key it: arm the gate and follow the line's level now
 		slot_gate = true;
 		pa_lines(mcu_pin_read(PIN_SCT_SLOT), drive);
