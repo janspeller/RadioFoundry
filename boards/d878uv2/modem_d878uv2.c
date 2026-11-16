@@ -296,6 +296,7 @@ static const sct_dmr_port_t port = {
 	.start_fields = tx_gain_fields,
 	.start_count = sizeof(tx_gain_fields) / sizeof(tx_gain_fields[0]),
 	.report_field = 0xFF,
+	.burst_edges = d878uv2_slot_edges,
 	.rx_ready = D878UV2_CR_READY,
 	.rx_settle_ms = CR_SETTLE_MS,
 	.ready = port_ready,

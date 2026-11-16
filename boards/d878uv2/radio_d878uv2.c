@@ -177,12 +177,64 @@ static void tx_dac(uint8_t level8)
 	mcu_dac_write(0, (uint16_t)level8 << 4);
 }
 
+static radio_mode_t mode_now = RADIO_MODE_FM;
+
+// --- The per-slot PA gate ---
+//
+// On this radio the PA is keyed per TDMA slot, not for the whole transmission: the baseband's slot-timing output
+// arrives on PD0, and the stock firmware's handler turns the PA on where it goes high and off where it goes low
+// (docs/spec/hardware-d878uv2.md 4.3). Keying the PA for the whole transmission instead radiates a continuous
+// carrier across both slots rather than TDMA bursts, which no DMR radio can decode - and runs the PA at twice
+// the duty its design expects.
+//
+// The gate is armed only while transmitting in DMR. FM keys the PA for the whole transmission, as it should.
+static volatile bool slot_gate;
+static volatile uint8_t tx_drive_now;
+static volatile uint32_t slot_edges;
+
+static inline void pa_lines(bool on, uint8_t drive)
+{
+	if (on) {
+		mcu_pin_write(PIN_PA_EN0, true);
+		mcu_pin_write(PIN_PA_EN1, true);
+		mcu_dac_write(0, (uint16_t)drive << 4);
+	} else {
+		mcu_dac_write(0, 0);
+		mcu_pin_write(PIN_PA_EN1, false);
+		mcu_pin_write(PIN_PA_EN0, false);
+	}
+}
+
+// The highest priority on the board: a missed edge is a burst on the air in the wrong slot
+void MCU_EXTI0_HANDLER(void)
+{
+	mcu_exti_clear(MCU_PIN(0));
+	slot_edges++;
+	if (slot_gate) {
+		pa_lines(mcu_pin_read(PIN_SCT_SLOT), tx_drive_now);
+	}
+}
+
+// The engine counts these to know when a transmission's last burst has left the air (modem-sct.md 3)
+uint32_t d878uv2_slot_edges(void)
+{
+	return slot_edges;
+}
+
 static void pa_on(uint8_t power, uint32_t hz)
 {
 	uint8_t drive = TX_DRIVE_UNCALIBRATED;
 
 	if (!d878uv2_cal_tx_drive(power, hz, &drive)) {
 		drive = TX_DRIVE_UNCALIBRATED;
+	}
+	tx_drive_now = drive;
+	if (mode_now == RADIO_MODE_DMR) {
+		// Let the slot line key it: arm the gate and follow the line's level now
+		slot_gate = true;
+		pa_lines(mcu_pin_read(PIN_SCT_SLOT), drive);
+		keyed = true;
+		return;
 	}
 	mcu_pin_write(PIN_PA_EN0, true);
 	mcu_pin_write(PIN_PA_EN1, true);
@@ -192,6 +244,7 @@ static void pa_on(uint8_t power, uint32_t hz)
 
 static void pa_off(void)
 {
+	slot_gate = false;
 	tx_dac(0);
 	mcu_pin_write(PIN_PA_EN1, false);
 	mcu_pin_write(PIN_PA_EN0, false);
@@ -202,6 +255,7 @@ static void pa_off(void)
 // safe from a fault handler
 void d878uv2_rf_safe(void)
 {
+	slot_gate = false;
 	tx_dac(0);
 	mcu_pin_write(PIN_PA_EN1, false);
 	mcu_pin_write(PIN_PA_EN0, false);
@@ -225,6 +279,14 @@ static void init(void)
 	// once the channel is on. So this is not what was keeping the trim from the pin - whether it reaches it at
 	// all is still unmeasured
 	mcu_pin_analog(GPIOA, MCU_PIN(4) | MCU_PIN(5));
+	// The baseband's slot-timing line, on both edges at the highest priority on the board
+	mcu_pin_in(PIN_SCT_SLOT, MCU_PULL_UP);
+	mcu_exti_route(GPIOD, 0);
+	mcu_exti_both_edges(MCU_PIN(0));
+	mcu_exti_clear(MCU_PIN(0));
+	mcu_exti_enable(MCU_PIN(0));
+	NVIC_SetPriority(MCU_EXTI0_IRQn, 0);
+	NVIC_EnableIRQ(MCU_EXTI0_IRQn);
 	mcu_dac_init(0);
 	tx_dac(0);
 	control_dac();
@@ -241,8 +303,6 @@ static void init(void)
 	d878uv2_gps_init();
 #endif
 }
-
-static radio_mode_t mode_now = RADIO_MODE_FM;
 
 // The RF chip's audio registers, per mode (hardware-d878uv2.md 4.6). 0x44's bits 7:4 are full AF gain in both
 // modes; its bits 11:8 are a fixed trim, one of five FM steps in the stock firmware chosen by a settings byte -

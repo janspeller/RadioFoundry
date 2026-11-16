@@ -18,6 +18,9 @@ extern const hal_radio_t d878uv2_radio;
 void d878uv2_rf_safe(void);
 // The RF chip's GPIO shadow (register 0x1F) as last written: the band and front-end switching
 uint16_t d878uv2_rf_gpio(void);
+// The baseband's slot-timing line's edges, rising and falling: the DMR engine takes differences within a
+// transmission to know when its last burst has left the air (docs/spec/modem-sct.md 3)
+uint32_t d878uv2_slot_edges(void);
 #if CONFIG_GPS
 // The GPS module's supply, on the RF chip's gpio2 (radio_d878uv2.c); its UART is gps_d878uv2.c
 void d878uv2_gps_power(bool on);
