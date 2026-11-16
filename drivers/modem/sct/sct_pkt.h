@@ -57,6 +57,7 @@ enum {
 	SCT_F_DIGI_MIC_GAIN	= 0x68,	// digital mode microphone gain: u16 MSB first, Q16.11 (2048 = 0 dB)
 	SCT_F_DIGI_SPK_GAIN	= 0x69,	// digital mode speaker gain, the same
 	SCT_F_I2C_OPERATION	= 0x6A,	// raw I2C access through the baseband
+	SCT_F_MISC_GAIN		= 0x6B,	// IQ gains, sub-audio level and DC-filter configuration
 	SCT_F_SQ_LEVEL		= 0x6C,	// the chip's squelch: gains, OOBE interval and thresholds
 	SCT_F_DMR_SLC		= 0x6E,
 	SCT_F_DMR_CALL_SLOT	= 0x6F,

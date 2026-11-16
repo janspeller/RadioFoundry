@@ -426,3 +426,10 @@ the engine reapplies these codec writes after receive setup and vocoder loading,
 call start. Each write waits for a codec-type ACK_MESSAGE; unrelated control acknowledgments cannot
 complete it. A refusal or timeout stops the sequence. Releasing during preparation cancels the remaining
 writes and call start. Boards supply wiring and gain data; packet sequencing stays in the shared engine.
+
+### Board control fields at analog mode entry
+
+The analog engine accepts `setup_fields`/`setup_count` and sends them as acknowledged control packets after
+process-mode selection. Setup runs on mode initialization or reconfiguration, not each PTT press. Failure stops
+receive readiness. Digital mode uses the existing start-field classification to send the same control field
+IDs in TYPE 0 packets. Library switching therefore reapplies each mode's own thresholds.

@@ -6,6 +6,19 @@
 Supersedes the 2026-11-15 handoff. The bring-up history is in [d878uv2-bringup.md](d878uv2-bringup.md); this file
 is only what the next session needs to continue.
 
+## Continuation: missing mode controls implemented
+
+The current candidate is `build/d878uv2-mode-audio/rfoundry_d878uv2_codec.bin`. It adds mode-entry 0x6C and
+12-byte 0x6B, using calibration +0x4A..+0x4E for known bytes and zero reserved trailing bytes. The ten-byte
+startup store update is not the twelve-byte wire length. Digital setup uses the shared engine's existing
+control-field classification; analog setup now accepts acknowledged board control fields. Per-call signaling
+is retained. Existing ANALOG_CONFIG remains nominal rather than claimed stock RAM reconstruction.
+
+Targeted host tests, four build configurations and stack checks pass. Hardware speech remains unverified.
+This candidate includes the earlier ramp; first test is 70 cm. Further dirty-side VHF/table findings need a
+separate review. The sections below preserve the original handoff and hardware observations; use git log for
+the latest implementation commit.
+
 ## Resume here
 
 Worktree `/var/home/jan/gitrepos/RadioFoundry/.claude/worktrees/d878uv2`, branch `d878uv2-bringup`, HEAD

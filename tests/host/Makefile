@@ -1621,7 +1621,7 @@ run-sctanalog: sctAnalogTest
 
 TESTS += codecSetupTest
 codecSetupTest: codecSetupTest.c $(ROOT)/boards/d878uv2/audio_setup.h $(ROOT)/drivers/audio/tlv320aic3204/tlv320aic3204.h $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
-	$(CC) $(CFLAGS) -I$(ROOT) '-DVOICE_SETUP_HEADER="boards/d878uv2/audio_setup.h"' -o $@ codecSetupTest.c \
+	$(CC) $(CFLAGS) -I$(ROOT) -I$(ROOT)/hal -DAUDIO_CAL_TYPE=d878uv2_cal_audio_t -DAUDIO_CAL_READ=d878uv2_cal_audio '-DVOICE_SETUP_HEADER="boards/d878uv2/audio_setup.h"' -o $@ codecSetupTest.c \
 		$(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
 .PHONY: run-codecsetup
 run: run-codecsetup
@@ -1631,7 +1631,7 @@ run-codecsetup: codecSetupTest
 TESTS += factoryDacTest
 factoryDacTest: factoryDacTest.c $(ROOT)/boards/d878uv2/cal_d878uv2.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
 	$(CC) $(CFLAGS) -I$(ROOT)/hal '-DFACTORY_CAL_SOURCE="../../boards/d878uv2/cal_d878uv2.c"' \
-		-DCAL_NAND_READ=d878uv2_nand_read -DCAL_NAND_READ_ANY=d878uv2_nand_read_any -DCAL_LOAD=d878uv2_cal_load -DCAL_CONTROL=d878uv2_cal_control -DCAL_BYTES=d878uv2_cal_bytes \
+		-DCAL_NAND_READ=d878uv2_nand_read -DCAL_NAND_READ_FACTORY=d878uv2_nand_read_factory -DCAL_NAND_READ_ANY=d878uv2_nand_read_any -DCAL_LOAD=d878uv2_cal_load -DCAL_CONTROL=d878uv2_cal_control -DCAL_BYTES=d878uv2_cal_bytes -DCAL_AUDIO_TYPE=d878uv2_cal_audio_t -DCAL_AUDIO_READ=d878uv2_cal_audio \
 		-o $@ factoryDacTest.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
 .PHONY: run-factorydac
 run: run-factorydac

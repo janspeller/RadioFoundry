@@ -274,6 +274,11 @@ static const sct_field_t tx_gain_fields[] = {
 	{ SCT_F_MOD_GAIN, sizeof(mod_gain), mod_gain },
 };
 
+static const sct_field_t digital_setup[] = {
+	{ SCT_F_SQ_LEVEL, sizeof(sq_digital), sq_digital },
+	{ SCT_F_MISC_GAIN, sizeof(misc_gain), misc_gain },
+};
+
 // Called as a transmission begins, with the frequency about to be keyed
 void d878uv2_modem_set_deviation(uint32_t hz)
 {
@@ -301,8 +306,8 @@ static const sct_dmr_port_t port = {
 	.codec_start_count = CODEC_MIC_COUNT,
 	.codec_tx = &codec_writes[1],
 	.tx_fields = port_gain_fields,
-	.start_fields = tx_gain_fields,
-	.start_count = sizeof(tx_gain_fields) / sizeof(tx_gain_fields[0]),
+	.start_fields = digital_setup,
+	.start_count = sizeof(digital_setup) / sizeof(digital_setup[0]),
 	.report_field = 0xFF,
 	.burst_edges = d878uv2_slot_edges,
 	.rx_ready = D878UV2_CR_READY,
@@ -368,6 +373,8 @@ bool d878uv2_modem_init(void)
 #endif
 #if CONFIG_FM
 	sct_analog_init(&analog, port_send, NULL);
+	analog.setup_fields = analog_setup;
+	analog.setup_count = sizeof(analog_setup) / sizeof(analog_setup[0]);
 	analog.tx_codec = codec_writes;
 	analog.tx_codec_count = CODEC_MIC_COUNT;
 #endif

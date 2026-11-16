@@ -2,6 +2,7 @@
 // Copyright (c) 2026 The RadioFoundry Authors
 #ifndef D878UV2_AUDIO_SETUP_H
 #define D878UV2_AUDIO_SETUP_H
+#include "d878uv2.h"
 #include "modem/sct/sct_host.h"
 #include "audio/tlv320aic3204/tlv320aic3204.h"
 
@@ -104,6 +105,15 @@ static inline void codec_mic_offset(int8_t offset_db)
 static uint8_t demod_gain_v[2] = { 0x00, 0x00 };
 static uint8_t spk_gain_v[2] = { 0x05, 0x46 };
 static uint8_t mic_gain_v[2] = { 0x07, 0xD0 };
+// Mode-entry squelch thresholds from the board's audio setup, not microphone gain controls.
+static const uint8_t sq_digital[12] = { 0,0,0,0x3C, 0x0F,0x3C,0x0A,0x8C, 0x0F,0x3C,0x0A,0x8C };
+static const uint8_t sq_analog[12] = { 0,0,0,0x3C, 0x0F,0x3C,0x0A,0x8C, 0xFF,0xFF,0xFF,0xFF };
+// The stock producer initializes ten bytes; the wire field is twelve. Reserved trailing bytes are zero.
+static uint8_t misc_gain[12] = { 8,0,8,0, 0x80,0,0x80,0, 0,0,0,0 };
+static const sct_field_t analog_setup[] = {
+	{ SCT_F_SQ_LEVEL, sizeof(sq_analog), sq_analog },
+	{ SCT_F_MISC_GAIN, sizeof(misc_gain), misc_gain },
+};
 static const sct_field_t voice_fields[] = {
 	{ SCT_F_DEMOD_GAIN, sizeof(demod_gain_v), demod_gain_v },
 	{ SCT_F_DIGI_MIC_GAIN, sizeof(mic_gain_v), mic_gain_v },
@@ -117,6 +127,8 @@ static inline void codec_audio_from_cal(void)
 	d878uv2_cal_audio_t a;
 
 	d878uv2_cal_audio(&a);
+	for (unsigned i = 0; i < 4; i++) misc_gain[4 + i] = a.misc[i];
+	misc_gain[9] = a.misc[4];
 	codec_writes[CODEC_AT_LOL].value = a.lol;
 	codec_writes[CODEC_AT_LOR].value = a.lor;
 	codec_writes[CODEC_AT_MICR].value = a.mic_r;

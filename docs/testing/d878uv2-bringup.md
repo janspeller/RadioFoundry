@@ -566,3 +566,18 @@ Zero-volume guard: the owner still heard loud noise after the remote zero-volume
 was unmuting HPL even at zero and did not gate the amplifier against the volume setting. The board now
 uses true HPL mute and a volume-aware speaker gate; the host test covers a squelch opening while muted and
 unmuting afterward. This is not a confirmed fix for the underlying loud receive noise. No RF was requested.
+
+### Resume from 27ab4d60: mode-entry controls
+
+Implemented missing 0x6C thresholds and 12-byte 0x6B payload at mode setup. Resolved the ten-byte store-update
+versus twelve-byte wire-field distinction from clean prose and the public manual; reserved trailing bytes are
+zero, with no claim they reproduce stock persistent RAM. Calibration +0x4A..+0x4E supplies the known bytes.
+Existing nominal ANALOG_CONFIG and documented call-control transitions are retained for this isolated test.
+The inherited codec-profile host test was stale after the four-write AGC/profile changes; it now checks the
+actual current profile, calibrated 2000 digital mic level and the new threshold/payload data. No radio touched.
+The VHF path remains outside this change; new dirty-side table findings require separate review.
+
+Mode-audio candidate: targeted analog/profile/calibration/remap host tests, normal/DIAG-off/FM-off/DMR-off
+builds and static stack check pass without compiler warnings. Doc/generic checks pass. No full CI or HIL run
+is claimed. Temporary configuration builds were removed. This image includes the previously unflashed ramp
+from the branch baseline; validate on 70 cm first and keep VHF testing deferred. No agent RF or flash.

@@ -183,6 +183,13 @@ void d878uv2_cal_audio(d878uv2_cal_audio_t *a)
 	a->spk_gain = 0x0546;
 	a->mic_gain = 0x07D0;
 	a->from_radio = false;
+	a->misc[0] = 0x80; a->misc[1] = 0; a->misc[2] = 0x80; a->misc[3] = 0; a->misc[4] = 0;
+	uint8_t misc[5];
+	if (loaded && cal_read(cal_base + 0x4Au, misc, sizeof(misc))) {
+		bool erased = true;
+		for (unsigned i = 0; i < sizeof(misc); i++) if (misc[i] != 0xFFu) erased = false;
+		if (!erased) for (unsigned i = 0; i < sizeof(misc); i++) a->misc[i] = misc[i];
+	}
 	if (!loaded || !cal_read(cal_base + CAL_AUDIO_UHF, r, sizeof(r))) {
 		return;
 	}

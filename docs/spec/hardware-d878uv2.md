@@ -1197,3 +1197,15 @@ HPL mute and holds both speaker-route and amplifier pins low regardless of the r
 Restoring nonzero volume reapplies the requested gate. This fixes mute behavior; the cause of loud noise at
 nonzero volume and weak-signal squelch openings remains unverified. The USB link disappeared before a
 receiver-only channel change could be completed.
+
+### Missing mode-entry controls, follow-up to the session handoff
+
+The board now supplies SQ_LEVEL (0x6C) at digital and analog setup: 00 00 00 3C followed by big-endian limits
+0F3C 0A8C 0F3C 0A8C, with the last two limits FFFF in analog mode. MISC_GAIN (0x6B) uses a 12-byte payload:
+08 00 08 00, calibration bytes +0x4A..+0x4D, 00, calibration +0x4E, then two reserved zero bytes. The calibration
+reader retains reset values 80 00 80 00 00 when that record is unavailable or erased.
+
+The stock startup API updates ten bytes but its emitter sends twelve from persistent storage. The final two
+stock bytes are not established by that producer. Reserved zeros are a public-manual choice, not recovered
+stock values. Existing ANALOG_CONFIG remains nominal, not a reconstruction of the unknown ten stock RAM bytes.
+The new controls are mode-entry data; call-start/stop signaling is retained. Hardware audio is unverified.

@@ -11,6 +11,9 @@
 typedef struct {
 	bool (*send)(const uint8_t *pkt, uint16_t len, void *ctx);
 	void *ctx;
+	// Board control fields sent once at each analog mode setup, before receive work mode.
+	const sct_field_t *setup_fields;
+	uint8_t setup_count, setup_index;
 	// Optional board microphone routing/gain, reapplied and acknowledged before each TX work-mode request.
 	const sct_codec_write_t *tx_codec;
 	uint8_t tx_codec_count, tx_codec_index;

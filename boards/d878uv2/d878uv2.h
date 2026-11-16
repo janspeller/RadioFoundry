@@ -128,6 +128,7 @@ uint16_t d878uv2_cal_mod_gain(uint32_t hz);
 // codec, and three 16-bit baseband levels. from_radio is false when the factory defaults were used instead
 typedef struct {
 	uint8_t lol, lor, mic_r;
+	uint8_t misc[5];	// calibration +0x4A..+0x4E for MISC_GAIN
 	uint16_t demod, spk_gain, mic_gain;
 	bool from_radio;
 } d878uv2_cal_audio_t;

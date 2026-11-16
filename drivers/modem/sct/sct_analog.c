@@ -9,7 +9,7 @@
 #define ERROR_SEND 0xFEu
 #define ERROR_TIMEOUT 0xFFu
 
-enum { VOCODER, MODE, CONFIG, SUBAUDIO, RX_WORK, RX_CARRIER, RX_READY, TX_MIC, TX_WORK, TX_START, TX_READY, TX_STOP, RESTORE, DIGITAL_READY, FAILED };
+enum { VOCODER, MODE, SETUP, CONFIG, SUBAUDIO, RX_WORK, RX_CARRIER, RX_READY, TX_MIC, TX_WORK, TX_START, TX_READY, TX_STOP, RESTORE, DIGITAL_READY, FAILED };
 
 void sct_analog_init(sct_analog_t *a, bool (*send)(const uint8_t *, uint16_t, void *), void *ctx)
 {
@@ -131,8 +131,17 @@ void sct_analog_poll(sct_analog_t *a, uint32_t now_ms)
 		break;
 	case MODE:
 		data[0] = 0x80;
-		command(a, SCT_TYPE_CONTROL, SCT_F_PROCESS_MODE, data, 1, CONFIG, now_ms);
+		a->setup_index = 0;
+		command(a, SCT_TYPE_CONTROL, SCT_F_PROCESS_MODE, data, 1, SETUP, now_ms);
 		break;
+	case SETUP:
+		if (a->setup_fields != NULL && a->setup_index < a->setup_count) {
+			const sct_field_t *f = &a->setup_fields[a->setup_index++];
+			command(a, SCT_TYPE_CONTROL, f->id, f->data, f->len, SETUP, now_ms);
+			break;
+		}
+		a->phase = CONFIG;
+		// fall through
 	case CONFIG:
 		// Standard narrow/wide channel filters, unity TX/RX gains in their documented Q formats.
 		data[0] = a->narrow ? 0x00 : 0x0A;

@@ -55,6 +55,10 @@ static void setup_rx(sct_analog_t *a, bool narrow)
 	cfg[0] = narrow ? 0 : 0x0A;
 	if (!a->analog_loaded) expect(a, 0, 0, 0x10, vocoder, 1);
 	expect(a, 0, 0, 0x1A, mode, 1);
+	for (unsigned i = 0; i < a->setup_count; i++) {
+		const sct_field_t *f = &a->setup_fields[i];
+		expect(a, 1, 0, f->id, f->data, f->len);
+	}
 	expect(a, 2, 0, 0x3C, cfg, 11);
 	expect(a, 4, 0, 0x26, sub, 2);
 	expect(a, 6, 0, 0x18, rx, 3);
@@ -200,6 +204,28 @@ int main(void)
 	assert(!a.loopback);
 	setup_rx(&a, true); // a retune cancels the diagnostic
 #endif
+	count = 0;
+	sct_analog_init(&a, send_packet, NULL);
+	static const uint8_t thresholds[12] = {0,0,0,60,15,60,10,140,255,255,255,255};
+	static const sct_field_t fields[] = {{SCT_F_SQ_LEVEL,12,thresholds}};
+	a.setup_fields = fields; a.setup_count = 1;
+	sct_analog_request(&a,true,false,true);
+	setup_rx(&a,true);
+	before = count;
+	sct_analog_poll(&a,100); assert(count==before);
+	sct_analog_request(&a,true,true,true);
+	expect(&a,102,0,0x18,tx,3); // setup is not repeated at PTT
+	count = 0;
+	sct_analog_init(&a, send_packet, NULL);
+	a.setup_fields = fields; a.setup_count = 1;
+	sct_analog_request(&a,true,false,true);
+	uint8_t av[] = {16}, am[] = {128};
+	expect(&a,0,0,0x10,av,1);
+	expect(&a,2,0,0x1A,am,1);
+	sct_analog_poll(&a,4); ack(&a,0x6C,6);
+	before = count;
+	sct_analog_poll(&a,6);
+	assert(a.error==6 && !a.ready && count==before);
 	puts("sctAnalogTest PASSED");
 	return 0;
 }

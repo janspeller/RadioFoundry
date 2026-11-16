@@ -31,6 +31,10 @@ bool CAL_NAND_READ(uint32_t addr, void *out, uint32_t n)
 	}
 	return false;
 }
+bool CAL_NAND_READ_FACTORY(uint32_t addr, void *out, uint32_t n)
+{
+	return CAL_NAND_READ(addr, out, n);
+}
 bool CAL_NAND_READ_ANY(uint32_t addr, void *out, uint32_t n, uint32_t *failed)
 {
 	*failed = raw_ecc_failed ? 1 : 0;
@@ -56,7 +60,12 @@ int main(void)
 	metadata[0x1F4] = 0x55; metadata[0x1F5] = 0;
 	metadata[0x1F6] = 0; metadata[0x1F7] = 0;
 	record(primary, 3620); record(mirror, 1901);
+	const uint8_t misc_values[5] = { 0x12,0x34,0x56,0x78,9 };
+	memcpy(primary + 0x4A, misc_values, sizeof(misc_values));
 	assert(CAL_LOAD()); expect(true, 3620);
+	CAL_AUDIO_TYPE audio;
+	CAL_AUDIO_READ(&audio);
+	assert(memcmp(audio.misc, misc_values, sizeof(misc_values)) == 0);
 	assert(!CAL_CONTROL(NULL));
 	primary[CAL_MARK_OFF] = 0;
 	assert(CAL_LOAD()); expect(true, 1901);

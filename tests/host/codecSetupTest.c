@@ -6,10 +6,15 @@
 #include <string.h>
 #include VOICE_SETUP_HEADER
 
+void AUDIO_CAL_READ(AUDIO_CAL_TYPE *a)
+{
+	*a = (AUDIO_CAL_TYPE){ .lol=4, .lor=8, .mic_r=12, .spk_gain=1350, .mic_gain=2000,
+		.misc={ 0x80,0,0x80,0,0 } };
+}
 static uint8_t response[8];
 static uint16_t left;
 static uint32_t now;
-static uint8_t expected_mic_gain = CODEC_MICPGA_DEFAULT;
+static uint8_t expected_mic_gain = D878UV2_MIC_GAIN;
 static bool mic_routed, mic_unmuted, mic_digital_unity, reject_route;
 static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 {
@@ -31,7 +36,7 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 		} else {
 			id = p[6];
 			if (id == 0x68) {
-				assert(n == 10 && p[7] == 0x08 && p[8] == 0);
+				assert(n == 10 && p[7] == 0x07 && p[8] == 0xD0);
 				mic_digital_unity = true;
 			}
 		}
@@ -53,7 +58,12 @@ static void reset(void *ctx) { (void)ctx; left = 0; mic_routed = mic_unmuted = m
 int main(void)
 {
 	static uint8_t block[SCT_BOOT_BLOCK_BYTES];
-	assert(CODEC_MIC_COUNT == 2);
+	codec_audio_from_cal();
+	const uint8_t sq[] = {0,0,0,60,15,60,10,140,255,255,255,255};
+	const uint8_t misc[] = {8,0,8,0,128,0,128,0,0,0,0,0};
+	assert(memcmp(sq_analog,sq,12)==0 && memcmp(misc_gain,misc,12)==0);
+	assert(sq_digital[8]==15 && sq_digital[9]==60 && sq_digital[10]==10 && sq_digital[11]==140);
+	assert(CODEC_MIC_COUNT == 4);
 	assert(codec_writes[0].page == 1 && codec_writes[0].reg == 52 && codec_writes[0].value == 0x80);
 	assert(codec_writes[1].page == 1 && codec_writes[1].reg == 59 && !(codec_writes[1].value & 0x80));
 	sct_host_t h = { .write = write_bus, .read = read_bus, .reset = reset, .delay_ms = delay,
@@ -61,9 +71,9 @@ int main(void)
 	sct_rx_t rx;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
 	assert(mic_routed && mic_unmuted && mic_digital_unity);
-	assert(codec_mic_pga(0) == 20 && codec_mic_pga(10) == 40 && codec_mic_pga(-10) == 0);
+	assert(codec_mic_pga(0) == 32 && codec_mic_pga(10) == 52 && codec_mic_pga(-10) == 12);
 	assert(codec_mic_pga(127) == 95 && codec_mic_pga(-128) == 0);
-	codec_mic_offset(10); expected_mic_gain = 40;
+	codec_mic_offset(10); expected_mic_gain = 52;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_OK);
 	assert(mic_routed && mic_unmuted);
 	reject_route = true;
