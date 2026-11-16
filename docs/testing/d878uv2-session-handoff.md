@@ -37,6 +37,19 @@ speech was too quiet to distinguish. This is inconclusive. USB removal prevented
 loopback and fixed volume must not be assumed restored. Reconnect and restore knob control before a repeat;
 changing channel cancels loopback. No RF was initiated by the agent.
 
+After reconnection, monitor and loopback were cleared and physical knob control was restored. A repeat local
+loopback completed ready/error=0 with knob control retained; the owner unplugged, raised volume and reported
+only hiss or silence, without speech. The agent then cleared loopback/monitor and restored knob control over
+USB. This did not establish successful microphone capture, nor prove that this modem implements the loopback
+as the manual describes.
+
+A controlled boot comparison is prepared: omit CODEC_SELECT = 1, which has no established caller in
+the stock MCU image. Leave vocoder selection, gains and bypass writes intact. This is a candidate experiment,
+not a proven microphone fix. The previous image remains the hardware baseline. No squelch tuning is included.
+The comparison artifact is `build/d878uv2-resident-codec/rfoundry_d878uv2_codec.bin`; the unmodified hardware
+baseline is preserved at `build/d878uv2-mode-audio-e3acd148/rfoundry_d878uv2_codec.bin`. Codec-profile and shared
+SCT tests pass (636 shared checks), as do the normal firmware build, generic check and documentation links.
+
 ## Resume here
 
 Worktree `/var/home/jan/gitrepos/RadioFoundry/.claude/worktrees/d878uv2`, branch `d878uv2-bringup`, HEAD

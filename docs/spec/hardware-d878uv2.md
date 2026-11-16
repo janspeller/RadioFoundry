@@ -825,6 +825,12 @@ with 0x34 = 0x80 and then writes the left PGA gain. The accessory-state latch af
 a microphone route controlled by that latch was not established. No missing reachable codec write has yet
 been shown to explain the transmit speech failure.
 
+The stock CODEC_SELECT sender also has no established direct callers or stored function pointers. No
+alternative live SET_I2C_ADDRESS initialization was established. The next bring-up comparison omits the
+explicit CODEC_SELECT = 1 command that RadioFoundry previously sent, while retaining VOCODER_SEL, calibrated
+gains and codec-bypass writes. This tests whether reselection disturbs resident codec setup. It does not prove
+the resident default, a side effect of reselection, or a repair for silent speech.
+
 Stock register 0x48 thresholds differ between bandwidth branches. At saved squelch level 5, the branch
 writing RF register 0x30 = 0x4006/0x4046 uses high threshold 42, and the 0x7006/0x7046 branch uses 52.
 Both low thresholds are three counts smaller. This does not establish a conversion from hardware detector

@@ -141,7 +141,9 @@ static inline void codec_audio_from_cal(void)
 }
 
 static const sct_voice_t voice = {
-	.codec = 1,
+	// Stock reaches the codec through bypass writes without an explicit CODEC_SELECT. Preserve the resident
+	// application's selection for this bring-up comparison; converter state still needs hardware verification.
+	.codec = 0,
 	.vocoder = 4,
 	.fields = voice_fields,
 	.field_count = sizeof(voice_fields) / sizeof(voice_fields[0]),

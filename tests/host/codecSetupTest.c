@@ -35,6 +35,7 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 			}
 		} else {
 			id = p[6];
+			assert(id != SCT_F_CODEC_SELECT); // keep the resident codec selection while applying the board gains
 			if (id == 0x68) {
 				assert(n == 10 && p[7] == 0x07 && p[8] == 0xD0);
 				mic_digital_unity = true;
