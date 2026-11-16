@@ -119,3 +119,6 @@ captures speech directly needs a board microphone-gain hook; software vocoder ga
 Compare a small adjustment first and return to the original value if speech becomes distorted.
 If the carrier hisses even while you are silent, check received signal strength and channel frequency as well
 as microphone gain.
+For a weak-signal bring-up report, include the tuning-output status, expected calibration count and actual
+timer compare count when available. These check the firmware setup; measuring the control voltage checks the
+analog output path.

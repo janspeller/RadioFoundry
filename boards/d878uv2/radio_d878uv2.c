@@ -165,7 +165,8 @@ static bool control_initialized;
 // the radio's calibration at every frequency change (docs/spec/hardware-d878uv2.md 5.1.2). It tracks the VCO or
 // the front end, so leaving it undriven detunes one band more than the other - which is what a radio that
 // transmits on one band and not the other looks like
-#define TUNE_TIMER		TIMER_BASE(3u)		// TIMER2 in the part's numbering: PA6 is its channel 0
+#define TUNE_TIM_N		3u			// MCU numbering: TIM3 is GD32 TIMER2, PA6 channel 0
+#define TUNE_TIMER		MCU_TIM(TUNE_TIM_N)
 static bool tune_initialized;
 
 static void tune_pwm(uint32_t hz)
@@ -176,7 +177,7 @@ static void tune_pwm(uint32_t hz)
 		return;
 	}
 	if (!tune_initialized) {
-		mcu_tim_clock_on(3u);
+		mcu_tim_clock_on(TUNE_TIM_N);
 		TIMER_PSC(TUNE_TIMER) = 0;
 		TIMER_CAR(TUNE_TIMER) = 4095u;
 		TIMER_CHCTL0(TUNE_TIMER) = TIMER_CHCTL0_CH0_PWM1 | TIMER_CHCTL0_CH0_PRELOAD;
@@ -473,6 +474,7 @@ static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 	ok &= apply_mode();
 	control_dac();
 	ok &= at1846s_set_freq(&rf, hz);
+	tune_pwm(hz);
 	rx_hz = hz;
 	rx_bw = bw;
 	front_end_rx(hz);
@@ -564,6 +566,7 @@ static void tx_off(void)
 		(void)apply_mode();
 		control_dac();
 		at1846s_set_freq(&rf, rx_hz);
+		tune_pwm(rx_hz);
 		front_end_rx(rx_hz);
 		at1846s_set_state(&rf, AT1846S_STATE_RX);
 #if CONFIG_FM
@@ -647,6 +650,18 @@ static void volume(uint8_t percent)
 #endif
 
 #if CONFIG_DIAG
+uint16_t d878uv2_tuning_value(uint8_t key)
+{
+	if (key == 2u) {
+		uint16_t duty;
+		return d878uv2_cal_tune_duty(rx_hz, &duty) ? duty : UINT16_MAX;
+	}
+	if (!tune_initialized || !mcu_tim_clocked(TUNE_TIM_N)) return 0;
+	if (key == 1u) return (uint16_t)TIMER_CH0CV(TUNE_TIMER);
+	return (TIMER_CTL0(TUNE_TIMER) & TIMER_CTL0_CEN) != 0 &&
+	       (TIMER_CHCTL2(TUNE_TIMER) & TIMER_CHCTL2_CH0EN) != 0;
+}
+
 // chip 0 is the AT1846S, read-only, and readable **while keyed** on purpose: what the chip is doing during a
 // transmission is exactly what a band that will not transmit needs to show. Nothing here writes the chip
 int d878uv2_chip_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap)

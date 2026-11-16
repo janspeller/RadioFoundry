@@ -1580,6 +1580,9 @@ rfGpsStartupTest: rfGpsStartupTest.c stubs/rf_startup/mcu_io.h $(ROOT)/boards/d8
 		-DRF_CODEC_WRITE=d878uv2_codec_write -DRF_AUDIO_REG=d878uv2_audio_reg -DRF_ANALOG_VALUE=d878uv2_analog_value \
 		-DRF_MODEM_LOOPBACK=d878uv2_modem_loopback -DRF_MODEM_MIC_GAIN=d878uv2_modem_mic_gain -DRF_CHIP_BYTES=d878uv2_chip_bytes \
 		-DRF_CAL_BYTES=d878uv2_cal_bytes -DRF_RADIO=d878uv2_radio \
+		-DRF_CAL_TUNE=d878uv2_cal_tune_duty -DRF_CAL_MOD_GAIN=d878uv2_cal_mod_gain \
+		-DRF_MODEM_DEVIATION=d878uv2_modem_set_deviation \
+		-DRF_TUNING_VALUE=d878uv2_tuning_value \
 		-Wl,--gc-sections -o $@ rfGpsStartupTest.c $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS) $(ROOT)/drivers/rf/subaudio/subaudio.c
 .PHONY: run-rfgps
 run: run-rfgps

@@ -184,22 +184,27 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 // Stable raw view keys for host tests and interactive bring-up.
 bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
 {
-	unsigned control_at = CONFIG_FM ? 42u : CONFIG_DMR ? 30u : 14u;
-	unsigned total = control_at + 6u;
-#if CONFIG_DMR || CONFIG_FM
-	total += 2u;
-#endif
-	if (len == 0 || i >= total) {
-		return false;
+	if (len == 0) return false;
+	// Keep tuning and microphone controls before the verbose codec snapshot: a view reply has a byte limit.
+	if (i < 3u) {
+		static const char *const names[] = { "ready", "compare", "expected" };
+		dl_fmt(buf, len, "tuning.pwm_%s=%u", names[i], (unsigned)d878uv2_tuning_value(i));
+		return true;
 	}
+	i -= 3u;
 #if CONFIG_DMR || CONFIG_FM
-	if (i >= control_at + 6u) {
-		int db = d878uv2_modem_mic_offset();
-		if (i == control_at + 6u) dl_fmt(buf, len, "mic_gain.offset_db=%d", db);
+	if (i < 2u) {
+		if (i == 0u) dl_fmt(buf, len, "mic_gain.offset_db=%d", (int)d878uv2_modem_mic_offset());
 		else dl_fmt(buf, len, "mic_gain.requested_pga=%u", (unsigned)d878uv2_modem_mic_pga());
 		return true;
 	}
+	i -= 2u;
 #endif
+	unsigned control_at = CONFIG_FM ? 42u : CONFIG_DMR ? 30u : 14u;
+	unsigned total = control_at + 6u;
+	if (len == 0 || i >= total) {
+		return false;
+	}
 	if (i == control_at + 5u) {
 		dl_fmt(buf, len, "cal.read_windows=1");
 		return true;

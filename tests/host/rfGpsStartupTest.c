@@ -7,6 +7,16 @@
 
 unsigned host_dac_init_mask, host_dac_writes[2];
 uint16_t host_dac_values[2];
+unsigned host_af_mask[5], host_timer_clocks;
+uint32_t host_timer_regs[6][16];
+static bool tune_valid;
+bool RF_CAL_TUNE(uint32_t hz, uint16_t *duty)
+{
+	*duty = hz >= 400000000u ? 1972u : 1644u;
+	return tune_valid;
+}
+uint16_t RF_CAL_MOD_GAIN(uint32_t hz) { (void)hz; return 3500u; }
+void RF_MODEM_DEVIATION(uint32_t hz) { (void)hz; }
 static uint16_t saved_control = 3620;
 static bool control_valid;
 bool RF_CAL_CONTROL(uint16_t *value) { *value = saved_control; return control_valid; }
@@ -66,10 +76,19 @@ bool RF_CAL_DRIVE(uint8_t level, uint32_t hz, uint8_t *drive)
 static void test_audio_path(void)
 {
 	set_mode(RADIO_MODE_FM);
+	tune_pwm(145500000u);
+	assert(host_timer_clocks == 0 && !tune_initialized); // absent calibration must not enable the output
+	tune_valid = true;
 	assert(host_dac_init_mask == 1u && host_dac_writes[1] == 0);
 	control_valid = true;
 	saved_control = 3619;
 	assert(rx(145500000u, RADIO_BW_12K5, NULL));
+	// The tuning pin belongs to the timer at this address; its clock, channel and compare must agree.
+	assert(TUNE_TIMER == 0x40000400u && host_timer_clocks == 2u);
+	assert(TIMER_CAR(0x40000400u) == 4095 && TIMER_CTL0(0x40000400u) == 1);
+	assert(TIMER_CHCTL0(0x40000400u) == 0x68 && TIMER_CHCTL2(0x40000400u) == 1);
+	assert(TIMER_CH0CV(0x40000400u) == 1644 && (host_af_mask[GPIOA] & MCU_PIN(6)));
+	assert(RF_TUNING_VALUE(0) == 1 && RF_TUNING_VALUE(1) == 1644 && RF_TUNING_VALUE(2) == 1644);
 	assert(host_dac_values[1] == saved_control && host_dac_values[0] == 0);
 	assert((rf.cache[0][0x3A] & 0x7000u) == 0x4000u);
 	assert(rf.cache[0][0x44] == RF_AUDIO_TRIM_FM);
@@ -98,12 +117,14 @@ static void test_audio_path(void)
 	assert(rf.cache[0][0x58] == RF_AUDIO_58_DMR);
 	assert((rf.cache[0][0x3A] & 0x7000u) == 0x4000u);
 	assert(tx(438500000u, RADIO_BW_12K5, 0, NULL));
+	assert(TIMER_CH0CV(0x40000400u) == 1972 && host_timer_clocks == 2u);
 	assert(rf.state == AT1846S_STATE_DMR_TX);
 	assert(rf.cache[0][0x30] == 0x4046);
 	assert(rf.cache[0][0x44] == RF_TX_GAIN_DMR);
 	assert(rf.cache[0][0x41] == RF_TX_VOICE_GAIN && rf.cache[0][0x59] == RF_TX_DEVIATION);
 	tx_off();
 	assert(rf.bw == AT1846S_BW_25K);
+	assert(TIMER_CH0CV(0x40000400u) == 1644); // split TX must restore receive tracking as well as frequency
 	uint32_t word = at1846s_freq_word(145500000u);
 	assert(rf.cache[0][0x29] == (uint16_t)((word >> 16) & 0x3FFFu));
 	assert(rf.cache[0][0x2A] == (uint16_t)word);

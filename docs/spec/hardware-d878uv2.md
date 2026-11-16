@@ -272,7 +272,7 @@ parallel transport serves both radios.
 | --- | --- |
 | PA4 | DAC channel 1 (analog mode): **TX power level**. The value is an 8-bit number shifted left by 4 and written 12-bit right-aligned, so only the top 8 bits of the DAC are used. Same as the 868 |
 | PA5 | DAC channel 2 (analog mode), enabled and written from three call sites; what it drives is not identified |
-| PA6 | TIM3 channel 1 PWM, period 4095, AF push-pull: a **frequency-dependent analog control voltage** (VCO or front-end tracking; which is not identified). The duty comes from two 16-bit tables held in RAM. At or below 174 MHz, a 39-entry table on a 1 MHz grid from 136 MHz, interpolated at 100 kHz steps and clamped to its last entry. Above 174 MHz, a 6-entry table on a 1 MHz grid from 220 MHz — which clamps to its last entry for anything past 225 MHz, so the duty is one constant across the whole UHF band. Two other operating modes load a fixed entry instead. The 868 page guesses PA6 or PB0 is a tuning voltage; on this radio it is PA6 |
+| PA6 | GD32 TIMER2 channel 0 (STM32 TIM3 channel 1), base 0x40000400, period 4095, AF push-pull: a **frequency-dependent analog control voltage** (VCO or front-end tracking; which is not identified). UHF uses 13 points on a 10 MHz grid from 400 MHz; VHF uses 39 points on a 1 MHz grid from 136 MHz. See the tuning-output correction below. The earlier six-point interpretation describes a separate 220 MHz table, not UHF. |
 | PA7 | **Speaker amplifier enable**, active high, left low at boot. Set in three places, cleared on nearly every state change. Levels per state: 4.6.3 |
 | PE0 | **The amplifier's input select** (4.6.3): high picks the codec's output (the radio's receive audio), low the tone generator and the broadcast receiver. It is low at reset and whenever the amplifier is off, and the paths that drive it low with PA7 high are the RDA5802 broadcast receiver's — which is where the "driven opposite to PA7" reading came from |
 | PB0 | **LCD backlight**: TIM8 channel 2 complementary output (CH2N), AF push-pull, period 4095, prescaler 3, PWM mode 2 with both polarities low. A separate call reconfigures PB0 as a plain push-pull output driven low to kill the backlight. The 868 page guesses TIMER2 channel 2 here; on this radio it is TIM8 |
@@ -1235,3 +1235,20 @@ The stock startup API updates ten bytes but its emitter sends twelve from persis
 stock bytes are not established by that producer. Reserved zeros are a public-manual choice, not recovered
 stock values. Existing ANALOG_CONFIG remains nominal, not a reconstruction of the unknown ten stock RAM bytes.
 The new controls are mode-entry data; call-start/stop signaling is retained. Hardware audio is unverified.
+
+### Tuning-output timer correction
+
+PA6 uses GD32 TIMER2 channel 0 at 0x40000400. The platform's native `TIMER_BASE(3)` instead selects TIMER3 at
+0x40000800, while the MCU abstraction's `mcu_tim_clock_on(3)` enables TIMER2. The board had mixed those two
+numbering conventions. It now uses `MCU_TIM(3)` with that clock call. The mapping is defined by the
+[GigaDevice datasheet](https://www.gd32mcu.com/data/documents/datasheet/GD32F303xx%20Datasheet_Rev3.3.pdf)
+and [timer memory map](https://www.gd32mcu.com/data/documents/userManual/GD32F30x_User_Manual_Rev2.9.pdf).
+
+The calibrated duty is applied at RX tune, TX tune and restoration of the saved RX frequency after TX.
+Previously only TX called the tracking helper. Diagnostics now expose `board.tuning.pwm_ready`, the actual
+`board.tuning.pwm_compare` register and `board.tuning.pwm_expected` from RX calibration. Expected 65535 means
+calibration is unavailable. Ready checks clock, counter enable and output-channel enable; it does not measure
+PA6 voltage or radiated power. The keys precede the codec snapshot to fit the debug reply's size limit.
+
+The host RF test catches both the mismatched clock/register block and omitted RX/restoration updates.
+The hardware power, carrier alignment and speech outcome remain unverified on the corrected image.

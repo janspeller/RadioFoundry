@@ -80,6 +80,34 @@ profile host test now checks positive and negative offsets on the wire with the 
 The candidate artifact is `build/d878uv2-mic-gain/rfoundry_d878uv2_codec.bin`. It has not been flashed and is
 not a claim that this small control correction explains all weak-speech or carrier-noise symptoms.
 
+### Weak carrier changes the priority
+
+The peer's carrier is **weak and hissy even while the owner is silent**. Treat RF power, tracking and alignment
+as open before pushing microphone gain further. The last 433.500 MHz FM TX snapshot reports frequency word
+0x0069D5C0, RF state 0x4046, GPIO 0x9EF2, drive 0x47, MOD_GAIN 0x0DAC and all writes successful. These are
+commanded/read RF states, not a measurement of radiated power or carrier frequency.
+
+Source review found a concrete tuning-output bug: `TIMER_BASE(3)` addresses GD32 TIMER3 at 0x40000800,
+but `mcu_tim_clock_on(3)` enables GD32 TIMER2, whose PA6 output is at 0x40000400. Use `MCU_TIM(3)` for both
+the clock's numbering and the register block. RX entry and return from TX also omitted the tracking update;
+both now apply the calibrated receive duty. The host RF fixture was stale and did not compile this path.
+It now simulates timer clocks/registers, fails against the old address and missing RX update, and passes the
+corrected code, including split-frequency TX/RX restoration.
+
+The candidate is `build/d878uv2-tuning/rfoundry_d878uv2_codec.bin`, including the prior AGC-control correction.
+It is not flashed. New leading board view keys `tuning.pwm_ready`, `tuning.pwm_compare` and
+`tuning.pwm_expected` expose actual timer enable/compare versus the requested RX calibration. Microphone
+gain diagnostics also precede the verbose codec snapshot so reply truncation no longer hides them.
+The new HIL check reads these keys without retuning or transmitting. It is syntax-checked only: pytest is
+not installed in this shell, and the radio still has the earlier image. Direct SoC register reads on that
+image were refused, so no live timer-register or analog-voltage result is claimed.
+
+Validation: the RF startup/regression and codec-profile host tests pass. Normal firmware, CONFIG_DIAG=n,
+CONFIG_FM=n (with battery saving off), and CONFIG_DMR=n build without warnings. The diagnostics-off and
+FM-off links each hit a transient GCC LTO internal compiler error on the first attempt and passed on retry.
+The normal stack check passes, with 16 bytes least free in the idle task. Full CI and the new HIL test were
+not run. Only the agent's three temporary tuning configuration trees were removed after validation.
+
 ## Resume here
 
 Worktree `/var/home/jan/gitrepos/RadioFoundry/.claude/worktrees/d878uv2`, branch `d878uv2-bringup`, HEAD

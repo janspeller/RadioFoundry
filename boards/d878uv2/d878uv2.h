@@ -31,6 +31,7 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len);
 bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len);
 int d878uv2_cal_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap);
 int d878uv2_chip_bytes(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t cap);
+uint16_t d878uv2_tuning_value(uint8_t key);
 #if CONFIG_DMR || CONFIG_FM
 int d878uv2_codec_snapshot(uint8_t page, uint8_t reg);
 bool d878uv2_audio_reg(uint8_t chip, uint8_t page, uint8_t reg, uint32_t *value, bool write);
