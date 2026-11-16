@@ -24,6 +24,16 @@ Two alternate LTO links needed retries after compiler internal errors. The defau
 The new read-only analog-calibration HIL test collects cleanly but has not run on this unflashed image.
 Documentation links and generic-doc checks pass. Full CI was not run. The owner prefers to flash manually.
 
+The subsequent whole-DMR trace is recorded under "Whole DMR and microphone path audit" on the hardware page.
+It finds a separate digital Mic-setting bug: the board updates PGA and AGC maximum in memory but sends only
+PGA at each digital TX; the shared engine also ignores codec acknowledgments. These are not fixed in
+`fc1c9900` and do not prove the cause of quiet baseline audio. A coupled, acknowledged microphone-prepare
+sequence needs tests for rejection, timeout, early release and legacy mute/restore behavior before a DMR
+change is prepared. No new mandatory DMR ADC/I2S/codec-output initialization was established.
+The +40 producer condition was clarified as raw channel type >=2, not ordinary digital type 1. Ordinary FM
+type 0 and DMR type 1 keep the saved word. Do not send the recovered analog packet in ordinary DMR based
+on that earlier mislabeled condition. The prepared FM binary and its expected version remain unchanged.
+
 Current running image: **`273d7c23`**, verified through USB after the owner's manual update from
 `build/d878uv2-fm-mod/rfoundry_d878uv2_codec.bin`. It adds calibrated FM `MOD_GAIN` setup and the
 unbuffered-DAC correction. The owner reports a slight overall improvement and somewhat better 70 cm

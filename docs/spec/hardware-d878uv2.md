@@ -1295,7 +1295,10 @@ uses processing mode 0x80; mixed/digital paths using 0x82 do not justify changin
 The earlier conclusion that ANALOG_CONFIG's ten gain bytes were unavailable was incorrect. The reachable
 boot audio producer copies the first fifteen bytes from calibration +0x0040. Audio store id 0x15 takes the
 first ten, and its setter copies them to the RAM buffer used for field 0x3C bytes 1–10. Pure FM sends those
-bytes unchanged. The digital-channel branch's addition of 40 to the final big-endian word does not apply to FM.
+bytes unchanged. The addition of 40 to the final big-endian word tests raw channel type >=2, covering additional
+hybrid behavior whose full UI enumeration is unresolved. Pure FM type 0 and pure DMR type 1 do not take it.
+The earlier description of that branch as generically digital was incorrect. The radio-store emitter sends
+ANALOG_CONFIG only when the vocoder store is 16; this producer does not require it in ordinary DMR.
 The five remaining bytes are the MISC_GAIN calibration already used by this board.
 
 Both saved calibration copies on the owner's radio match these factory defaults:
@@ -1318,3 +1321,45 @@ eleven-byte field, as hexadecimal strings. The latter is `-` until acknowledged.
 diagnostics, not codec readback. The receive-only HIL check compares their gains and channel-width bits.
 Microphone PGA and saved calibration are unchanged. Hardware confirmation of transmit speech is pending;
 the restored RX gain is lower than the former unity setting, so receive volume can also change.
+
+### Whole DMR and microphone path audit
+
+This audit compares the reachable stock MCU lifecycle with the shared engine and this board's profile.
+The resident modem's internal codec/ADC and vocoder implementation remains outside the traced MCU path.
+An accepted packet or recognized call header does not measure microphone samples or intelligible voice.
+The shared protocol sequence is described in [modem-sct.md](modem-sct.md).
+
+| Stage | Current RadioFoundry path | Audit result |
+| --- | --- | --- |
+| Boot and common audio | Boot block, vocoder 4, calibrated DEMOD_GAIN and digital mic/speaker gains, then codec input/output trims | Sources match the identified calibration. Explicit CODEC_SELECT and additional MCU ADC/MICBIAS setup are not established stock requirements |
+| Return from FM | Drain analog ownership and select vocoder 4 before digital readiness | Analog gain calibration belongs to the analog engine; do not copy field 0x3C into ordinary DMR on the strength of the +40 branch |
+| Digital start | Processing mode 2, report fields, channel CC/own ID/call options, board start fields, RX work mode and slot selection; microphone start writes and band MOD_GAIN follow | Shared layer handles signaling; a board provides wiring and calibration. A call recognized through dummy-load leakage is not full validation of this path |
+| Receive | RF band enables and tuned frequency, CARRIER_READY, sync/slot/LC reports, native modem voice playback and HPL/speaker gating | The codec's receive side working does not prove microphone capture. Slot timing and codec delay remain separate RF measurements |
+| RF TX preparation | Saved reference DAC and PA6 tracking, RF microphone-source select and TX trims, band selection, PA power and PD0 slot-edge gating | Readback verifies programmed values, not modulation quality, reference voltage or RF power |
+| Microphone setting | Gain offset updates the left PGA row and AGC maximum row in memory | Both must reach the codec together; AGC control contains target/hysteresis fields and must not be treated as another linear gain |
+| Microphone at digital TX | The board's `codec_tx` points only to the left-PGA row; the four-write profile is sent only by `codec_start` | Confirmed mismatch: a setting changed after start can raise PGA while the old AGC maximum remains in force |
+| Voice generation and signaling | Shared engine starts native voice from LC metadata and paces later voice bursts at 60 ms; the resident modem supplies encoded microphone voice | Header recognition does not establish valid encoded speech or sufficient RF decode margin |
+| Codec acknowledgment | Shared digital engine discards codec-type packets, including errors; its single TX codec write does not wait for acceptance | An engine-level TX success cannot establish mic-write success. Stock codec wrappers use separate acknowledged transactions |
+| Release and return | End/drain call, gate PA, restore receive RF frequency/bandwidth/band enables and carrier handling | No newly established mandatory microphone-reset or converter-reset write was found for every ordinary PTT |
+
+Stock's ordinary Mic setting selects gain bytes 0x18/0x1C/0x20/0x24/0x2A and updates two audio-store
+operations: route/PGA and AGC control/maximum. Each codec write uses a separate TYPE 0x40 acknowledgment
+(200 ms in the traced wrappers). A cached runtime helper can reconnect IN1L and reapply PGA. Its other
+selector controls HPL; those speaker calls must not be counted as microphone resets.
+
+For example, this board's Mic offset +10 dB changes requested PGA and AGC maximum from 32 to 52, but after
+digital start only the PGA reaches the codec. The old ceiling can constrain the increase. Mode entry also
+calls the gain-field hook after `codec_start`, so in-memory freshness must be considered there. This explains
+a gain-setting consistency bug, not necessarily quiet audio at the unchanged baseline setting.
+
+The next digital microphone correction must apply the current coupled settings with acknowledgments before
+TX work mode. Replaying all four current microphone writes per call is one implementation strategy, not a
+claim that stock performs four writes on every PTT. Shared sequencing must preserve the existing mobile
+board's codec mute/restore behavior. Rejection, timeout and release during preparation need host tests.
+That correction is not implemented in the prepared FM image `fc1c9900`.
+
+The stock resend also carries a twelve-byte DC_OFFSET block. No new nondefault value for it, ordinary-voice
+VOCOER_IO_SET or MODOUT_CONFIG transaction, or additional ADC power/bias/routing write was established by
+this audit. Service/tone full-duplex commands and special stop debug bits are not ordinary voice defaults.
+Raw codec-I2C address convention, resident mode-change effects, actual ADC samples, deviation and burst
+timing remain unresolved. Normal-antenna DMR voice still needs testing independently of microphone gain.
