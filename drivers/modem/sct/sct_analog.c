@@ -29,6 +29,8 @@ void sct_analog_request(sct_analog_t *a, bool enabled, bool tx, bool narrow)
 	}
 #endif
 	if (!enabled) {
+		if (a->codec != NULL && a->tx_codec_started) sct_codec_cancel(a->codec);
+		a->tx_codec_started = false;
 		a->enabled = false;
 		a->ready = false;
 		if (a->phase == FAILED) {
@@ -184,14 +186,36 @@ void sct_analog_poll(sct_analog_t *a, uint32_t now_ms)
 #endif
 		if (!a->want_tx) break;
 		a->tx_codec_index = 0;
+		a->tx_codec_started = false;
 		a->phase = TX_MIC;
+		a->ready = false;
 		// fall through
 	case TX_MIC:
 		if (!a->want_tx) {
+			if (a->codec != NULL) sct_codec_cancel(a->codec);
+			a->tx_codec_started = false;
 			a->phase = RX_READY;
 			a->ready = true;
 			break;
 		}
+		if (a->codec != NULL && a->tx_codec_count != 0) {
+			if (a->tx_codec == NULL || a->tx_codec_count > SCT_CODEC_BATCH_MAX) {
+				a->error = ERROR_SEND;
+				a->phase = FAILED;
+				break;
+			}
+			if (a->codec->fault || (a->tx_codec_started && a->codec->state == SCT_CODEC_ERROR)) {
+				a->error = a->codec->error;
+				a->phase = FAILED;
+				break;
+			}
+			if (!a->tx_codec_started) {
+				a->tx_codec_started = sct_codec_begin(a->codec, a->tx_codec, a->tx_codec_count);
+				break;
+			}
+			a->tx_codec_index = a->codec->acked;
+			if (a->codec->state != SCT_CODEC_OK) break;
+		} else
 		if (a->tx_codec != NULL && a->tx_codec_index < a->tx_codec_count) {
 			uint8_t pkt[SCT_CODEC_PKT_BYTES];
 			sct_pkt_codec(pkt, &a->tx_codec[a->tx_codec_index]);

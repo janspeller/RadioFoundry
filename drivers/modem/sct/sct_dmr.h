@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include "hal_dmr_modem.h"
 #include "sct_pkt.h"
+#include "sct_codec.h"
 
 typedef struct {
 	// One built packet to the chip, at task level. False if the bus failed
@@ -58,6 +59,11 @@ typedef struct {
 	// engine ignores
 	const sct_codec_write_t *codec_tx;
 	const sct_codec_write_t *codec_rx;
+	// Optional acknowledged microphone batch before slot/work mode. The shared runtime codec owner must own
+	// every runtime codec write on this port; do not combine it with the legacy codec_* writes above/below.
+	sct_codec_t *codec;
+	const sct_codec_write_t *codec_prepare;
+	uint8_t codec_prepare_count;
 	// Optional: a codec write that silences the microphone when the call is ending (tx_release), and its undo at
 	// the return to receive
 	const sct_codec_write_t *codec_mic_off;

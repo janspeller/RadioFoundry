@@ -116,6 +116,25 @@ int main(void)
 		if (n) sct_analog_packet(&a, buf, n);
 	}
 	assert(a.ready && a.error == 0 && modulation_sent);
+	// The shared runtime codec owner must complete both coupled gain writes before analog TX readiness.
+	reject_route = false;
+	mic_routed = mic_unmuted = mic_agc = mic_ceiling = false;
+	codec_mic_offset(10); expected_mic_gain = 52;
+	sct_codec_t codec;
+	sct_codec_init(&codec,write_bus,NULL);
+	a.codec = &codec; a.tx_codec = codec_writes; a.tx_codec_count = CODEC_MIC_COUNT;
+	sct_analog_request(&a,true,true,true);
+	sct_analog_poll(&a,now++);
+	assert(!a.ready);
+	for (unsigned i=0; i<32 && !a.ready; i++) {
+		sct_analog_poll(&a,now);
+		sct_codec_poll(&codec,now++);
+		uint8_t buf[8];
+		uint16_t n=read_bus(buf,sizeof(buf),NULL);
+		if (n && !sct_codec_packet(&codec,buf,n)) sct_analog_packet(&a,buf,n);
+	}
+	assert(a.ready && a.error == 0 && codec.acked == 4 && codec.error == 0);
+	assert(mic_routed && mic_unmuted && mic_agc && mic_ceiling);
 	puts("codecSetupTest PASSED");
 	return 0;
 }

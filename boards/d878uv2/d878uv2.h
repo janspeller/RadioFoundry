@@ -104,8 +104,15 @@ void d878uv2_modem_carrier(bool carrier);
 sct_boot_result_t d878uv2_modem_boot_result(void);
 // The modulator's gain for the frequency about to be keyed, from this radio's calibration
 void d878uv2_modem_set_deviation(uint32_t hz);
+#if CONFIG_DMR
+void d878uv2_modem_pa_arm(void);
+bool d878uv2_modem_pa_ready(void);
+#endif
 // One TLV320AIC3204 register through the baseband (hardware-d878uv2.md 4.6)
 bool d878uv2_codec_write(uint8_t page, uint8_t reg, uint8_t value);
+#if CONFIG_DIAG
+uint32_t d878uv2_codec_value(uint8_t key);
+#endif
 #if CONFIG_FM
 void d878uv2_modem_analog(bool enabled, bool tx, bool narrow);
 #if CONFIG_DIAG

@@ -441,7 +441,7 @@ hrc5000Test: hrc5000Test.c $(HRC5K) $(wildcard $(ROOT)/drivers/modem/hrc5000/*.h
 
 # The SCT baseband driver (drivers/modem/sct): packets, both chips' boot and voice set-up, the DMR engine on a fake chip
 TESTS   += sctTest
-SCT := $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_dmr.c
+SCT := $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_dmr.c $(ROOT)/drivers/modem/sct/sct_codec.c
 sctTest: sctTest.c $(SCT) $(wildcard $(ROOT)/drivers/modem/sct/*.h) $(ROOT)/hal/hal_dmr_modem.h
 	$(CC) $(CFLAGS) -I$(ROOT)/hal -Wshadow -o $@ sctTest.c $(SCT)
 
@@ -1582,6 +1582,7 @@ rfGpsStartupTest: rfGpsStartupTest.c stubs/rf_startup/mcu_io.h $(ROOT)/boards/d8
 		-DRF_CAL_BYTES=d878uv2_cal_bytes -DRF_RADIO=d878uv2_radio \
 		-DRF_CAL_TUNE=d878uv2_cal_tune_duty -DRF_CAL_MOD_GAIN=d878uv2_cal_mod_gain \
 		-DRF_MODEM_DEVIATION=d878uv2_modem_set_deviation \
+		-DRF_MODEM_PA_ARM=d878uv2_modem_pa_arm -DRF_MODEM_PA_READY=d878uv2_modem_pa_ready \
 		-DRF_TUNING_VALUE=d878uv2_tuning_value \
 		-Wl,--gc-sections -o $@ rfGpsStartupTest.c $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS) $(ROOT)/drivers/rf/subaudio/subaudio.c
 .PHONY: run-rfgps
@@ -1615,17 +1616,25 @@ run-scti2c: sctI2cTest
 	./sctI2cTest
 
 TESTS += sctAnalogTest
-sctAnalogTest: sctAnalogTest.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_analog.h $(ROOT)/drivers/modem/sct/sct_pkt.c
-	$(CC) $(CFLAGS) -Wshadow -o $@ sctAnalogTest.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+sctAnalogTest: sctAnalogTest.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_analog.h $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_codec.c
+	$(CC) $(CFLAGS) -Wshadow -o $@ sctAnalogTest.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_codec.c
 .PHONY: run-sctanalog
 run: run-sctanalog
 run-sctanalog: sctAnalogTest
 	./sctAnalogTest
 
 TESTS += codecSetupTest
-codecSetupTest: codecSetupTest.c $(ROOT)/boards/d878uv2/audio_setup.h $(ROOT)/drivers/audio/tlv320aic3204/tlv320aic3204.h $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_analog.c
+codecSetupTest: codecSetupTest.c $(ROOT)/boards/d878uv2/audio_setup.h $(ROOT)/drivers/audio/tlv320aic3204/tlv320aic3204.h $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_codec.c
 	$(CC) $(CFLAGS) -I$(ROOT) -I$(ROOT)/hal -DAUDIO_CAL_TYPE=d878uv2_cal_audio_t -DAUDIO_CAL_READ=d878uv2_cal_audio '-DVOICE_SETUP_HEADER="boards/d878uv2/audio_setup.h"' -o $@ codecSetupTest.c \
-		$(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_analog.c
+		$(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_analog.c $(ROOT)/drivers/modem/sct/sct_codec.c
+
+TESTS += sctCodecTest
+sctCodecTest: sctCodecTest.c $(ROOT)/drivers/modem/sct/sct_codec.c $(ROOT)/drivers/modem/sct/sct_codec.h $(ROOT)/drivers/modem/sct/sct_pkt.c
+	$(CC) $(CFLAGS) -Wshadow -o $@ sctCodecTest.c $(ROOT)/drivers/modem/sct/sct_codec.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+.PHONY: run-sctcodec
+run: run-sctcodec
+run-sctcodec: sctCodecTest
+	./sctCodecTest
 .PHONY: run-codecsetup
 run: run-codecsetup
 run-codecsetup: codecSetupTest

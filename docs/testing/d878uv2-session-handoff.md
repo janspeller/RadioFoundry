@@ -8,6 +8,23 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+New combined candidate in preparation: `build/d878uv2-mic-prepare/rfoundry_d878uv2_codec.bin`. It includes
+the FM gain fix and complete, acknowledged microphone preparation for both modes. A shared runtime codec
+owner serializes volume and mic writes. DMR TX work mode and bursts wait for all four ACKs, and the PA slot
+gate requires the new call's completed batch generation. Early PTT release cancels preparation; queued
+data with `tx_end` still transmits after preparation. Abort/stop/mode change drain any in-flight ACK.
+Timeout or uncertain send fences the codec stream until radio restart. The legacy mobile mute/restore
+path remains unchanged. No flash or RF test was performed by the agent; hardware audio is unverified.
+After the owner's manual flash, verify the running version, then inspect `board.codec_runtime.*` after
+a short owner-operated call. `acked=4`, `error=0`, `fault=0` and equal mic PGA/ceiling verify command acceptance,
+not speech capture. Firmware images from earlier checkpoints are retained for comparison.
+Validation: shared DMR tests pass 734 checks, including existing mute/restore cases. Codec transaction,
+analog profile and RF startup/slot-gate tests pass. Default, DMR-off, FM-off (battery save off) and
+diagnostics-off builds pass without warnings, as does the other SCT board's default build. Alternate LTO
+links required sequential retries after the known compiler internal error. The default stack check passes
+with its 128-byte margin. Both read-only HIL tests collect; they have not run on the unflashed candidate.
+Sanitizer checks could not link because the host's ASan/UBSan runtime libraries are missing. Full CI was not run.
+
 New FM gain candidate: `build/d878uv2-fm-gains/rfoundry_d878uv2_codec.bin`. The trace recovered
 ANALOG_CONFIG bytes 1–10 from calibration
 +0x40..+0x49. The old claim that those bytes were unavailable RAM data was wrong. Both owner calibration
@@ -25,11 +42,11 @@ The new read-only analog-calibration HIL test collects cleanly but has not run o
 Documentation links and generic-doc checks pass. Full CI was not run. The owner prefers to flash manually.
 
 The subsequent whole-DMR trace is recorded under "Whole DMR and microphone path audit" on the hardware page.
-It finds a separate digital Mic-setting bug: the board updates PGA and AGC maximum in memory but sends only
+It found a separate digital Mic-setting bug: the board updated PGA and AGC maximum in memory but sent only
 PGA at each digital TX; the shared engine also ignores codec acknowledgments. These are not fixed in
-`fc1c9900` and do not prove the cause of quiet baseline audio. A coupled, acknowledged microphone-prepare
-sequence needs tests for rejection, timeout, early release and legacy mute/restore behavior before a DMR
-change is prepared. No new mandatory DMR ADC/I2S/codec-output initialization was established.
+`fc1c9900` and do not prove the cause of quiet baseline audio. The newer candidate above applies the coupled,
+acknowledged profile and adds rejection, timeout, early-release and legacy-path regression coverage.
+No new mandatory DMR ADC/I2S/codec-output initialization was established.
 The +40 producer condition was clarified as raw channel type >=2, not ordinary digital type 1. Ordinary FM
 type 0 and DMR type 1 keep the saved word. Do not send the recovered analog packet in ordinary DMR based
 on that earlier mislabeled condition. The prepared FM binary and its expected version remain unchanged.

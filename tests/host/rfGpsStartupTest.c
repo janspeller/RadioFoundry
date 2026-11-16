@@ -9,6 +9,7 @@ unsigned host_dac_init_mask, host_dac_writes[2];
 uint16_t host_dac_values[2];
 uint32_t host_dac_control, host_dac_clock;
 unsigned host_af_mask[5], host_timer_clocks;
+unsigned host_pin_levels[5];
 uint32_t host_timer_regs[6][16];
 static bool tune_valid;
 bool RF_CAL_TUNE(uint32_t hz, uint16_t *duty)
@@ -19,6 +20,9 @@ bool RF_CAL_TUNE(uint32_t hz, uint16_t *duty)
 uint16_t RF_CAL_MOD_GAIN(uint32_t hz) { (void)hz; return 3500u; }
 static uint32_t modulation_hz;
 void RF_MODEM_DEVIATION(uint32_t hz) { modulation_hz = hz; }
+static bool mic_prepared;
+void RF_MODEM_PA_ARM(void) { mic_prepared = false; }
+bool RF_MODEM_PA_READY(void) { return mic_prepared; }
 static uint16_t saved_control = 3620;
 static bool control_valid;
 bool RF_CAL_CONTROL(uint16_t *value) { *value = saved_control; return control_valid; }
@@ -71,7 +75,7 @@ void RF_GPS_INIT(void)
 bool RF_CAL_DRIVE(uint8_t level, uint32_t hz, uint8_t *drive)
 {
 	(void)level; (void)hz;
-	*drive = 0;
+	*drive = 47;
 	return true;
 }
 
@@ -120,7 +124,18 @@ static void test_audio_path(void)
 	assert(rf.cache[0][0x40] == RF_AUDIO_FILTER_DMR);
 	assert(rf.cache[0][0x58] == RF_AUDIO_58_DMR);
 	assert((rf.cache[0][0x3A] & 0x7000u) == 0x4000u);
+	host_pin_levels[GPIOD] = MCU_PIN(0);
+	mic_prepared = true; // an old call's completed setup must not arm a fresh call
 	assert(tx(438500000u, RADIO_BW_12K5, 0, NULL));
+	assert(!mic_prepared && host_dac_values[0] == 0);
+	MCU_EXTI0_HANDLER();
+	assert(host_dac_values[0] == 0);
+	mic_prepared = true;
+	MCU_EXTI0_HANDLER();
+	assert(host_dac_values[0] != 0);
+	host_pin_levels[GPIOD] = 0;
+	MCU_EXTI0_HANDLER();
+	assert(host_dac_values[0] == 0);
 	assert(TIMER_CH0CV(0x40000400u) == 1972 && host_timer_clocks == 2u);
 	assert(rf.state == AT1846S_STATE_DMR_TX);
 	assert(rf.cache[0][0x30] == 0x4046);

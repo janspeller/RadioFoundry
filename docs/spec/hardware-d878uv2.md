@@ -1324,7 +1324,8 @@ the restored RX gain is lower than the former unity setting, so receive volume c
 
 ### Whole DMR and microphone path audit
 
-This audit compares the reachable stock MCU lifecycle with the shared engine and this board's profile.
+This audit compares the reachable stock MCU lifecycle with the shared engine and board profile at `b17ef9ee`,
+before the microphone correction described below.
 The resident modem's internal codec/ADC and vocoder implementation remains outside the traced MCU path.
 An accepted packet or recognized call header does not measure microphone samples or intelligible voice.
 The shared protocol sequence is described in [modem-sct.md](modem-sct.md).
@@ -1352,14 +1353,37 @@ digital start only the PGA reaches the codec. The old ceiling can constrain the 
 calls the gain-field hook after `codec_start`, so in-memory freshness must be considered there. This explains
 a gain-setting consistency bug, not necessarily quiet audio at the unchanged baseline setting.
 
-The next digital microphone correction must apply the current coupled settings with acknowledgments before
+The digital microphone correction must apply the current coupled settings with acknowledgments before
 TX work mode. Replaying all four current microphone writes per call is one implementation strategy, not a
 claim that stock performs four writes on every PTT. Shared sequencing must preserve the existing mobile
 board's codec mute/restore behavior. Rejection, timeout and release during preparation need host tests.
-That correction is not implemented in the prepared FM image `fc1c9900`.
+That correction is not implemented in the earlier FM image `fc1c9900`; the newer candidate includes it.
 
 The stock resend also carries a twelve-byte DC_OFFSET block. No new nondefault value for it, ordinary-voice
 VOCOER_IO_SET or MODOUT_CONFIG transaction, or additional ADC power/bias/routing write was established by
 this audit. Service/tone full-duplex commands and special stop debug bits are not ordinary voice defaults.
 Raw codec-I2C address convention, resident mode-change effects, actual ADC samples, deviation and burst
 timing remain unresolved. Normal-antenna DMR voice still needs testing independently of microphone gain.
+
+### Acknowledged runtime microphone setup
+
+The board now gives both FM and DMR the complete current four-write microphone profile. DMR no longer
+uses a PGA-only TX write or unacknowledged microphone start writes. Its gain-field hook updates the PGA
+and AGC maximum before the runtime owner snapshots the batch; the AGC target/hysteresis byte stays fixed.
+The shared helper serializes microphone and HPL writes, and the modem task routes codec ACKs to it first.
+An accepted volume update is queued, not proof that the codec applied it.
+
+DMR slot gating is armed with the next microphone batch generation. PA output starts off even if PD0 is
+already high. The slot ISR requires that generation to be fully acknowledged before following PD0. It
+does not take a mutex or make an RTOS call. A prior call's completed setup cannot authorize a fresh call.
+Stock's four writes per ordinary PTT remain unproven; this is the port's explicit fresh-state strategy.
+
+`board.codec_runtime` exposes `acked`, `error`, `fault`, `mic_pga`, `mic_ceiling`, `timeouts` and `rejected`.
+The last acknowledged PGA and ceiling can be compared after an owner-operated call without keying RF.
+Errors 0xFE and 0xFF identify send failure and timeout. After either, restart the radio to reset the fenced
+codec stream. An explicit codec NAK is reported and prevents TX; its ACK has drained, so a later call can retry.
+These keys describe accepted commands, not ADC samples or a measurement of intelligible voice.
+
+Host tests cover coupled gain updates, volume ACK ordering, each mic-write rejection, timeout, late ACK,
+early release, abort, stop, mode restart, data queued before preparation and fresh-call PA gating. The
+other SCT board retains its legacy mute/restore path. Hardware speech results remain pending.

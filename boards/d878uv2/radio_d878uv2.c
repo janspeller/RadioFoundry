@@ -264,7 +264,11 @@ void MCU_EXTI0_HANDLER(void)
 	mcu_exti_clear(MCU_PIN(0));
 	slot_edges++;
 	if (slot_gate) {
-		pa_lines(mcu_pin_read(PIN_SCT_SLOT), tx_drive_now);
+		bool ready = true;
+#if CONFIG_DMR
+		ready = d878uv2_modem_pa_ready();
+#endif
+		pa_lines(ready && mcu_pin_read(PIN_SCT_SLOT), tx_drive_now);
 	}
 }
 
@@ -288,9 +292,12 @@ static void pa_on(uint8_t power, uint32_t hz)
 #define D878UV2_SLOT_GATE 1
 #endif
 	if (D878UV2_SLOT_GATE && mode_now == RADIO_MODE_DMR) {
-		// Let the slot line key it: arm the gate and follow the line's level now
+#if CONFIG_DMR
+		d878uv2_modem_pa_arm();
+#endif
+		// The next microphone batch must be acknowledged before any slot can raise the PA.
 		slot_gate = true;
-		pa_lines(mcu_pin_read(PIN_SCT_SLOT), drive);
+		pa_lines(false, drive);
 		keyed = true;
 		return;
 	}

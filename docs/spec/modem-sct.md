@@ -167,7 +167,7 @@ Frame lengths by kind:
 
 USBD, empty and short bursts are not sent.
 
-Start (`start`), all packets TYPE 0x05 (the voice set-up of section 2 ran once at boot):
+Start (`start`), with control fields in TYPE 0 and DMR fields in TYPE 0x05 (the voice setup of section 2 ran at boot):
 
 | Field | Value |
 | --- | --- |
@@ -194,7 +194,8 @@ modem task can both call in. No RTOS calls and no waits: the host tests run the 
 ## 5. Transmit
 
 1. `tx_begin`: the board's `tx_fields` (when given) as one control packet (TYPE 0), such as a modulator gain for
-   the band being keyed; then its `codec_tx` (when given), then DMR_CALL_SLOT `0x80 | aligned 0x40 | slot` (slot 0
+   the band being keyed; then acknowledged `codec_prepare` when provided, or legacy `codec_tx`, then
+   DMR_CALL_SLOT `0x80 | aligned 0x40 | slot` (slot 0
    in direct mode), then WORK_MODE transmit, in the Packet Interface's order. No frame goes before WORK_MODE is
    answered, or 40 ms without an answer (`mode_timeouts`). WORK_MODE refused: `TX_REJECTED`. The queue holds 8 bursts.
 2. Each frame is sent, then the engine waits for its answer (`43 00` or ACK 0x0A), at most a slot (60 ms). The next
@@ -237,8 +238,29 @@ modem task can both call in. No RTOS calls and no waits: the host tests run the 
    later in 10.4 µs steps when it delays the output that carries the 4FSK; the other sign moved it by less than a
    sample. A board sets them with `codec_start` and `tx_fields` (section 8).
 
-A codec write is answered by a TYPE 0x40 packet holding an `ACK_MESSAGE`. The engine skips TYPE 0x40 packets, so
-the answer is never taken as a frame's answer or a NAK, OK or not.
+A codec write is answered by a TYPE 0x40 packet holding an `ACK_MESSAGE`. Legacy codec writes retain their
+existing behavior: those answers are not frame answers or DMR NAKs. An acknowledged runtime codec owner
+consumes and checks its codec answers before they reach the DMR parser.
+
+### Acknowledged microphone preparation
+
+A port can supply `codec`, `codec_prepare` and `codec_prepare_count`. The shared `sct_codec` transaction
+helper snapshots up to four writes and sends one at a time, waiting up to 200 ms for each codec ACK.
+The board routes every runtime codec write, including volume updates, through that same owner. ACKs do not
+carry register addresses, so an older volume transaction must drain before microphone preparation begins.
+Queued volume changes coalesce by register and run after the batch. This port cannot mix acknowledged
+ownership with legacy codec start, mute or restore writes; `start` rejects that combination.
+
+The DMR engine queues bursts while preparation is pending. Slot selection and TX work mode wait until all
+writes succeed. A refusal, uncertain send or timeout rejects TX. PTT release during preparation cancels the
+voice call, while `tx_end` after queuing a data call still lets that queue drain after preparation. Abort,
+stop and mode reconfiguration cancel preparation. A canceled in-flight write retains ownership of its ACK;
+that ACK cannot complete the next batch. Timeout or send failure fences the stream until modem reset,
+because a late untagged ACK cannot safely be matched to a new write.
+
+FM can use the same runtime codec owner for its microphone batch. Its control commands keep their own
+acknowledgment handling. The helper contains no RTOS calls or blocking waits. A completed batch publishes
+a generation counter, allowing a board's slot gate to require fresh microphone setup for each call.
 
 ## 6. Receive
 

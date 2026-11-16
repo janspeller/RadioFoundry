@@ -199,6 +199,12 @@ bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
 		return true;
 	}
 	i -= 2u;
+	if (i < 7u) {
+		static const char *const names[] = { "acked", "error", "fault", "mic_pga", "mic_ceiling", "timeouts", "rejected" };
+		dl_fmt(buf, len, "codec_runtime.%s=%u", names[i], (unsigned)d878uv2_codec_value(i));
+		return true;
+	}
+	i -= 7u;
 #endif
 #if CONFIG_FM
 	if (i < 2u) {
@@ -216,6 +222,8 @@ bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
 		return true;
 	}
 	i -= 2u;
+	// Keep FM readiness/errors ahead of raw GPIO and verbose codec snapshots in the bounded reply.
+	if (i < 42u) i = (uint8_t)(i < 12u ? i + 30u : i - 12u);
 #endif
 	unsigned control_at = CONFIG_FM ? 42u : CONFIG_DMR ? 30u : 14u;
 	unsigned total = control_at + 6u;

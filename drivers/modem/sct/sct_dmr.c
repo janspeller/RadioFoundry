@@ -42,6 +42,8 @@ static struct {
 	uint32_t tx_edges;	// the port's burst_edges() at the key-up
 	uint32_t tx_sent;	// frames sent since
 	bool audio_tx;		// codec_tx went: codec_rx is due at the return to receive
+	bool preparing, prepare_started, prepare_cancel;
+	uint8_t tx_slot;
 	bool mic_off;		// codec_mic_off went: codec_mic_on is due at the return to receive
 	bool lc_new;		// set_embedded_lc gave an LC not yet sent
 	uint8_t emb_lc[LC_BYTES];
@@ -327,7 +329,7 @@ static bool send_frame(uint8_t prop, const uint8_t *data, uint8_t len)
 // The next queued burst, when the chip is ready for it
 static void tx_pump(void)
 {
-	while (s.q_count != 0 && !s.mode_wait && !s.waiting && (!s.paced || (int32_t)(s.now - s.next_ms) >= 0)) {
+	while (s.q_count != 0 && !s.preparing && !s.mode_wait && !s.waiting && (!s.paced || (int32_t)(s.now - s.next_ms) >= 0)) {
 		const dmr_tx_burst_t *b = &s.q[s.q_head];
 
 		if (b->kind == DMR_BURST_VOICE) {
@@ -377,6 +379,8 @@ static void tx_pump(void)
 // The chip refused the transmission: back to receive, and the stack hears it wasn't sent
 static void tx_reject(void)
 {
+	if (s.preparing) sct_codec_cancel(s.port->codec);
+	s.preparing = false;
 	s.st.tx_rejected++;
 	s.tx = TX_IDLE;
 	s.waiting = false;
@@ -392,6 +396,8 @@ static void tx_reject(void)
 
 static void tx_finish(void)
 {
+	if (s.preparing) sct_codec_cancel(s.port->codec);
+	s.preparing = false;
 	s.tx = TX_IDLE;
 	s.waiting = false;
 	s.paced = false;
@@ -446,10 +452,33 @@ static void health_mark(void)
 	}
 }
 
+static bool tx_work_mode(void);
+
 static void tx_step(void)
 {
 	if (s.tx == TX_IDLE)
 		return;
+	if (s.preparing) {
+		if (s.prepare_cancel) {
+			tx_finish();
+			return;
+		}
+		sct_codec_t *c = s.port->codec;
+		if (c->fault || (s.prepare_started && c->state == SCT_CODEC_ERROR)) {
+			tx_reject();
+			return;
+		}
+		if (!s.prepare_started) {
+			s.prepare_started = sct_codec_begin(c, s.port->codec_prepare, s.port->codec_prepare_count);
+			return;
+		}
+		if (c->state != SCT_CODEC_OK) return;
+		s.preparing = false;
+		if (!tx_work_mode()) {
+			tx_reject();
+			return;
+		}
+	}
 	// Unanswered within the Packet Interface's time: the packet may be lost, but a transmission is under way
 	if (s.mode_wait && (int32_t)(s.now - s.mode_ms) >= SCT_DMR_MODE_WAIT_MS) {
 		s.mode_wait = false;
@@ -913,7 +942,14 @@ static bool x_start(const dmr_config_t *cfg, dmr_event_cb_t cb, void *ctx)
 {
 	if (s.port == NULL || (s.port->ready != NULL && !s.port->ready(s.port->ctx)))
 		return false;
+	// An acknowledged codec owner cannot share its untagged ACK stream with legacy fire-and-forget writes.
+	if (s.port->codec != NULL && (s.port->codec_tx != NULL || s.port->codec_rx != NULL ||
+	    s.port->codec_mic_off != NULL || s.port->codec_mic_on != NULL || s.port->codec_start_count != 0 ||
+	    s.port->codec_prepare == NULL || s.port->codec_prepare_count == 0 ||
+	    s.port->codec_prepare_count > SCT_CODEC_BATCH_MAX)) return false;
 	sct_pkt_t p;
+	if (s.preparing) sct_codec_cancel(s.port->codec);
+	s.preparing = false;
 
 	s.cfg = *cfg;
 	s.cb = cb;
@@ -960,6 +996,8 @@ static bool x_start(const dmr_config_t *cfg, dmr_event_cb_t cb, void *ctx)
 static void x_stop(void)
 {
 	sct_pkt_t p;
+	if (s.preparing) sct_codec_cancel(s.port->codec);
+	s.preparing = false;
 
 	s.running = false;
 	rx_voice_clear();
@@ -1011,31 +1049,35 @@ static void x_rx_lock_slot(int8_t ts)
 	}
 }
 
+static bool tx_work_mode(void)
+{
+	sct_pkt_t p;
+	sct_pkt_begin(&p, SCT_TYPE_DMR);
+	sct_pkt_add1(&p, SCT_F_DMR_CALL_SLOT, s.tx_slot);
+	if (!send(&p)) return false;
+	s.mode_wait = true;
+	s.mode_ms = s.now;
+	sct_pkt_begin(&p, SCT_TYPE_CONTROL);
+	add_work_mode(&p, 2);
+	return send(&p);
+}
+
 static bool x_tx_begin(dmr_timing_t timing, int8_t ts, dmr_access_t access)
 {
 	(void)access;	// the chip has no polite access of its own; the stack's channel check stands
 	if (!s.running || s.tx != TX_IDLE)
 		return false;
-	sct_pkt_t p;
 	// TX on the slot asked; with aligned timing, take the TX timing from what is received
 	uint8_t slot = (uint8_t)(0x80 | (timing == DMR_TIMING_ALIGNED ? 0x40 : 0) | (!s.cfg.repeater ? 0 : ts == 2 ? 2 : 1));
 
 	if (!send_tx_fields())
 		return false;
 	audio_tx();
-	// The slot first: the Packet Interface's transmit sequence, and WORK_MODE is what starts it
-	sct_pkt_begin(&p, SCT_TYPE_DMR);
-	sct_pkt_add1(&p, SCT_F_DMR_CALL_SLOT, slot);
-	bool sent = send(&p);
-
-	if (sent) {
-		s.mode_wait = true;	// before the send: its answer can be the next thing in
-		s.mode_ms = s.now;
-		sct_pkt_begin(&p, SCT_TYPE_CONTROL);
-		add_work_mode(&p, 2);
-		sent = send(&p);
-	}
-	if (!sent) {
+	s.tx_slot = slot;
+	s.preparing = s.port->codec != NULL;
+	s.prepare_started = false;
+	s.prepare_cancel = false;
+	if (!s.preparing && !tx_work_mode()) {
 		s.mode_wait = false;
 		audio_rx();
 		return false;
@@ -1080,6 +1122,10 @@ static void x_tx_end(void)
 
 static void x_tx_release(void)
 {
+	if (s.preparing) {
+		s.prepare_cancel = true;
+		return;
+	}
 	if (s.tx == TX_IDLE || s.mic_off || s.port->codec_mic_off == NULL)
 		return;
 	s.mic_off = true;
@@ -1090,6 +1136,8 @@ static void x_tx_abort(void)
 {
 	if (s.tx == TX_IDLE)
 		return;
+	if (s.preparing) sct_codec_cancel(s.port->codec);
+	s.preparing = false;
 	s.tx = TX_IDLE;
 	s.q_count = 0;
 	s.waiting = false;

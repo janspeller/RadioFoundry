@@ -26,6 +26,7 @@
 static sct_analog_t analog;
 #endif
 #include "modem/sct/sct_host.h"
+#include "modem/sct/sct_codec.h"
 #include "FreeRTOS.h"
 #include "semphr.h"
 #include "task.h"
@@ -175,6 +176,7 @@ static const sct_host_t host = {
 };
 
 static SemaphoreHandle_t lock;
+static sct_codec_t codec;
 static bool booted, boot_done;
 #if CONFIG_DIAG
 static uint8_t codec_snapshot[2][128];
@@ -262,6 +264,21 @@ void d878uv2_modem_set_deviation(uint32_t hz)
 }
 
 #if CONFIG_DMR
+static volatile uint32_t pa_generation;
+
+void d878uv2_modem_pa_arm(void)
+{
+	port_lock(NULL);
+	uint32_t next = codec.generation + 1u;
+	pa_generation = next == 0 ? 1u : next;
+	port_unlock(NULL);
+}
+
+bool d878uv2_modem_pa_ready(void)
+{
+	return codec.completed == pa_generation;
+}
+
 // The chip looks for sync only from CARRIER_READY on (modem-sct.md 3), so a board that never sends it boots the
 // baseband and then hears nothing. It goes out two ways: from the board's own carrier reading
 // (d878uv2_modem_carrier, called by the radio's status path) and, whatever the board reads, rx_settle_ms after
@@ -300,9 +317,9 @@ static uint8_t port_gain_fields(const sct_field_t **fields, void *ctx)
 static const sct_dmr_port_t port = {
 	.send = port_send,
 	.call_option = { 0x01, 0x40, 0x42, 0x4F, 0x08 },
-	.codec_start = codec_writes,
-	.codec_start_count = CODEC_MIC_COUNT,
-	.codec_tx = &codec_writes[1],
+	.codec = &codec,
+	.codec_prepare = codec_writes,
+	.codec_prepare_count = CODEC_MIC_COUNT,
 	.tx_fields = port_gain_fields,
 	.start_fields = digital_setup,
 	.start_count = sizeof(digital_setup) / sizeof(digital_setup[0]),
@@ -320,6 +337,7 @@ static const sct_dmr_port_t port = {
 static void on_packet(const uint8_t *pkt, uint16_t len, void *ctx)
 {
 	(void)ctx;
+	if (sct_codec_packet(&codec, pkt, len)) return;
 #if CONFIG_FM
 	if (sct_analog_owns_link(&analog)) {
 		sct_analog_packet(&analog, pkt, len);
@@ -359,6 +377,7 @@ static void modem_task(void *arg)
 			sct_dmr_poll(hal_millis());
 #endif
 		}
+		if (booted) sct_codec_poll(&codec, hal_millis());
 		port_unlock(NULL);
 		vTaskDelay(pdMS_TO_TICKS(MODEM_POLL_MS));
 	}
@@ -366,6 +385,7 @@ static void modem_task(void *arg)
 
 bool d878uv2_modem_init(void)
 {
+	sct_codec_init(&codec, port_send, NULL);
 #if CONFIG_DMR
 	sct_dmr_init(&port);
 #endif
@@ -376,6 +396,7 @@ bool d878uv2_modem_init(void)
 	analog.config = analog_config;
 	analog.tx_codec = codec_writes;
 	analog.tx_codec_count = CODEC_MIC_COUNT;
+	analog.codec = &codec;
 #endif
 	if (crc32(__codec_slot, SCT_BOOT_BLOCK_BYTES) != BOOT_BLOCK_CRC32) {
 		boot_result = SCT_BOOT_NO_BLOCK;
@@ -472,19 +493,30 @@ uint32_t d878uv2_analog_value(uint8_t key)
 // (docs/spec/hardware-d878uv2.md 4.6)
 bool d878uv2_codec_write(uint8_t page, uint8_t reg, uint8_t value)
 {
-	uint8_t pkt[SCT_CODEC_PKT_BYTES];
 	sct_codec_write_t w = { .page = page, .reg = reg, .value = value };
 
 	if (!booted) {
 		return false;
 	}
-	sct_pkt_codec(pkt, &w);
 	port_lock(NULL);
-	bool ok = sct_host_send(&host, pkt, sizeof(pkt));
+	bool ok = sct_codec_update(&codec, &w);
 
 	port_unlock(NULL);
 	return ok;
 }
+
+#if CONFIG_DIAG
+uint32_t d878uv2_codec_value(uint8_t key)
+{
+	port_lock(NULL);
+	uint32_t value = key == 0 ? codec.acked : key == 1 ? codec.error : key == 2 ? codec.fault :
+		key == 3 ? (codec.acked > 1 ? codec.batch[1].value : 0) :
+		key == 4 ? (codec.acked > 3 ? codec.batch[3].value : 0) :
+		key == 5 ? codec.timeouts : codec.rejected;
+	port_unlock(NULL);
+	return value;
+}
+#endif
 
 // The boot's result, for the diagnostics line
 sct_boot_result_t d878uv2_modem_boot_result(void)

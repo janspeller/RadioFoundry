@@ -128,3 +128,5 @@ If carrier alignment does not improve quiet speech, report that result separatel
 and microphone gain control different stages; matching carrier frequency does not verify either stage.
 For boards with calibrated analog processing, a firmware correction can change both transmit speech and
 receive volume. Compare transmit clarity and receiver volume separately at the same channel width.
+If codec diagnostics report a runtime fault after a write timeout or send failure, restart the radio.
+This resets the command stream so an old acknowledgment cannot be mistaken for a new microphone setup.

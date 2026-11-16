@@ -16,7 +16,8 @@
 static inline void mcu_pin_write(unsigned port, unsigned pin, bool level) { (void)port; (void)pin; (void)level; }
 static inline void mcu_pin_out(unsigned port, unsigned pin, bool level, bool od) { (void)od; mcu_pin_write(port, pin, level); }
 static inline void mcu_pin_in(unsigned port, unsigned pin, unsigned pull) { (void)port; (void)pin; (void)pull; }
-static inline bool mcu_pin_read(unsigned port, unsigned pin) { (void)port; (void)pin; return false; }
+extern unsigned host_pin_levels[5];
+static inline bool mcu_pin_read(unsigned port, unsigned pin) { return (host_pin_levels[port] & pin) != 0; }
 static inline void mcu_pin_analog(unsigned port, unsigned pins) { (void)port; (void)pins; }
 extern unsigned host_af_mask[5];
 static inline void mcu_pin_af(unsigned port, unsigned pins, unsigned af, bool od)

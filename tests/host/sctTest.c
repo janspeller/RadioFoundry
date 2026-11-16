@@ -1800,6 +1800,108 @@ static void test_field_access(void)
 	sct_dmr_modem.stop();
 }
 
+static unsigned tx_work_sent(void)
+{
+	unsigned count = 0;
+	for (int i = 0; i < nsent; i++) {
+		const uint8_t *d = sent_field(i, SCT_F_WORK_MODE, NULL);
+		if (d != NULL && d[0] == 2) count++;
+	}
+	return count;
+}
+
+static void test_dmr_mic_prepare(void)
+{
+	sct_codec_t codec;
+	sct_codec_write_t mic[] = {{1,52,0x80},{1,59,32},{0,86,0xA0},{0,88,32}};
+	sct_dmr_port_t p = { .send=d_send, .codec=&codec, .codec_prepare=mic, .codec_prepare_count=4 };
+	dmr_config_t cfg = { .own_id=1234567, .cc=1 };
+	const uint8_t ok[] = {0x84,0xA9,0x61,0,2,0x40,0x17,0};
+	uint32_t t = 20000;
+	// Change gain after digital start: both PGA and ceiling must reach the codec before TX work mode.
+	sct_codec_init(&codec,d_send,NULL);
+	sct_dmr_init(&p); nsent=nev=0;
+	CHECK(m->start(&cfg,on_event,NULL));
+	mic[1].value=mic[3].value=52;
+	nsent=0;
+	CHECK(m->tx_begin(DMR_TIMING_OWN,1,DMR_ACCESS_IMPOLITE));
+	dmr_tx_burst_t b=burst(DMR_BURST_CSBK,0,12);
+	CHECK(m->tx_queue(&b) && frames_sent()==0 && tx_work_sent()==0);
+	m->tx_end(); // data callers finish queueing before asynchronous codec preparation has completed
+	CHECK(m->is_transmitting());
+	sct_dmr_poll(t++);
+	for (unsigned i=0; i<4; i++) {
+		sct_codec_poll(&codec,t++);
+		CHECK(is_codec(nsent-1,&mic[i]) && tx_work_sent()==0 && frames_sent()==0);
+		static const uint8_t unrelated[] = {0x17,0};
+		chip_packet(unrelated,2,SCT_TYPE_CONTROL,t++);
+		CHECK(codec.acked==i);
+		CHECK(sct_codec_packet(&codec,ok,sizeof(ok)));
+		sct_dmr_poll(t++);
+	}
+	CHECK(codec.acked==4 && tx_work_sent()==1 && frames_sent()==0);
+	static const uint8_t mode_ok[] = {0x18,0};
+	chip_packet(mode_ok,2,SCT_TYPE_CONTROL,t++);
+	CHECK(frames_sent()==1);
+	m->tx_abort(); m->stop();
+
+	// Refusal or release at every microphone write must prevent TX, including a late final ACK.
+	for (unsigned release=0; release<2; release++) for (unsigned at=0; at<4; at++) {
+		sct_codec_init(&codec,d_send,NULL);
+		sct_dmr_init(&p); nsent=nev=0;
+		CHECK(m->start(&cfg,on_event,NULL)); nsent=0;
+		CHECK(m->tx_begin(DMR_TIMING_OWN,1,DMR_ACCESS_IMPOLITE));
+		CHECK(m->tx_queue(&b)); sct_dmr_poll(t++);
+		for (unsigned i=0; i<=at; i++) {
+			sct_codec_poll(&codec,t++);
+			if (i<at) {
+				CHECK(sct_codec_packet(&codec,ok,sizeof(ok)));
+				sct_dmr_poll(t++);
+			}
+		}
+		if (release) {
+			m->tx_release(); m->tx_end();
+			CHECK(count_ev(DMR_EV_TX_DONE)==1);
+			CHECK(sct_codec_packet(&codec,ok,sizeof(ok)));
+		} else {
+			uint8_t nak[] = {0x84,0xA9,0x61,0,2,0x40,0x17,6};
+			CHECK(sct_codec_packet(&codec,nak,sizeof(nak)));
+		}
+		sct_dmr_poll(t++);
+		CHECK(!m->is_transmitting() && tx_work_sent()==0 && frames_sent()==0);
+		if (!release) CHECK(count_ev(DMR_EV_TX_REJECTED)==1);
+		m->stop();
+	}
+	sct_codec_init(&codec,d_send,NULL);
+	sct_dmr_init(&p); nsent=nev=0;
+	CHECK(m->start(&cfg,on_event,NULL)); nsent=0;
+	CHECK(m->tx_begin(DMR_TIMING_OWN,1,DMR_ACCESS_IMPOLITE));
+	sct_dmr_poll(t++); sct_codec_poll(&codec,t);
+	t+=200; sct_codec_poll(&codec,t); sct_dmr_poll(t++);
+	CHECK(codec.fault && !m->is_transmitting() && tx_work_sent()==0);
+	CHECK(count_ev(DMR_EV_TX_REJECTED)==1);
+	CHECK(sct_codec_packet(&codec,ok,sizeof(ok)));
+	CHECK(m->tx_begin(DMR_TIMING_OWN,1,DMR_ACCESS_IMPOLITE));
+	sct_dmr_poll(t++);
+	CHECK(!m->is_transmitting() && tx_work_sent()==0); // timed-out ACK stream remains fenced
+	m->stop();
+	for (unsigned action=0; action<3; action++) {
+		sct_codec_init(&codec,d_send,NULL);
+		sct_dmr_init(&p); nsent=nev=0;
+		CHECK(m->start(&cfg,on_event,NULL)); nsent=0;
+		CHECK(m->tx_begin(DMR_TIMING_OWN,1,DMR_ACCESS_IMPOLITE));
+		sct_dmr_poll(t++); sct_codec_poll(&codec,t++);
+		if (action==0) m->tx_abort();
+		else if (action==1) m->stop();
+		else CHECK(m->start(&cfg,on_event,NULL)); // channel/mode reconfiguration while a write is in flight
+		CHECK(sct_codec_packet(&codec,ok,sizeof(ok)));
+		sct_dmr_poll(t++);
+		CHECK(!m->is_transmitting() && tx_work_sent()==0 && codec.acked==0);
+		m->stop();
+	}
+	sct_dmr_init(&port);
+}
+
 int main(void)
 {
 	test_build();
@@ -1823,6 +1925,7 @@ int main(void)
 	test_dmr_tx_early_end();
 	test_dmr_tx_fields();
 	test_dmr_codec_start();
+	test_dmr_mic_prepare();
 	test_chip_answers();
 	test_field_access();
 	CHECK(lock_depth == 0 && lock_max == 1);

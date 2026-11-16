@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "sct_pkt.h"
+#include "sct_codec.h"
 #include "config.h"
 
 typedef struct {
@@ -19,6 +20,8 @@ typedef struct {
 	// Optional board microphone routing/gain, reapplied and acknowledged before each TX work-mode request.
 	const sct_codec_write_t *tx_codec;
 	uint8_t tx_codec_count, tx_codec_index;
+	sct_codec_t *codec;	// Optional shared runtime codec owner (also serializes volume writes).
+	bool tx_codec_started;
 	bool pending_codec;
 	bool enabled, want_tx, narrow, restart, ready, digital_ready, analog_loaded;
 #if CONFIG_DIAG
