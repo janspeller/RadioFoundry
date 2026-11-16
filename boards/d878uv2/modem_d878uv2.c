@@ -216,14 +216,6 @@ int8_t d878uv2_modem_mic_offset(void) { return mic_offset_db; }
 uint8_t d878uv2_modem_mic_pga(void) { return codec_mic_pga(mic_offset_db); }
 
 #if CONFIG_DMR
-// The engine calls this before codec_tx; prepare the next write without touching the bus here.
-static uint8_t port_tx_fields(const sct_field_t **fields, void *ctx)
-{
-	(void)ctx;
-	codec_mic_offset(mic_offset_db);
-	*fields = NULL;
-	return 0;
-}
 
 static bool port_ready(void *ctx)
 {
@@ -268,6 +260,29 @@ static void port_unlock(void *ctx)
 // After a transmission the receiver needs a moment before the chip should start hunting
 #define CR_SETTLE_MS		14
 
+// The modulator's gain, sent at each start and before every transmission. The chip's own default leaves both
+// kinds of transmission weak on this radio: FM deviation the other radio can barely hear, and DMR it cannot
+// decode at all. Q16.11, so 2048 is 0 dB and 4096 is +6 dB.
+//
+// **A guess in the right units.** The radio's own deviation lives in its calibration (the band record's MOD
+// byte, docs/spec/hardware-d878uv2.md 5), and how that reaches the modulator is not established, so this is a
+// build knob to find the level by experiment: -DD878UV2_MOD_GAIN=<q16.11>
+#ifndef D878UV2_MOD_GAIN
+#define D878UV2_MOD_GAIN	2048u
+#endif
+static const uint8_t mod_gain[] = { (uint8_t)(D878UV2_MOD_GAIN >> 8), (uint8_t)(D878UV2_MOD_GAIN & 0xFFu) };
+static const sct_field_t tx_gain_fields[] = {
+	{ SCT_F_MOD_GAIN, sizeof(mod_gain), mod_gain },
+};
+
+static uint8_t port_gain_fields(const sct_field_t **fields, void *ctx)
+{
+	(void)ctx;
+	codec_mic_offset(mic_offset_db);
+	*fields = tx_gain_fields;
+	return (uint8_t)(sizeof(tx_gain_fields) / sizeof(tx_gain_fields[0]));
+}
+
 // How the board wires the chip (modem-sct.md 4). **Taken from the family's mobile**, which runs the same baseband:
 // this radio's own wiring is not recorded, so these five bytes are the second thing to question if the chip boots
 // but no call decodes (docs/testing/d878uv2-bringup.md, stage 8)
@@ -277,7 +292,9 @@ static const sct_dmr_port_t port = {
 	.codec_start = codec_writes,
 	.codec_start_count = CODEC_MIC_COUNT,
 	.codec_tx = &codec_writes[1],
-	.tx_fields = port_tx_fields,
+	.tx_fields = port_gain_fields,
+	.start_fields = tx_gain_fields,
+	.start_count = sizeof(tx_gain_fields) / sizeof(tx_gain_fields[0]),
 	.report_field = 0xFF,
 	.rx_ready = D878UV2_CR_READY,
 	.rx_settle_ms = CR_SETTLE_MS,
