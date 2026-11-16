@@ -70,6 +70,8 @@ bool d878uv2_nand_ready(void);
 uint16_t d878uv2_nand_id(void);
 bool d878uv2_nand_read(uint32_t addr, void *buf, uint32_t len);
 bool d878uv2_nand_read_any(uint32_t addr, void *buf, uint32_t len, uint32_t *ecc_failed);
+// The factory's regions (calibration), read with the chip's on-die ECC off: see the note in nand_d878uv2.c
+bool d878uv2_nand_read_factory(uint32_t addr, void *buf, uint32_t len);
 void d878uv2_nand_lock(void);
 void d878uv2_nand_unlock(void);
 #if CONFIG_NAND_STORAGE

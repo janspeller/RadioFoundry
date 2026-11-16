@@ -128,6 +128,35 @@ bool d878uv2_nand_read(uint32_t addr, void *buf, uint32_t len)
 	return ok;
 }
 
+// The factory's own regions, read with the chip's on-die ECC turned off for the transfer.
+//
+// The calibration block reports ECC failures when it is read the normal way, which is what a region written by a
+// programmer that does not use the on-die ECC looks like: the syndrome over its spare bytes never matches, so a
+// checked read refuses data that is perfectly good. Reading raw returns the same bytes either way - on-die ECC
+// corrects, it does not encode what is already there - so the only thing given up is correction on a region this
+// port never writes (docs/spec/hardware-d878uv2.md 5).
+bool d878uv2_nand_read_factory(uint32_t addr, void *buf, uint32_t len)
+{
+	d878uv2_nand_lock();
+	bool ok = ready;
+
+	if (ok) {
+		ok = spi_nand_set_feature(&nand, SPI_NAND_FEATURE_CONFIG, 0u);	// ECC off for the read
+	}
+	if (ok) {
+		uint32_t failed = 0;
+
+		ok = spi_nand_read_any(&nand, addr, buf, len, &failed);
+		// failed counts pages whose ECC did not verify, which is meaningless with ECC off: ignore it here
+	}
+	// Put the chip back however the read went: everything else expects ECC on
+	if (ready) {
+		spi_nand_set_feature(&nand, SPI_NAND_FEATURE_CONFIG, nand.config);
+	}
+	d878uv2_nand_unlock();
+	return ok;
+}
+
 bool d878uv2_nand_read_any(uint32_t addr, void *buf, uint32_t len, uint32_t *ecc_failed)
 {
 	d878uv2_nand_lock();

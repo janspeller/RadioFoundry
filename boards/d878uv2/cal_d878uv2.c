@@ -49,10 +49,13 @@ static nand_remap_t calibration_map;
 static uint8_t map_status;
 static uint32_t signature_crc;
 
+// The factory's regions are read with the chip's on-die ECC off: a checked read refuses them, which is what a
+// region written without that ECC looks like (nand_d878uv2.c). The diagnostic inspection further down keeps the
+// checked read on purpose, so an ECC failure can still be seen rather than hidden
 static bool raw_read(uint32_t addr, void *out, uint32_t len, void *ctx)
 {
 	(void)ctx;
-	return d878uv2_nand_read(addr, out, len);
+	return d878uv2_nand_read_factory(addr, out, len);
 }
 
 static bool cal_read(uint32_t addr, void *out, uint32_t len)
@@ -97,7 +100,7 @@ bool d878uv2_cal_load(void)
 	uint8_t signature[25];
 	map_status = 1;
 	signature_crc = 0;
-	if (!d878uv2_nand_read(0x1FF00u, signature, sizeof(signature))) return false;
+	if (!d878uv2_nand_read_factory(0x1FF00u, signature, sizeof(signature))) return false;
 	signature_crc = storage_crc32(0, signature, sizeof(signature));
 	map_status = 2;
 	if (signature_crc != 0xD0D91952u) return false;
