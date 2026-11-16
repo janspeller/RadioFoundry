@@ -393,6 +393,11 @@ call start. Release sends call stop and restores RX work mode and carrier ready.
 cancels the start. Each step waits for its acknowledgment; refusal, write failure or 200 ms timeout records an
 error and stops the sequence until another request. Codec acknowledgments cannot complete these steps.
 
+Board control fields can include calibrated `MOD_GAIN`. They are acknowledged during analog setup before
+receive work mode; supplying the field only to the digital engine does not configure a fresh analog session.
+The board updates frequency-dependent calibration under its modem lock and restarts analog setup if the
+selected gain changes.
+
 The selected analog channel filters are 0x00 for narrow and 0x0A for wide. Gains use the field's documented
 Q formats. These are nominal settings, not factory gain calibration. The engine is used under `CONFIG_FM`;
 the baseband and codec still boot in an FM-only build. No TX commands are issued without a TX request.

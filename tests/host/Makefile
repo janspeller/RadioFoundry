@@ -1623,9 +1623,9 @@ run-sctanalog: sctAnalogTest
 	./sctAnalogTest
 
 TESTS += codecSetupTest
-codecSetupTest: codecSetupTest.c $(ROOT)/boards/d878uv2/audio_setup.h $(ROOT)/drivers/audio/tlv320aic3204/tlv320aic3204.h $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+codecSetupTest: codecSetupTest.c $(ROOT)/boards/d878uv2/audio_setup.h $(ROOT)/drivers/audio/tlv320aic3204/tlv320aic3204.h $(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_analog.c
 	$(CC) $(CFLAGS) -I$(ROOT) -I$(ROOT)/hal -DAUDIO_CAL_TYPE=d878uv2_cal_audio_t -DAUDIO_CAL_READ=d878uv2_cal_audio '-DVOICE_SETUP_HEADER="boards/d878uv2/audio_setup.h"' -o $@ codecSetupTest.c \
-		$(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c
+		$(ROOT)/drivers/modem/sct/sct_host.c $(ROOT)/drivers/modem/sct/sct_pkt.c $(ROOT)/drivers/modem/sct/sct_analog.c
 .PHONY: run-codecsetup
 run: run-codecsetup
 run-codecsetup: codecSetupTest

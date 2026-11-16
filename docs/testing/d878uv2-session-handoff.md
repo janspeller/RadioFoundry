@@ -8,6 +8,13 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Latest prepared candidate: `build/d878uv2-fm-mod/rfoundry_d878uv2_codec.bin`, adding calibrated FM
+`MOD_GAIN` setup to the unbuffered-DAC candidate. This image is not flashed. Targeted codec-profile,
+analog-engine and RF-startup host tests pass. The profile regression fails before the missing field is
+added. Default, DMR-off and FM-off (with battery save off) builds pass without warnings; the FM-off link
+needed a retry. Default stack check passes, and documentation links and generic-doc checks pass.
+Full CI was not run. The radio remains on `8d1b53bc`; voice improvement and DMR operation are unverified.
+
 The owner flashed `8d1b53bc` from `build/d878uv2-tuning/rfoundry_d878uv2_codec.bin`; USB version confirms it.
 On FM 433.500 MHz / 12.5 kHz, read-only diagnostics show PWM ready=1, actual compare=1972 and expected=1972.
 FM ready=1, error=0, timeouts=0, loopback=0, monitor=0 and state=idle. No TX occurred since that boot at the
@@ -75,7 +82,23 @@ followed by sustained "ah." At 42–43 seconds, seven accepted frames have media
 99.5th-percentile absolute deviation in the 300–3000 Hz measurement band. At 43–47 seconds, 18 accepted
 frames have medians 244.6 Hz RMS and 796.4 Hz percentile deviation. Clipped frames were excluded. These
 are descriptive window statistics, not calibrated full-band peak deviation. A matching sustained-sound
-UV878 test is pending. The first 55-second attempt ended without a carrier; allow a longer readiness window.
+UV878 test followed in `/tmp/rfoundry-dut-sustained-voice.jsonl`. The owner reports completion. Two keyed
+intervals appear at approximately 7.7–11.8 and 17.7–23.1 seconds. Accepted steady samples mostly remain
+70–80 Hz RMS, without the clear sustained rise in the reference test; some edge/handling frames clip.
+Do not infer a calibrated gain ratio or identify the failed stage from these summaries. The first 55-second
+reference attempt ended without a carrier; allow a longer readiness window. The SDR driver is restored.
+The owner has been asked to reconnect USB for restoration and diagnostics. A targeted spec-side audit of
+reachable microphone/codec/baseband setup is running in `stock_audio_spec`; no additional gain change or
+flash is justified yet by these captures alone.
+
+USB restoration is complete: VFO simplex 433.500 MHz, channel mode zone 3 / position 2 at 433.500 MHz,
+effective L2. Live FM ready=1, error=0, timeouts=0, loopback=0, mic offset=0 and requested PGA=32.
+
+The subsequent reachable-stock audit established a concrete omission: FM mode setup sends calibrated
+`MOD_GAIN`, but the port supplied that field only to digital TX. The candidate now includes it in analog
+setup, updates its band calibration under the modem lock, and restarts analog setup when the gain changes.
+This is a verified command omission, not a proven explanation for the audio measurements. The existing
+unbuffered-DAC correction is also included; neither change is on the running `8d1b53bc` image yet.
 
 While waiting for the receiver, a separate stock mismatch was corrected in source: both RF-control DAC output
 buffers must be disabled before enable, with triggers/waves/DMA off. The saved calibration counts remain

@@ -17,7 +17,8 @@ bool RF_CAL_TUNE(uint32_t hz, uint16_t *duty)
 	return tune_valid;
 }
 uint16_t RF_CAL_MOD_GAIN(uint32_t hz) { (void)hz; return 3500u; }
-void RF_MODEM_DEVIATION(uint32_t hz) { (void)hz; }
+static uint32_t modulation_hz;
+void RF_MODEM_DEVIATION(uint32_t hz) { modulation_hz = hz; }
 static uint16_t saved_control = 3620;
 static bool control_valid;
 bool RF_CAL_CONTROL(uint16_t *value) { *value = saved_control; return control_valid; }
@@ -95,6 +96,7 @@ static void test_audio_path(void)
 	assert((rf.cache[0][0x3A] & 0x7000u) == 0x4000u);
 	assert(rf.cache[0][0x44] == RF_AUDIO_TRIM_FM);
 	assert(analog_enabled && !analog_tx);
+	assert(modulation_hz == 145500000u);
 	uint16_t input = rf.cache[0][0x0A], voice = rf.cache[0][0x41], deviation = rf.cache[0][0x59];
 	saved_control = 3620;
 	assert(tx(145500000u, RADIO_BW_12K5, 0, NULL));
@@ -134,9 +136,11 @@ static void test_audio_path(void)
 	assert(rf.cache[0][0x30] == 0x7026);
 	set_mode(RADIO_MODE_FM);
 	assert(tx(433500000u, RADIO_BW_25K, 0, NULL));
+	assert(modulation_hz == 433500000u);
 	assert(rf.cache[0][0x30] == 0x7046 && rf.cache[0][0x58] == RF_AUDIO_58_FM_TX);
 	tx_off();
 	assert(rf.cache[0][0x58] == RF_AUDIO_58_FM);
+	assert(modulation_hz == 145500000u);
 	// Entering RX directly must also undo TX trims, including ones not rewritten by a cached mode table.
 	assert(tx(433500000u, RADIO_BW_12K5, 0, NULL));
 	assert(rx(433500000u, RADIO_BW_12K5, NULL));

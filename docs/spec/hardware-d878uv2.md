@@ -1272,3 +1272,20 @@ ASCII `1846N`, read from logical NAND 0x02FA0120 or the selected mirror at 0x02F
 as RF-chip autodetection. No extra GPIO change was justified: GPIO1 remains unchanged in the traced normal
 TX/RX-return path, and GPIO3 is high in ordinary TX. Live register 0x79 = 0x1932 and 0x7A = 0x204B already
 have the stock source helper's cleared high bits, so those bits do not establish a missing routing change.
+
+### Calibrated modulation gain in FM mode setup
+
+The reachable stock mode resend emits store id 0x10 as `MOD_GAIN` (field 0x2C), without an analog/digital
+predicate. FM entry marks this field dirty. Its source is the selected band's big-endian calibration
+halfword at +0x0090 for UHF or +0x00D0 for VHF, copied to store offset +0x34 and sent unchanged.
+This is a reachable mode-setup field, unlike the unused library transmit helper.
+
+The port previously updated its gain buffer before TX but sent it only through the digital engine's TX
+fields. FM mode setup now sends the same calibrated buffer before RX work mode. Frequency selection updates
+the buffer under the modem lock; a changed gain restarts analog setup, including on return from a split TX.
+The FM-only build uses this path too. The profile test fails when receive work mode precedes modulation
+gain and passes with the field present. This corrects an omission; restored speech remains unverified.
+
+The ordinary microphone setting 0x20 produces codec writes 1:34=80, 1:3B=20, 0:56=A0 and 0:58=20, each
+acknowledged separately. Their completion does not establish ADC power, bias or sample routing. Pure FM
+uses processing mode 0x80; mixed/digital paths using 0x82 do not justify changing the pure-FM value.

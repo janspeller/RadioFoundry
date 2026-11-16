@@ -244,6 +244,22 @@ static void port_unlock(void *ctx)
 	}
 }
 
+// Analog mode setup and digital TX both need the selected band's modulation calibration.
+void d878uv2_modem_set_deviation(uint32_t hz)
+{
+	uint16_t v = d878uv2_cal_mod_gain(hz);
+	port_lock(NULL);
+#if CONFIG_FM
+	if (analog.enabled && (mod_gain[0] != (uint8_t)(v >> 8) || mod_gain[1] != (uint8_t)v)) {
+		analog.restart = true;
+		analog.ready = false;
+	}
+#endif
+	mod_gain[0] = (uint8_t)(v >> 8);
+	mod_gain[1] = (uint8_t)v;
+	port_unlock(NULL);
+}
+
 #if CONFIG_DMR
 // The chip looks for sync only from CARRIER_READY on (modem-sct.md 3), so a board that never sends it boots the
 // baseband and then hears nothing. It goes out two ways: from the board's own carrier reading
@@ -260,16 +276,6 @@ static void port_unlock(void *ctx)
 // After a transmission the receiver needs a moment before the chip should start hunting
 #define CR_SETTLE_MS		14
 
-// The modulator's gain, sent at each start and before every transmission. The chip's own default leaves both
-// kinds of transmission weak on this radio: FM deviation the other radio can barely hear, and DMR it cannot
-// decode at all. Q16.11, so 2048 is 0 dB and 4096 is +6 dB.
-//
-// **A guess in the right units.** The radio's own deviation lives in its calibration (the band record's MOD
-// byte, docs/spec/hardware-d878uv2.md 5), and how that reaches the modulator is not established, so this is a
-// build knob to find the level by experiment: -DD878UV2_MOD_GAIN=<q16.11>
-// The value is the radio's own, from its calibration, sent unchanged: no arithmetic, big-endian, band-selected
-// (docs/spec/hardware-d878uv2.md 4.6). The factory default stands in when the calibration has not been read
-static uint8_t mod_gain[2] = { 0x0D, 0xAC };
 static const sct_field_t tx_gain_fields[] = {
 	{ SCT_F_MOD_GAIN, sizeof(mod_gain), mod_gain },
 };
@@ -278,15 +284,6 @@ static const sct_field_t digital_setup[] = {
 	{ SCT_F_SQ_LEVEL, sizeof(sq_digital), sq_digital },
 	{ SCT_F_MISC_GAIN, sizeof(misc_gain), misc_gain },
 };
-
-// Called as a transmission begins, with the frequency about to be keyed
-void d878uv2_modem_set_deviation(uint32_t hz)
-{
-	uint16_t v = d878uv2_cal_mod_gain(hz);
-
-	mod_gain[0] = (uint8_t)(v >> 8);
-	mod_gain[1] = (uint8_t)(v & 0xFFu);
-}
 
 static uint8_t port_gain_fields(const sct_field_t **fields, void *ctx)
 {

@@ -105,12 +105,15 @@ static inline void codec_mic_offset(int8_t offset_db)
 static uint8_t demod_gain_v[2] = { 0x00, 0x00 };
 static uint8_t spk_gain_v[2] = { 0x05, 0x46 };
 static uint8_t mic_gain_v[2] = { 0x07, 0xD0 };
+// Shared by analog mode setup and digital TX setup; selected from the band's calibration.
+static uint8_t mod_gain[2] = { 0x0D, 0xAC };
 // Mode-entry squelch thresholds from the board's audio setup, not microphone gain controls.
 static const uint8_t sq_digital[12] = { 0,0,0,0x3C, 0x0F,0x3C,0x0A,0x8C, 0x0F,0x3C,0x0A,0x8C };
 static const uint8_t sq_analog[12] = { 0,0,0,0x3C, 0x0F,0x3C,0x0A,0x8C, 0xFF,0xFF,0xFF,0xFF };
 // The stock producer initializes ten bytes; the wire field is twelve. Reserved trailing bytes are zero.
 static uint8_t misc_gain[12] = { 8,0,8,0, 0x80,0,0x80,0, 0,0,0,0 };
 static const sct_field_t analog_setup[] = {
+	{ SCT_F_MOD_GAIN, sizeof(mod_gain), mod_gain },
 	{ SCT_F_SQ_LEVEL, sizeof(sq_analog), sq_analog },
 	{ SCT_F_MISC_GAIN, sizeof(misc_gain), misc_gain },
 };

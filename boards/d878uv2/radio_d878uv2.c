@@ -490,7 +490,10 @@ static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 	}
 	ok &= at1846s_set_state(&rf, AT1846S_STATE_RX);
 #if CONFIG_FM
-	if (mode_now == RADIO_MODE_FM) d878uv2_modem_analog(true, false, bw != RADIO_BW_25K);
+	if (mode_now == RADIO_MODE_FM) {
+		d878uv2_modem_set_deviation(hz);
+		d878uv2_modem_analog(true, false, bw != RADIO_BW_25K);
+	}
 #endif
 	return ok;
 }
@@ -525,7 +528,7 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 		ok &= at1846s_set_tx_tone(&rf, AT1846S_TONE_NONE, 0);
 	}
 	ok &= apply_tx_audio();
-#if CONFIG_DMR
+#if CONFIG_DMR || CONFIG_FM
 	d878uv2_modem_set_deviation(hz);	// this radio's own deviation, before the carrier goes up
 #endif
 	tune_pwm(hz);
@@ -575,7 +578,10 @@ static void tx_off(void)
 		front_end_rx(rx_hz);
 		at1846s_set_state(&rf, AT1846S_STATE_RX);
 #if CONFIG_FM
-		if (mode_now == RADIO_MODE_FM) d878uv2_modem_analog(true, false, rx_bw != RADIO_BW_25K);
+		if (mode_now == RADIO_MODE_FM) {
+			d878uv2_modem_set_deviation(rx_hz);
+			d878uv2_modem_analog(true, false, rx_bw != RADIO_BW_25K);
+		}
 #endif
 	}
 }

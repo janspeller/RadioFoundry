@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include VOICE_SETUP_HEADER
+#include "modem/sct/sct_analog.h"
 
 void AUDIO_CAL_READ(AUDIO_CAL_TYPE *a)
 {
@@ -16,6 +17,7 @@ static uint16_t left;
 static uint32_t now;
 static uint8_t expected_mic_gain = 0x20;
 static bool mic_routed, mic_unmuted, mic_digital_unity, mic_agc, mic_ceiling, reject_route;
+static bool analog_test, modulation_sent;
 static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 {
 	(void)ctx;
@@ -43,6 +45,11 @@ static bool write_bus(const uint8_t *p, uint16_t n, void *ctx)
 			}
 		} else {
 			id = p[6];
+			if (analog_test && id == SCT_F_MOD_GAIN) {
+				assert(n == 10 && p[7] == 0x0D && p[8] == 0xAC);
+				modulation_sent = true;
+			}
+			if (analog_test && id == SCT_F_WORK_MODE) assert(modulation_sent);
 			assert(id != SCT_F_CODEC_SELECT); // keep the resident codec selection while applying the board gains
 			if (id == 0x68) {
 				assert(n == 10 && p[7] == 0x07 && p[8] == 0xD0);
@@ -90,6 +97,20 @@ int main(void)
 	assert(mic_routed && mic_unmuted && mic_agc && mic_ceiling);
 	reject_route = true;
 	assert(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_NO_VOICE);
+	// Exercise the real mode setup: a ready receiver must already have sent its modulation calibration.
+	analog_test = true;
+	sct_analog_t a;
+	sct_analog_init(&a, write_bus, NULL);
+	a.setup_fields = analog_setup;
+	a.setup_count = sizeof(analog_setup) / sizeof(analog_setup[0]);
+	sct_analog_request(&a, true, false, true);
+	for (unsigned i = 0; i < 32 && !a.ready; i++) {
+		sct_analog_poll(&a, now++);
+		uint8_t buf[8];
+		uint16_t n = read_bus(buf, sizeof(buf), NULL);
+		if (n) sct_analog_packet(&a, buf, n);
+	}
+	assert(a.ready && a.error == 0 && modulation_sent);
 	puts("codecSetupTest PASSED");
 	return 0;
 }
