@@ -124,6 +124,15 @@ bool d878uv2_cal_tx_drive(uint8_t level, uint32_t hz, uint8_t *drive);
 // The modulator's gain for a frequency: the radio's own deviation, or the factory default
 uint16_t d878uv2_cal_mod_gain(uint32_t hz);
 
+// The radio's own audio values (docs/spec/hardware-d878uv2.md 4.6.6): three gain bytes the baseband passes to the
+// codec, and three 16-bit baseband levels. from_radio is false when the factory defaults were used instead
+typedef struct {
+	uint8_t lol, lor, mic_r;
+	uint16_t demod, spk_gain, mic_gain;
+	bool from_radio;
+} d878uv2_cal_audio_t;
+void d878uv2_cal_audio(d878uv2_cal_audio_t *a);
+
 // LCD backlight, 0..100 %: TIM8 channel 2's complementary output on PB0 (power_d878uv2.c, hardware-d878uv2.md 4.3)
 void d878uv2_backlight(uint8_t percent);
 

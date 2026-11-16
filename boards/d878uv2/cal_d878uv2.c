@@ -159,6 +159,56 @@ uint16_t d878uv2_cal_mod_gain(uint32_t hz)
 	return v != 0u && v != 0xFFFFu ? v : CAL_MOD_GAIN_DEFAULT;
 }
 
+// The audio record's per-radio values (docs/spec/hardware-d878uv2.md 4.6.6, 5.3). Three gain bytes that the
+// baseband passes to the codec, and three 16-bit levels that are baseband fields of their own. The factory
+// defaults stand in when the calibration has not been read; they are the values a factory-fresh radio runs
+#define CAL_A_LOL		0x12u	// -> the codec's LOL driver gain      (default 0x04)
+#define CAL_A_LOR		0x13u	// -> LOR                              (default 0x08)
+#define CAL_A_MICR		0x14u	// -> the right MICPGA                 (default 0x0C)
+#define CAL_A_DEMOD		0x17u	// -> DEMOD_GAIN,     u16 big-endian   (default 0x0000)
+#define CAL_A_SPK		0x19u	// -> DIGI_SPK_GAIN,  u16 big-endian   (default 0x0546)
+#define CAL_A_MIC		0x1Bu	// -> DIGI_MIC_GAIN,  u16 big-endian   (default 0x07D0)
+
+void d878uv2_cal_audio(d878uv2_cal_audio_t *a)
+{
+	uint8_t r[0x1Du];
+
+	a->lol = 0x04;
+	a->lor = 0x08;
+	a->mic_r = 0x0C;
+	a->demod = 0x0000;
+	a->spk_gain = 0x0546;
+	a->mic_gain = 0x07D0;
+	a->from_radio = false;
+	if (!loaded || !cal_read(cal_base + CAL_AUDIO_UHF, r, sizeof(r))) {
+		return;
+	}
+	// A byte of 0xFF is an erased cell, not a gain: keep the factory value for anything that reads blank
+	if (r[CAL_A_LOL] != 0xFFu) {
+		a->lol = r[CAL_A_LOL];
+	}
+	if (r[CAL_A_LOR] != 0xFFu) {
+		a->lor = r[CAL_A_LOR];
+	}
+	if (r[CAL_A_MICR] != 0xFFu) {
+		a->mic_r = r[CAL_A_MICR];
+	}
+	uint16_t demod = (uint16_t)((r[CAL_A_DEMOD] << 8) | r[CAL_A_DEMOD + 1u]);
+	uint16_t spk = (uint16_t)((r[CAL_A_SPK] << 8) | r[CAL_A_SPK + 1u]);
+	uint16_t mic = (uint16_t)((r[CAL_A_MIC] << 8) | r[CAL_A_MIC + 1u]);
+
+	if (demod != 0xFFFFu) {
+		a->demod = demod;
+	}
+	if (spk != 0xFFFFu && spk != 0u) {
+		a->spk_gain = spk;
+	}
+	if (mic != 0xFFFFu && mic != 0u) {
+		a->mic_gain = mic;
+	}
+	a->from_radio = true;
+}
+
 bool d878uv2_cal_ready(void)
 {
 	return loaded;

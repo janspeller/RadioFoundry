@@ -72,6 +72,15 @@ static sct_codec_write_t codec_writes[] = {
 	{ CODEC_PAGE_OUT, CODEC_LOL_GAIN, CODEC_LOL_DEFAULT },
 	{ CODEC_PAGE_OUT, CODEC_LOR_GAIN, CODEC_LOR_DEFAULT },
 };
+// Which row is which, so a value never lands on the wrong register when the table is reordered
+#define CODEC_AT_MICPGA_L	1u
+#define CODEC_AT_AGC1		2u
+#define CODEC_AT_AGC3		3u
+#define CODEC_AT_MICR		4u
+#define CODEC_AT_HPL		5u
+#define CODEC_AT_LOL		6u
+#define CODEC_AT_LOR		7u
+_Static_assert(sizeof(codec_writes) / sizeof(codec_writes[0]) == 8, "the indexes above follow the table");
 
 // The shared mic-gain setting supplies a dB offset; the codec uses half-dB units, with mute kept clear.
 static inline uint8_t codec_mic_pga(int8_t offset_db)
@@ -84,16 +93,40 @@ static inline void codec_mic_offset(int8_t offset_db)
 {
 	uint8_t g = codec_mic_pga(offset_db);
 
-	codec_writes[1].value = g;
-	codec_writes[2].value = (uint8_t)(g | CODEC_AGC_ON);
-	codec_writes[3].value = g;
+	codec_writes[CODEC_AT_MICPGA_L].value = g;
+	codec_writes[CODEC_AT_AGC1].value = (uint8_t)(g | CODEC_AGC_ON);
+	codec_writes[CODEC_AT_AGC3].value = g;
 }
 
-static const uint8_t unity_gain[] = { 0x08, 0x00 };
+// The three 16-bit levels are the radio's own, not unity: the factory's are 0x0000, 0x0546 (1350) and 0x07D0
+// (2000), and sending 2048 for the two digital gains was a guess that is wrong in both
+// (docs/spec/hardware-d878uv2.md 4.6.6)
+static uint8_t demod_gain_v[2] = { 0x00, 0x00 };
+static uint8_t spk_gain_v[2] = { 0x05, 0x46 };
+static uint8_t mic_gain_v[2] = { 0x07, 0xD0 };
 static const sct_field_t voice_fields[] = {
-	{ SCT_F_DIGI_MIC_GAIN, sizeof(unity_gain), unity_gain },
-	{ SCT_F_DIGI_SPK_GAIN, sizeof(unity_gain), unity_gain },
+	{ SCT_F_DEMOD_GAIN, sizeof(demod_gain_v), demod_gain_v },
+	{ SCT_F_DIGI_MIC_GAIN, sizeof(mic_gain_v), mic_gain_v },
+	{ SCT_F_DIGI_SPK_GAIN, sizeof(spk_gain_v), spk_gain_v },
 };
+
+// Take everything the calibration has for the audio chain, before the voice set-up goes out. The gain bytes go
+// to the codec through the baseband; the three levels are baseband fields of their own
+static inline void codec_audio_from_cal(void)
+{
+	d878uv2_cal_audio_t a;
+
+	d878uv2_cal_audio(&a);
+	codec_writes[CODEC_AT_LOL].value = a.lol;
+	codec_writes[CODEC_AT_LOR].value = a.lor;
+	codec_writes[CODEC_AT_MICR].value = a.mic_r;
+	demod_gain_v[0] = (uint8_t)(a.demod >> 8);
+	demod_gain_v[1] = (uint8_t)a.demod;
+	spk_gain_v[0] = (uint8_t)(a.spk_gain >> 8);
+	spk_gain_v[1] = (uint8_t)a.spk_gain;
+	mic_gain_v[0] = (uint8_t)(a.mic_gain >> 8);
+	mic_gain_v[1] = (uint8_t)a.mic_gain;
+}
 
 static const sct_voice_t voice = {
 	.codec = 1,

@@ -334,6 +334,7 @@ static void modem_task(void *arg)
 
 	(void)arg;
 	sct_rx_reset(&rx);
+	codec_audio_from_cal();	// the radio's own gains and levels, before the voice set-up carries them out
 	boot_result = sct_host_boot(&host, &rx, BOOT_TIMEOUT_MS);
 #if CONFIG_DIAG
 	if (boot_result == SCT_BOOT_OK) {
