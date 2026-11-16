@@ -43,6 +43,13 @@ only hiss or silence, without speech. The agent then cleared loopback/monitor an
 USB. This did not establish successful microphone capture, nor prove that this modem implements the loopback
 as the manual describes.
 
+The alternate-input repeat sent codec page 1 register 0x34 = 0x20 (IN2L), then enabled local loopback. The
+engine reported ready=1, error=0, TX=0 and loopback=1. With the cable removed and knob-controlled volume, the
+owner again reported only hiss or silence. Both input checks therefore failed to establish audible microphone
+capture. There is still no actual codec readback, so neither physical input wiring nor a failed ADC is proved.
+After reconnection the agent disabled monitor/loopback, sent the normal 0x34 = 0x80 input selection, and
+confirmed volume.src=knob with override=-1. No RF was requested.
+
 A controlled boot comparison is prepared: omit CODEC_SELECT = 1, which has no established caller in
 the stock MCU image. Leave vocoder selection, gains and bypass writes intact. This is a candidate experiment,
 not a proven microphone fix. The previous image remains the hardware baseline. No squelch tuning is included.
