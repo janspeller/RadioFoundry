@@ -17,12 +17,22 @@
 #define CODEC_MICPGA_R		0x3Cu	// Right MICPGA Volume Control: bit 7 mute, bits 6:0 in 0.5 dB steps
 #define CODEC_MICPGA_L		0x3Bu	// Left MICPGA Volume Control: the microphone's side
 #define CODEC_HPL_GAIN		0x10u	// HPL Driver Gain: bit 6 mute, bits 5:0 two's complement dB
-#define CODEC_MICPGA_DEFAULT	0x14u	// unmuted, 10 dB
+// The microphone chain's gains are placeholders until the calibration's own audio bytes are identified, and a
+// transmission that the other radio can barely hear means one of its stages is too low. Both can be moved at
+// build time to find which: D878UV2_MIC_PGA is the microphone into the codec (0.5 dB steps, so 0x28 is 20 dB),
+// D878UV2_LINE_GAIN the codec's line outputs into the RF chip's modulator (two's complement dB)
+#ifndef D878UV2_MIC_PGA
+#define D878UV2_MIC_PGA		0x14u	// unmuted, 10 dB
+#endif
+#define CODEC_MICPGA_DEFAULT	D878UV2_MIC_PGA
 #define CODEC_HPL_DEFAULT	0x0Au	// unmuted, +10 dB
 
 #define CODEC_LOL_GAIN		0x12u	// LOL Driver Gain: the line outputs feed the RF chip's modulator input
 #define CODEC_LOR_GAIN		0x13u
-#define CODEC_LINE_DEFAULT	0x00u	// unmuted, 0 dB
+#ifndef D878UV2_LINE_GAIN
+#define D878UV2_LINE_GAIN	0x00u	// unmuted, 0 dB
+#endif
+#define CODEC_LINE_DEFAULT	D878UV2_LINE_GAIN
 
 // The first two writes are also the documented microphone-enable sequence at TX entry.
 #define CODEC_MIC_COUNT 2u

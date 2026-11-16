@@ -678,6 +678,7 @@ From a radio running this port (its diagnostics page), beyond the codeplug read 
 | Receive on the AT1846S | RSSI and the noise reading follow the band; the squelch opens |
 | **The core's storage on the NAND** | a whole codeplug was written through the CPS and read back identical, so the sector layer mounts, wears and reads in RadioFoundry's own blocks. The factory mark it treats as blank (ten 0x55 bytes) holds on this radio too |
 | The open-firmware CPS | answers on the USB serial port: identity, and a whole codeplug written and verified |
+| **The factory calibration reads** | only with the chip's on-die ECC turned off for the transfer. A checked read refuses it, which is what a region written without that ECC looks like. With ECC off the remap mounts, the signature at 0x1FF00 matches, and a factory control-DAC word reads back as valid |
 
 **Not confirmed: audio.** FM and DMR receive remain silent after codec gain/unmute writes were added. DMR call
 recognition is observed, but speaker output is not. Codec power, routing and mute readback are the next check;
