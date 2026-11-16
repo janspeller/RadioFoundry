@@ -20,8 +20,10 @@ int RF_CAL_BYTES(uint8_t chip, uint8_t page, uint8_t reg, uint8_t *out, uint8_t 
 	return cap;
 }
 static unsigned codec_route_writes;
+static uint8_t hpl_gain;
 bool RF_CODEC_WRITE(uint8_t page, uint8_t reg, uint8_t value)
 {
+	if (page == 1 && reg == 16) { hpl_gain = value; return true; }
 	assert(page == 1 && reg == 52 && (value == 0x80 || value == 0x20));
 	codec_route_writes++;
 	return true;
@@ -129,6 +131,16 @@ int main(void)
 	assert(RF_RADIO.mic_gain != NULL);
 	RF_RADIO.mic_gain(6);
 	assert(mic_offset == 6);
+	volume(20);
+	audio(true);
+	assert(audio_requested && !speaker_muted && !(hpl_gain & 0x40));
+	volume(0);
+	assert(audio_requested && speaker_muted && hpl_gain == 0x40);
+	audio(true); // squelch opening cannot undo a zero-volume mute
+	assert(speaker_muted && hpl_gain == 0x40);
+	volume(20);
+	assert(!speaker_muted && !(hpl_gain & 0x40));
+	audio(false);
 	test_audio_path();
 	uint32_t route = 0x20;
 	assert(!RF_AUDIO_REG(1, 1, 52, &route, false));

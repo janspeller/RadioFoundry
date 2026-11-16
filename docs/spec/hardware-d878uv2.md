@@ -1186,3 +1186,13 @@ Calibration inspection pages 4..7 mirror windows 0..3 using the NAND diagnostic 
 prefix the bytes with an ECC-failure flag (0 means none reported, 1 means at least one page failed ECC).
 The requested length includes that flag. At most 31 data bytes follow it; for a DAC word request 3 bytes,
 for a marker area request 9. Raw diagnostic data is never applied as calibration by this interface.
+
+### Zero-volume mute correction
+
+The owner reports loud receive noise with the harness removed, including after volume override zero. Live
+state showed FM RX opening at about -127 dBm, monitor off, and volume.sent=0. The codec volume callback had
+mapped zero to -6 dB with mute clear, while the core's receive gate remained allowed to open. Zero now sets
+HPL mute and holds both speaker-route and amplifier pins low regardless of the requested receive gate.
+Restoring nonzero volume reapplies the requested gate. This fixes mute behavior; the cause of loud noise at
+nonzero volume and weak-signal squelch openings remains unverified. The USB link disappeared before a
+receiver-only channel change could be completed.

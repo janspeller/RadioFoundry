@@ -439,8 +439,12 @@ static void status(radio_status_t *st)
 // reading of "driven opposite to PA7" came from the broadcast paths, the only ones that pair PE0 low with PA7
 // high (docs/spec/hardware-d878uv2.md 4.3, 4.6). Driving PE0 low here pointed the amplifier at the tone input and
 // was why a receiver that opened its squelch was silent
+static bool audio_requested, speaker_muted = true;
+
 static void audio(bool on)
 {
+	audio_requested = on;
+	on = on && !speaker_muted;
 	mcu_pin_write(PIN_AUDIO_SW, on);	// the codec's output
 	mcu_pin_write(PIN_SPK_EN, on);
 }
@@ -468,6 +472,9 @@ static void volume(uint8_t percent)
 	int db = CODEC_GAIN_MIN_DB + ((int)percent * (CODEC_GAIN_MAX_DB - CODEC_GAIN_MIN_DB)) / 100;
 	uint8_t reg = (uint8_t)((db < 0 ? db + 64 : db) & 0x3F);	// two's complement in six bits, mute clear
 
+	speaker_muted = percent == 0;
+	if (speaker_muted) reg = 0x40; // HPL driver mute, not its minimum unmuted gain
+	audio(audio_requested);
 	d878uv2_codec_write(CODEC_PAGE_OUT, CODEC_HPL_GAIN, reg);
 }
 

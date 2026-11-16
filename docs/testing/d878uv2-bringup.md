@@ -561,3 +561,8 @@ factory-reader and remapping host tests pass. Normal, DIAG-off, FM-off (battery 
 builds pass without compiler warnings; static stack check passes. Doc/generic/license checks pass. HIL tests
 were syntax-checked but not run; pytest is absent from the available Python environment. Temporary build
 configurations were removed. The agent did not flash, transmit or alter the owner's gain setting.
+
+Zero-volume guard: the owner still heard loud noise after the remote zero-volume override. The callback
+was unmuting HPL even at zero and did not gate the amplifier against the volume setting. The board now
+uses true HPL mute and a volume-aware speaker gate; the host test covers a squelch opening while muted and
+unmuting afterward. This is not a confirmed fix for the underlying loud receive noise. No RF was requested.
