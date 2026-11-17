@@ -1442,3 +1442,22 @@ decoder or payload transformation was recovered. A particular cipher, compressio
 location has not been established. The resident TI initialization table and FM/DMR microphone routing
 remain unrecovered. This audit supports no additional microphone register patch. Extracted payloads and
 reproduction tools remain in ignored storage in the dirty tree; only prose crosses the clean-room boundary.
+
+
+### Confirmed default microphone setting
+
+A follow-up trace reaches the settings-reset initializer: it stores microphone index 2. The ordinary
+producer maps indexes 0 through 4 to PGA bytes 0x18, 0x1C, 0x20, 0x24 and 0x2A. The current route 0x80,
+PGA 0x20, AGC control 0xA0 and ceiling 0x20 therefore match the initialized middle stock setting.
+No higher default gain is justified by this trace.
+
+Microphone enable writes page 1 register 0x34 = 0x80, then register 0x3B = the selected gain. Disable
+writes register 0x34 = 0 only. Nonzero AGC control writes page 0 register 0x56 = control OR 0x80 and
+register 0x58 = current PGA gain. Zero AGC control writes 0x56 = 0 and leaves the ceiling unchanged.
+These producers have no established FM/DMR or accessory-dependent alternate input selection.
+
+Normal startup flushes queued audio settings after vocoder selections 4 then 16, then radio settings
+select the stored vocoder mode. The ordering is established; an ADC initialization side effect of
+selecting 16 is not. The audit supports no additional microphone register correction beyond codec
+selection. Codec state readback is needed to distinguish accepted gain commands from actual ADC setup.
+The owner still reports weak mic audio and overwhelming static at the peer after codec selection.

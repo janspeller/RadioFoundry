@@ -8,6 +8,13 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Latest owner result after codec selection: microphone audio remains low and static overwhelms the peer
+receiver. A new dirty trace proves stock reset Mic index 2 and its 0x20 PGA / 0xA0 AGC / 0x20 ceiling;
+the current settings match. No further gain, input or ADC patch is supported. A read-only USB check of
+the existing codec snapshots on the running codec-selection image is pending owner reconnection. The
+readback-parser correction is committed separately; do not ask for a new flash before checking existing
+snapshots. No claim of a completed microphone repair is justified.
+
 Audio-fix follow-up: the shared boot-time codec readback parser rejected reports whose TYPE combines
 read bit 0x20 with a protocol selector. It now accepts the read bit with selectors (including 0x23/0x25),
 while retaining exact length and field checks. The regression fails before the correction and passes after;
