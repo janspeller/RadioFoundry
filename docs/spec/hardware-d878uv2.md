@@ -1412,3 +1412,33 @@ Continue firmware-only analysis of that resident initialization when possible. C
 I2C/I2S capture would provide independent evidence, but the owner has no scope or logic analyzer; capture
 is not a prerequisite for further firmware analysis. The supplied owner folder has no schematic; public
 board photos do not establish capsule continuity. The new image has not been flashed or speech-tested.
+
+
+### Resident baseband extraction checkpoint
+
+The offline dirty audit reconstructed all six supplied BA flash streams and validated every byte against
+the source container: 1,177 outer checksummed records, 192 internal load records, 294,472 supplied bytes.
+The internal records carry a marker, destination and word count. The updater independently constructs
+these headers from instruction/data memory metadata and an explicit coding selector. All BA records are
+coded: 179 instruction records and 13 data records. The host forwards already coded payloads unchanged.
+The same extraction method validates three earlier supplied versions.
+
+| Flash start | Role established by the updater's trailer metadata |
+| --- | --- |
+| 0x000100 | User application, instruction entry 0x0800 |
+| 0x018000 | Vocoder 4 (AMBE+2) |
+| 0x02C000 | Vocoder 12 |
+| 0x040000 | Vocoder 16 (Analog) |
+| 0x051000 | Vocoder 23; further meaning not established |
+| 0x068000 | Second user application, instruction entry 0x0800 |
+
+Vocoder-4 and vocoder-12 streams are byte-identical across all four supplied versions. The analog stream
+and both applications change. These roles do not identify which application owns the codec or prove that
+both applications run together. The supplied installer contains small uncoded download examples, but no
+uncoded resident equivalent or TI3204.txt initialization script was found.
+
+Extraction is complete for the supplied records; decoding remains unresolved. No validated instruction
+decoder or payload transformation was recovered. A particular cipher, compression scheme or ROM decoder
+location has not been established. The resident TI initialization table and FM/DMR microphone routing
+remain unrecovered. This audit supports no additional microphone register patch. Extracted payloads and
+reproduction tools remain in ignored storage in the dirty tree; only prose crosses the clean-room boundary.

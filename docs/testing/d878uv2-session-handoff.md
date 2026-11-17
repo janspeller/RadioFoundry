@@ -17,6 +17,13 @@ resident instructions and recovering the codec initialization table remain open.
 manifests and payloads stay in ignored `build/resident-audit/` in the dirty tree. Only prose findings cross
 the clean-room boundary. No radio access, flash or RF was performed.
 
+The completed audit labels the six streams as two user applications and vocoders 4, 12, 16 (Analog),
+and 23. Vocoders 4/12 are identical across all four supplied versions; analog and application streams
+change. Every resident record is coded, the host forwards already coded input, and no validated decoder
+or uncoded resident equivalent was recovered. Extraction is complete; codec initialization and mic sample
+routing remain unrecovered. The hardware page records the section roles and evidence boundary. No new
+firmware image or register change follows from this extraction.
+
 Owner follow-up: the codec-selection image appears to improve audio. This is a subjective improvement,
 not confirmation of normal microphone level or intelligible DMR voice. The owner requested continued
 offline dirty-worker extraction of the resident baseband image overnight, prioritizing the TI codec
