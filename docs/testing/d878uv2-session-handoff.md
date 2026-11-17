@@ -8,6 +8,16 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Read-only USB follow-up: the radio runs `8a566a6a`, idle on FM 433.500 MHz, with the requested analog
+packet acknowledged and no modem errors. The board view truncates before the cached codec fields. An
+isolated rebuild of the exact commit matches the pinned application except five compiler build-date/time
+immediate bytes in our CPS information routine; all other 372,024 application bytes match. The running
+application was separately verified byte-for-byte against the pinned image through READ_MEM. Its named
+`codec_snapshot_valid` flags at 0x2000E919 are both zero, so neither page provides valid ADC/bias state.
+These are cached status flags, not new codec I2C reads. No settings, codec registers or RF were changed.
+The readback-parser correction is still absent from this running image. Prepare that diagnostic image
+before attempting another microphone register correction; weak/hissy voice is not fixed.
+
 Latest owner result after codec selection: microphone audio remains low and static overwhelms the peer
 receiver. A new dirty trace proves stock reset Mic index 2 and its 0x20 PGA / 0xA0 AGC / 0x20 ceiling;
 the current settings match. No further gain, input or ADC patch is supported. A read-only USB check of
