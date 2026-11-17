@@ -8,6 +8,15 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Audio-fix follow-up: the shared boot-time codec readback parser rejected reports whose TYPE combines
+read bit 0x20 with a protocol selector. It now accepts the read bit with selectors (including 0x23/0x25),
+while retaining exact length and field checks. The regression fails before the correction and passes after;
+control-only replies remain rejected without changing the output buffer. I2C, codec-profile, analog-engine
+and codec-owner tests pass; the default firmware build passes without warnings. This is a diagnostic
+correction, not a microphone gain or initialization change. No radio port was present during this check;
+no flash, settings change or RF was performed. A new dirty audit is checking remaining reachable stock
+microphone settings and startup ordering. Do not label the microphone fixed on these results.
+
 Offline extraction checkpoint: the dirty worker validated the BA container's 1,177 outer checksummed
 records and extracted 192 internal load records in six address-preserving flash ranges, totaling 294,472
 supplied bytes. Reconstructing the ranges reproduces every byte. The same parser validates three earlier

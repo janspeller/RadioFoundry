@@ -205,8 +205,8 @@ bool sct_host_i2c_read(const sct_host_t *h, sct_rx_t *rx, uint8_t address, uint8
 			if (body == 2 && rx->buf[6] == SCT_F_ACK && rx->buf[7] != SCT_ACK_OK) {
 				return false;
 			}
-			// I2C read responses have the requested length, not the fixed request length.
-			if (rx->buf[5] == SCT_TYPE_READ && body == (uint16_t)(n + 1u) &&
+			// The read flag can accompany a protocol selector; the response length is variable.
+			if ((rx->buf[5] & SCT_TYPE_READ) && body == (uint16_t)(n + 1u) &&
 			    rx->buf[6] == SCT_F_I2C_OPERATION) {
 				memcpy(out, &rx->buf[7], n);
 				return true;

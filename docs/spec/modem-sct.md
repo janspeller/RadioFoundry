@@ -397,7 +397,9 @@ of any baseband field, for checking a driver value against the chip.
 With diagnostics enabled, a board can read the codec after voice setup and before handing the receive stream to
 the runtime engine. `sct_host_i2c_page` writes register 0 through `I2C_OPERATION` (field 0x6A), waiting for field
 status. `sct_host_i2c_read` sends TYPE 0x20 with the eight-bit device write address, register and byte count, then
-accepts only a response of the requested length. This response is variable-length; it is not parsed using the
+accepts only a response of the requested length with the read/report bit (0x20) set. Protocol selector
+bits may accompany that bit: TYPE 0x23 and 0x25 are reports as well as TYPE 0x20; TYPE 0x00, 0x03 and
+0x05 are not. This response is variable-length; it is not parsed using the
 fixed request length in the normal field table. Error acknowledgments and timeouts fail the read. The caller
 must restore the codec page afterward. These synchronous helpers are for startup only and must not compete
 with a runtime engine for packets.
