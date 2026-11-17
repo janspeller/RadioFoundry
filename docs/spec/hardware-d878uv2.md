@@ -1756,7 +1756,7 @@ The default-path trace supersedes earlier statements that register 0x59 = 0x0C50
 transmit setting. The board must apply the calibrated final value after tone selection and before TX
 enable. Pure FM uses MODU/CTCW/DCSW at +0x06/+0x07/+0x08 of the selected active calibration copy.
 Stock pure DMR writes zero; its complete runtime profile differs from the current layer-2 path, so this
-FM correction retains the existing digital setting pending a separate comparison. The frequency classifier
+FM correction initially retained the existing digital setting; the later pure-DMR audit below supersedes it. The frequency classifier
 uses TX frequency, divided into integer 10 Hz units;
 the separate bandwidth table's frequency branches use RX frequency.
 
@@ -1800,3 +1800,92 @@ compiled under CONFIG_FM. Factory identity and the revision's common initializat
 The exact supported pure-FM reset path is implemented for 1846N; generic fallback for other identities
 is retained and is not claimed to match their stock setup. New microphone audio remains unverified
 until the owner tests the resulting image.
+
+
+### Pure-DMR receive and transition RF table, November 2026
+
+This table describes ordinary channel mode 1 with the owner's confirmed
+persisted `1846N` identity. It is neither the pure-FM narrow table nor the
+mixed-mode fallback. The width dispatcher returns narrow for pure DMR. The
+nonzero-mode narrow helper's FM fallback also tests the digital predicate;
+mode 1 returns true, so ordinary pure DMR takes the DMR table below.
+
+The ordered bank-0 writes are:
+
+| Order | Register/value and condition |
+| --- | --- |
+| 1 | 0A=4381; 13=B100; 15=1100 |
+| 2 | Active RX frequency at least 300 MHz: 32=44D5; 33=44D5; 34=2398 |
+| 2 alternative | Active RX frequency below 300 MHz: 32=44D5; 33=44DD; 34=2392 |
+| 3 | 35=50A9; 36=50A9 |
+| 4 | 3C=1A32; 41=4006; 3A=40C3; 3F=28D0 |
+| 5 | 48=203E; 50=010B; 56=0B02; 60=101E |
+| 6 | 62=0A10; 65=2494; 66=EB2E |
+| 7 | 7F=0001 |
+| 8, bank 1 | 07=020C; 08=0214; 09=030C; 0A=0314; 0B=0324; 0C=0344; 0D=1344; 0E=1B44; 0F=3F44; 12=E0EB |
+| 9 | 7F=0000 |
+
+The 200 MHz sub-branch in this DMR helper emits exactly the same values on
+both sides, so below 300 MHz has one effective result. Its comparison uses
+the active RX-frequency word, including when invoked during TX setup on a
+split channel. This table does not depend on saved analog Mic index.
+
+Compared with pure-FM narrow operation, the DMR table changes 0A, 32, 33, 34,
+35, 36, 3C, 41, 48, 50, 56 and 60. The bank-1 table, 13, 15, 3A, 3F, 62, 65
+and 66 match the corresponding narrow settings for this identity. Compared
+with FM wide, additional filter/bank-1 values differ. These explicit writes
+must replace prior FM values when entering DMR; applying only a generic width
+bit leaves a mixed configuration not established by the stock path.
+
+Before applying this table, normal DMR receive entry writes 58=80E5, 40=0031
+and 44=0AFA. Pure-FM receive instead uses 58=8085, 40=0030 and the analog Mic
+receive table. The later width table does not overwrite these three registers.
+After the DMR table, the receive calibration/squelch helper overwrites 49 and
+48; therefore table value 48=203E is intermediate. Ordinary narrow non-FM
+squelch configuration ends 48=192F, while register 49 remains dependent on the
+selected receive calibration and correction-grid calculation. RX enable uses
+30=4006 then 4026 with VOX disabled, and receive-band GPIOs are restored.
+
+Normal source setup selects source 4 in 3A before width application and clears
+7A bit 15 and 79 bits 15:14. The DMR table later writes 3A=40C3. The common
+initialization's 54=2A18, 5A=0CDD and 63=3FFF remain startup prerequisites;
+this width table does not overwrite them or establish per-mode replacements.
+
+#### Ordinary pure-DMR TX changes
+
+The ordinary TX path's digital predicate causes it to skip the pure-FM writes
+58=8405 and 40=0030. The digital receive-path values are retained at that
+point. It applies the same DMR narrow table, inserts source 7 in 0A bits14:11,
+and preserves mask780F while adding03A0. Because DMR table0A=4381 has bit0
+set, the resulting source value is **3BA1**, versus pure-FM3BA0. It writes
+44=0BFF,41=070F and intermediate59=0C50. The later deviation helper receives
+true for pure-DMR mode1 and overwrites59 with0000 before TX enable.
+
+Thus a profile that forces the FM0A low bits or FM58/40 values during DMR TX
+is not faithful to this stock branch. This is protocol/mode evidence, not a
+claim that every DMR voice failure is caused by these RF values. Slot-gated
+PA timing and SCT voice processing remain separate requirements.
+
+The frequency boundaries differ deliberately in the recovered producers:
+width-table UHF selection is RX frequency **at least**300MHz, while the
+calibrated-deviation band split and RF receive/transmit band-enable branch
+use **greater than**300MHz. An implementation should preserve the chosen
+branch's comparison instead of sharing a guessed common threshold.
+
+
+### DMR profile correction after owner test
+
+The owner reports less hiss on image `8feb48ba`, but speech remains very quiet in FM and DMR TX.
+DMR receive briefly detects carrier, then drops without decoding voice. Read-only diagnostics confirm
+that image combines the new common init with the old generic DMR table: 0A=4380, 33=4493, 34=2B8E,
+3C=1B34, 50=010A and 60=0F17. This is not the pure-DMR table above. The new board profile supplies
+that table, forces narrow DMR operation, restores its RX filter 48=192F, and sets final digital TX
+59=0000 while retaining input-source bit 0 in 0A=3BA1. Host regressions cover both bands, the exact
+300 MHz boundary, FM-wide to DMR transitions, split TX and RX restoration. Audio/decode confirmation
+on the radio remains pending. Register 49's complete calibration path remains a separate gap.
+
+The same live checkpoint records a runtime codec timeout, but all four microphone writes had already
+completed: route 80, PGA 20, AGC A0, ceiling 20; generation 11 was fully acknowledged. The timeout was
+later than the last owner's transmission. It is not evidence for why that speech was quiet. Both boot
+codec snapshots remain invalid, so no ADC/bias/routing state is inferred from them. No gain increase
+or additional microphone-register write is justified by this checkpoint.

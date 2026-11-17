@@ -58,9 +58,51 @@ static const at1846s_step_t rf_n_init[] = {
 	{ 0, 0x30, 0x7006, 50 },
 	{ 0, 0x30, 0x70A6, 0 },
 };
+#if CONFIG_DMR
+// Pure DMR always selects the narrow table; its filter and low-frequency path differ from FM.
+#define RF_N_DMR_BW_33 4u
+#define RF_N_DMR_BW_34 5u
+static at1846s_bw_step_t rf_n_dmr_bw[] = {
+	{ 0, 0x0A, 3, { 0x4381, 0x4381 } },
+	{ 0, 0x13, 3, { 0xB100, 0xB100 } },
+	{ 0, 0x15, 3, { 0x1100, 0x1100 } },
+	{ 0, 0x32, 3, { 0x44D5, 0x44D5 } },
+	{ 0, 0x33, 3, { 0x44D5, 0x44D5 } },
+	{ 0, 0x34, 3, { 0x2398, 0x2398 } },
+	{ 0, 0x35, 3, { 0x50A9, 0x50A9 } },
+	{ 0, 0x36, 3, { 0x50A9, 0x50A9 } },
+	{ 0, 0x3C, 3, { 0x1A32, 0x1A32 } },
+	{ 0, 0x41, 3, { 0x4006, 0x4006 } },
+	{ 0, 0x3A, 3, { 0x40C3, 0x40C3 } },
+	{ 0, 0x3F, 3, { 0x28D0, 0x28D0 } },
+	{ 0, 0x48, 3, { 0x203E, 0x203E } },
+	{ 0, 0x50, 3, { 0x010B, 0x010B } },
+	{ 0, 0x56, 3, { 0x0B02, 0x0B02 } },
+	{ 0, 0x60, 3, { 0x101E, 0x101E } },
+	{ 0, 0x62, 3, { 0x0A10, 0x0A10 } },
+	{ 0, 0x65, 3, { 0x2494, 0x2494 } },
+	{ 0, 0x66, 3, { 0xEB2E, 0xEB2E } },
+	{ 1, 0x07, 3, { 0x020C, 0x020C } },
+	{ 1, 0x08, 3, { 0x0214, 0x0214 } },
+	{ 1, 0x09, 3, { 0x030C, 0x030C } },
+	{ 1, 0x0A, 3, { 0x0314, 0x0314 } },
+	{ 1, 0x0B, 3, { 0x0324, 0x0324 } },
+	{ 1, 0x0C, 3, { 0x0344, 0x0344 } },
+	{ 1, 0x0D, 3, { 0x1344, 0x1344 } },
+	{ 1, 0x0E, 3, { 0x1B44, 0x1B44 } },
+	{ 1, 0x0F, 3, { 0x3F44, 0x3F44 } },
+	{ 1, 0x12, 3, { 0xE0EB, 0xE0EB } },
+};
+static const at1846s_step_t rf_n_dmr_mode[] = { { 0, 0x58, 0x80E5, 0 }, { 0, 0x40, 0x0031, 0 } };
+#endif
 static const at1846s_profile_t rf_n_digital = {
 	.init = rf_n_init, .init_count = sizeof(rf_n_init) / sizeof(rf_n_init[0]),
 	.probe_tries = 200, .probe_delay_ms = 5,
+#if CONFIG_DMR
+	.bandwidth = rf_n_dmr_bw, .bandwidth_count = sizeof(rf_n_dmr_bw) / sizeof(rf_n_dmr_bw[0]),
+	.mode = { [AT1846S_MODE_DMR] = rf_n_dmr_mode },
+	.mode_count = { [AT1846S_MODE_DMR] = sizeof(rf_n_dmr_mode) / sizeof(rf_n_dmr_mode[0]) },
+#endif
 };
 
 #if CONFIG_FM

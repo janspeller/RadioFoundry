@@ -8,41 +8,35 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint — 2026-11-17
 
-Stock is installed. The owner confirms its microphone audio works more than fine, with DigiMic 4 and
-AnaMic 3. RadioFoundry's weak, hissy transmit audio has not yet been repaired on air. Exact displayed
-mic-level to raw-index mapping remains unconfirmed. Do not treat stock as a debug-link target.
+The owner flashed `8feb48ba`: hiss is much lower, but FM and DMR transmit speech remains very quiet.
+DMR receive detects carrier briefly then drops without voice decode. Stock's microphone was previously
+confirmed clear, at DigiMic 4 / AnaMic 3. No higher gain is justified by that displayed setting alone.
 
-Read-only stock codeplug reads confirmed factory identity `1846N`, frequency calibration FQCU 3180,
-and deviation bytes MODU `2A`, CTCW `12`, DCSW `0C`. No settings were written and no RF was keyed.
-The stock programming session disconnected during END after the successful checked reads.
+Read-only diagnostics confirm RadioFoundry `8feb48ba` is running, factory identity `1846N`, FQCU 3180,
+and a mixed RF profile in DMR receive: the new common init plus old generic DMR filters. For example,
+0A=4380, 33=4493, 34=2B8E, 3C=1B34, 50=010A, 60=0F17. The completed dirty-side follow-up establishes
+an ordinary pure-DMR width/mode table distinct from both the old generic and new FM tables.
 
-The completed default-path trace found two additional setup differences. The factory identity selects
-an RF revision profile whose reset sequence and FM bandwidth/filter tables differ from the shared
-legacy defaults. Ordinary FM also writes calibrated register 0x59 after tone setup; the old port retained
-an intermediate `0C50`. For this radio at 433.500 MHz, final 0x59 is `0A92` without DCS and `0A8C` with
-DCS. These are verified setup differences, not proof that either alone explains the microphone fault.
+The correction now supplies that DMR table as board data, forces narrow operation, selects its 33/34
+values from RX frequency even during split TX, and restores final RX filter 48=192F. DMR TX preserves
+the digital path with 0A=3BA1 and final 59=0000. Host tests reproduce the old mismatch before the fix
+and cover FM-wide/DMR transitions, both bands, the exact 300 MHz boundary, split TX and RX restoration.
+Register 49's full calibrated receive setup remains a separate gap. On-radio decode is unverified.
 
-The implementation now selects the revision profile from the active factory identity copy, keeps chip
-sequence execution in the shared driver, and supplies board register data. Split-channel bandwidth
-selection uses RX frequency, while final FM deviation uses the uncorrected TX frequency. Calibration
-copy/remapping and defensive fallback behavior have host tests. DMR receives the common revision init;
-its remaining mode-specific RF setup is not claimed to match stock. No microphone gain was raised.
+A runtime codec timeout was also recorded, but the last microphone batch completed all four writes:
+route 80, PGA 20, AGC A0, ceiling 20; generation 11 was fully acknowledged. Timeout timestamp 121508 ms
+was later than the last transmission. It cannot explain the already quiet speech. Both cached boot
+codec snapshots are invalid, so they establish no ADC, bias or electrical routing state. The timeout
+fences further runtime codec writes until reset; do not clear it by discarding potentially late ACKs.
 
-The next candidate will be pinned in `build/d878uv2-rf-profile/`, including its ELF and map. The old
-`build/d878uv2-output-setup/` image, embedded version `91209ba0`, is superseded; do not recommend it.
-The new image includes its TYPE-5 `MODOUT_CONFIG` startup command and the codec readback-parser fix.
-It has not been flashed or audio-tested. The owner performs flashing manually.
+The prior factory stock reads confirmed ID `1846N`, MODU/CTCW/DCSW `2A 12 0C`, and FQCU 3180. Their
+stock session disconnected during END after checked reads; no settings were written or RF keyed.
+The common RF init, FM tables and calibrated final FM deviation remain in place. No microphone gain
+has been raised. The exact displayed stock Mic-level to raw-index mapping remains unresolved.
 
-Host RF-driver, factory-calibration and board-sequence regressions pass. Default, FM-off and DMR-off
-firmware builds pass without warnings, as does another board using the shared RF driver. The default
-stack check passes with its previous margin. Passive RF-profile HIL checks were added and collected;
-they have not run against the new firmware. Documentation links and generic checks pass.
-
-The follow-up trace confirms ordinary FM work-mode bytes already match and finds no mandatory
-unrecorded-voice `VOCODER_IO_SET` omission. Analog raw index 2 matches RF 0x44 value `09FF`.
-RF 0x64 controls VOX thresholds, so it does not justify a voice-gain patch. Stock's runtime vocoder
-helper can emit vendor index 12 for stored selection 4; that is not established as a valid replacement
-for layer-2 selection 4. No full codec-trim resend after each vocoder switch was proven.
+Superseded candidate: `build/d878uv2-rf-profile/`, embedded version `8feb48ba`. Prepare the DMR correction
+in a new versioned folder with its matching ELF/map; do not overwrite that tested checkpoint. The owner
+flashes manually. New microphone audio and DMR decode remain pending owner confirmation.
 
 History audit requested by the owner:
 

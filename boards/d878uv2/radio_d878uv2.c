@@ -250,6 +250,13 @@ static void configure_profile(uint32_t rx_frequency)
 #else
 	(void)rx_frequency;
 #endif
+#if CONFIG_DMR
+	bool high = rx_frequency >= 300000000u;
+	for (unsigned col = 0; col < 2; col++) {
+		rf_n_dmr_bw[RF_N_DMR_BW_33].value[col] = high ? 0x44D5 : 0x44DD;
+		rf_n_dmr_bw[RF_N_DMR_BW_34].value[col] = high ? 0x2398 : 0x2392;
+	}
+#endif
 	at1846s_set_profile(&rf, &rf_n_digital);
 }
 
@@ -453,7 +460,8 @@ static bool apply_tx_audio(uint32_t hz, const subtone_t *tone)
 	ok &= at1846s_modify(&rf, 0, 0x0A, 0x780Fu, 0x03A0u);
 	ok &= at1846s_write(&rf, 0, 0x44, mode_now == RADIO_MODE_FM ? RF_TX_GAIN_FM : RF_TX_GAIN_DMR);
 	ok &= at1846s_write(&rf, 0, 0x41, RF_TX_VOICE_GAIN);
-	uint16_t deviation = RF_TX_DEVIATION;
+	uint16_t deviation = mode_now == RADIO_MODE_DMR && d878uv2_cal_rf_type() == D878UV2_RF_1846N ?
+		0 : RF_TX_DEVIATION;
 #if CONFIG_FM
 	if (mode_now == RADIO_MODE_FM) {
 		bool dcs = tone != NULL && (tone->type == TONE_DCS || tone->type == TONE_DCS_INV);
@@ -497,7 +505,15 @@ static void set_mode(radio_mode_t mode)
 
 static at1846s_bw_t bw_of(radio_bw_t bw)
 {
+	if (mode_now == RADIO_MODE_DMR && d878uv2_cal_rf_type() == D878UV2_RF_1846N) return AT1846S_BW_12K5;
 	return bw == RADIO_BW_25K ? AT1846S_BW_25K : AT1846S_BW_12K5;
+}
+
+static bool apply_rx_filter(void)
+{
+	// Normal digital RX overwrites the width table's intermediate squelch filter.
+	return mode_now != RADIO_MODE_DMR || d878uv2_cal_rf_type() != D878UV2_RF_1846N ||
+		at1846s_write(&rf, 0, 0x48, 0x192F);
 }
 
 // The core's sub-audio types onto the chip driver's
@@ -522,6 +538,7 @@ static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 	configure_profile(hz);
 	ok &= at1846s_set_bandwidth(&rf, bw_of(bw));
 	ok &= apply_mode();
+	ok &= apply_rx_filter();
 	control_dac();
 	ok &= at1846s_set_freq(&rf, hz);
 	tune_pwm(hz);
@@ -618,6 +635,7 @@ static void tx_off(void)
 	if (rx_hz != 0) {
 		at1846s_set_bandwidth(&rf, bw_of(rx_bw));
 		(void)apply_mode();
+		(void)apply_rx_filter();
 		control_dac();
 		at1846s_set_freq(&rf, rx_hz);
 		tune_pwm(rx_hz);

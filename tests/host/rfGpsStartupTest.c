@@ -104,6 +104,29 @@ static void test_revision_profiles(void)
 	assert(rf.cache[0][0x3C] == 0x0408 && rf.cache[0][0x3F] == 0x28D0);
 	assert(rf.cache[0][0x60] == 0x1CB8 && rf.cache[0][0x62] == 0x0A10);
 	assert(rf.cache[1][7] == 0x020C && rf.cache[1][0x12] == 0xE0EB);
+	// A digital channel must replace FM-wide filters and force narrow operation on both bands.
+	set_mode(RADIO_MODE_DMR);
+	const uint32_t bands[] = { 299999990u, 300000000u, 433500000u };
+	for (unsigned i = 0; i < sizeof(bands) / sizeof(bands[0]); i++) {
+		assert(rx(bands[i], RADIO_BW_25K, NULL));
+		assert(rf.bw == AT1846S_BW_12K5 && rf.cache[0][0x30] == 0x4026);
+		assert(rf.cache[0][0x33] == (i == 0 ? 0x44DD : 0x44D5));
+		assert(rf.cache[0][0x34] == (i == 0 ? 0x2392 : 0x2398));
+		assert(rf.cache[0][0x0A] == 0x4381 && rf.cache[0][0x48] == 0x192F);
+		assert(rf.cache[0][0x3C] == 0x1A32 && rf.cache[0][0x41] == 0x4006);
+	}
+	assert(rx(145500000u, RADIO_BW_12K5, NULL));
+	assert(tx(433500000u, RADIO_BW_12K5, 0, NULL));
+	assert(rf.cache[0][0x33] == 0x44DD && rf.cache[0][0x34] == 0x2392); // split TX follows RX band
+	assert(rf.cache[0][0x0A] == 0x3BA1 && rf.cache[0][0x59] == 0);
+	assert(rf.cache[0][0x58] == 0x80E5 && rf.cache[0][0x40] == 0x0031);
+	tx_off();
+	assert(rf.cache[0][0x0A] == 0x4381 && rf.cache[0][0x41] == 0x4006 && rf.cache[0][0x48] == 0x192F);
+	set_mode(RADIO_MODE_FM);
+	assert(rx(433500000u, RADIO_BW_25K, NULL));
+	assert(rf.cache[0][0x0A] == 0x43A0 && rf.cache[0][0x3C] == 0x0408);
+	assert(rf.cache[0][0x32] == 0x75E3 && rf.cache[0][0x50] == 0x010A);
+	assert(rf.cache[0][0x56] == 0x0B22 && rf.cache[0][0x60] == 0x203E);
 	factory_rf_type = RF_KIND_OTHER; configure_profile(145500000u);
 	assert(rf.profile == NULL);
 	assert(at1846s_set_bandwidth(&rf, AT1846S_BW_12K5));
@@ -157,6 +180,13 @@ static void test_audio_path(void)
 	assert(rf.cache[0][0x44] == RF_AUDIO_TRIM_DMR);
 	assert(rf.cache[0][0x40] == RF_AUDIO_FILTER_DMR);
 	assert(rf.cache[0][0x58] == RF_AUDIO_58_DMR);
+	assert(rf.cache[0][0x0A] == 0x4381);
+	assert(rf.cache[0][0x13] == 0xB100 && rf.cache[0][0x15] == 0x1100);
+	assert(rf.cache[0][0x32] == 0x44D5 && rf.cache[0][0x33] == 0x44DD && rf.cache[0][0x34] == 0x2392);
+	assert(rf.cache[0][0x35] == 0x50A9 && rf.cache[0][0x36] == 0x50A9);
+	assert(rf.cache[0][0x3C] == 0x1A32 && rf.cache[0][0x41] == 0x4006);
+	assert(rf.cache[0][0x50] == 0x010B && rf.cache[0][0x56] == 0x0B02);
+	assert(rf.cache[0][0x60] == 0x101E && rf.cache[0][0x62] == 0x0A10);
 	assert((rf.cache[0][0x3A] & 0x7000u) == 0x4000u);
 	host_pin_levels[GPIOD] = MCU_PIN(0);
 	mic_prepared = true; // an old call's completed setup must not arm a fresh call
@@ -174,15 +204,17 @@ static void test_audio_path(void)
 	assert(rf.state == AT1846S_STATE_DMR_TX);
 	assert(rf.cache[0][0x30] == 0x4046);
 	assert(rf.cache[0][0x44] == RF_TX_GAIN_DMR);
-	assert(rf.cache[0][0x41] == RF_TX_VOICE_GAIN && rf.cache[0][0x59] == RF_TX_DEVIATION);
+	assert(rf.cache[0][0x41] == RF_TX_VOICE_GAIN && rf.cache[0][0x59] == 0);
+	assert(rf.cache[0][0x0A] == 0x3BA1);
 	tx_off();
-	assert(rf.bw == AT1846S_BW_25K);
+	assert(rf.bw == AT1846S_BW_12K5);
 	assert(TIMER_CH0CV(0x40000400u) == 1644); // split TX must restore receive tracking as well as frequency
 	uint32_t word = at1846s_freq_word(145500000u);
 	assert(rf.cache[0][0x29] == (uint16_t)((word >> 16) & 0x3FFFu));
 	assert(rf.cache[0][0x2A] == (uint16_t)word);
 	assert(rf.state == AT1846S_STATE_RX);
-	assert(rf.cache[0][0x30] == 0x7026);
+	assert(rf.cache[0][0x30] == 0x4026);
+	assert(rf.cache[0][0x48] == 0x192F);
 	set_mode(RADIO_MODE_FM);
 	assert(tx(433500000u, RADIO_BW_25K, 0, NULL));
 	assert(modulation_hz == 433500000u);
