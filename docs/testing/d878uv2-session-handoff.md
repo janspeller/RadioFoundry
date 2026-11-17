@@ -8,6 +8,15 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Offline extraction checkpoint: the dirty worker validated the BA container's 1,177 outer checksummed
+records and extracted 192 internal load records in six address-preserving flash ranges, totaling 294,472
+supplied bytes. Reconstructing the ranges reproduces every byte. The same parser validates three earlier
+stock versions. The updater independently constructs these headers from instruction/data section metadata
+and an explicit coding selector; the BA payloads use coded variants. Extraction is validated; decoding the
+resident instructions and recovering the codec initialization table remain open. Local extraction tools,
+manifests and payloads stay in ignored `build/resident-audit/` in the dirty tree. Only prose findings cross
+the clean-room boundary. No radio access, flash or RF was performed.
+
 Owner follow-up: the codec-selection image appears to improve audio. This is a subjective improvement,
 not confirmation of normal microphone level or intelligible DMR voice. The owner requested continued
 offline dirty-worker extraction of the resident baseband image overnight, prioritizing the TI codec
