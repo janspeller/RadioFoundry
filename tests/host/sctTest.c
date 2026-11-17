@@ -374,6 +374,44 @@ static void test_voice(void)
 	CHECK(sct_host_boot(&h, &rx, 1000) == SCT_BOOT_NO_APP && bus.nlog == 0);
 }
 
+// Typed startup fields retain their protocol, and failures cannot fall through to later setup.
+static void test_voice_setup_fields(void)
+{
+	static uint8_t block[SCT_BOOT_BLOCK_BYTES];
+	static const uint8_t value[5] = { 0, 1, 2, 3, 4 };
+	sct_setup_field_t setup = { SCT_TYPE_DMR, { SCT_F_MODOUT_CONFIG, 5, value } };
+	sct_voice_t voice = { .codec = 1, .vocoder = 4, .setup_fields = &setup, .setup_count = 1 };
+	sct_host_t host = { .write = b_write, .read = b_read, .reset = b_reset, .delay_ms = b_delay,
+		.now_ms = b_now, .boot = SCT_BOOT_BLOCK, .boot_block = block, .voice = &voice };
+	sct_rx_t rx;
+	memset(&bus, 0, sizeof(bus));
+	bus.answer_block = SCT_ACK_RESET_READY;
+	bus.voice = true;
+	bus.refuse_id = -1;
+	const uint8_t types[] = { SCT_TYPE_CONTROL, SCT_TYPE_DPMR, SCT_TYPE_DMR };
+	for (unsigned i = 0; i < sizeof(types); i++) {
+		setup.type = types[i]; bus.nlog = 0;
+		CHECK(sct_host_boot(&host, &rx, 1000) == SCT_BOOT_OK);
+		CHECK(bus.nlog == 3 && bus.log[2][5] == types[i]);
+		CHECK(bus.log[2][6] == SCT_F_MODOUT_CONFIG && memcmp(bus.log[2] + 7, value, 5) == 0);
+	}
+	bus.refuse_id = SCT_F_MODOUT_CONFIG; bus.nlog = 0;
+	CHECK(sct_host_boot(&host, &rx, 1000) == SCT_BOOT_NO_VOICE && bus.nlog == 3);
+	bus.mute_id = true; bus.now = 0; bus.nlog = 0;
+	CHECK(sct_host_boot(&host, &rx, 1000) == SCT_BOOT_NO_VOICE && bus.nlog == 3);
+	CHECK(bus.now == 200);
+	bus.refuse_id = -1; bus.mute_id = false;
+	const uint8_t invalid[] = { SCT_TYPE_PROGRAM, SCT_TYPE_CODEC, SCT_TYPE_DMR | SCT_TYPE_READ };
+	for (unsigned i = 0; i < sizeof(invalid); i++) {
+		setup.type = invalid[i]; bus.nlog = 0;
+		CHECK(sct_host_boot(&host, &rx, 1000) == SCT_BOOT_NO_VOICE && bus.nlog == 2);
+	}
+	setup.type = SCT_TYPE_DMR; setup.field.len = 4; bus.nlog = 0;
+	CHECK(sct_host_boot(&host, &rx, 1000) == SCT_BOOT_NO_VOICE && bus.nlog == 2);
+	voice.setup_fields = NULL; bus.nlog = 0;
+	CHECK(sct_host_boot(&host, &rx, 1000) == SCT_BOOT_NO_VOICE && bus.nlog == 2);
+}
+
 // --- The DMR engine, on a fake chip ---
 
 #define SENT_MAX 64
@@ -1909,6 +1947,7 @@ int main(void)
 	test_boot();
 	test_boot_rom_self();
 	test_voice();
+	test_voice_setup_fields();
 	test_dmr_start();
 	test_dmr_voice_tx();
 	test_dmr_data_tx();

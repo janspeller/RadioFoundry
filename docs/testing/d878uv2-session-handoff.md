@@ -8,6 +8,24 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+New supported startup correction: the normal stock final startup stage sends TYPE 0x05,
+`MODOUT_CONFIG` (0x41), payload `00 1D 00 00 00`, before queued gains. Our profile omitted it.
+The board now supplies that exact packet through optional typed startup fields in the shared host;
+it is acknowledged after the configured vocoder and before control gains or codec writes. Unsupported
+packet types, invalid lengths, refusal and timeout stop setup. Other profiles leave the new list empty.
+The board-profile regression fails before the correction and passes after, including rejection gating.
+Shared SCT tests pass 751 checks; codec-profile, raw-I2C, analog and codec-owner tests pass. Default
+handheld and mobile builds and the handheld DMR-off build pass without warnings. Default stack check
+passes with its previous margin. Documentation links and generic checks pass. No radio flash or RF
+was performed; this corrects a proven missing command, not a verified microphone repair.
+
+Remaining trace limits: stock's runtime vocoder helper can emit vendor index 12 for stored selection 4;
+that is not established as a valid replacement for layer-2 selection 4. No full codec-trim resend after
+each vocoder switch was proven. These remain separate from the implemented startup field. The dirty
+worker hit its usage limit before completing the new WORK_MODE/VOCODER_IO_SET/RF conditional audit.
+Do not report those unfinished checks as verified. The owner's actual stock analog/digital mic settings
+have been requested to distinguish working saved settings from reset defaults.
+
 Current owner baseline: stock firmware has been restored, and its microphone audio works more than fine.
 The weak/noisy microphone fault remains specific to RadioFoundry under this comparison. Do not treat the
 stock radio as a running debug-link target or assume the diagnostic image has been flashed.

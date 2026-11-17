@@ -1362,7 +1362,7 @@ board's codec mute/restore behavior. Rejection, timeout and release during prepa
 That correction is not implemented in the earlier FM image `fc1c9900`; the newer candidate includes it.
 
 The stock resend also carries a twelve-byte DC_OFFSET block. No new nondefault value for it, ordinary-voice
-VOCOER_IO_SET or MODOUT_CONFIG transaction, or additional ADC power/bias/routing write was established by
+VOCOER_IO_SET transaction or additional ADC power/bias/routing write was established by
 this audit. Service/tone full-duplex commands and special stop debug bits are not ordinary voice defaults.
 Raw codec-I2C address convention, resident mode-change effects, actual ADC samples, deviation and burst
 timing remain unresolved. Normal-antenna DMR voice still needs testing independently of microphone gain.
@@ -1461,3 +1461,37 @@ select the stored vocoder mode. The ordering is established; an ADC initializati
 selecting 16 is not. The audit supports no additional microphone register correction beyond codec
 selection. Codec state readback is needed to distinguish accepted gain commands from actual ADC setup.
 The owner still reports weak mic audio and overwhelming static at the peer after codec selection.
+
+
+### Recovered modulation-output startup field
+
+The normal final startup stage sends `MODOUT_CONFIG` (0x41) after the main vocoder-selection stage and
+before the queued audio/radio settings. The wrapper uses the runtime protocol byte, initialized to 5;
+the wire TYPE is therefore 0x05. Its five data bytes are `00 1D 00 00 00`. Byte 0 is the output-delay
+store, initialized to zero; the wrapper sets byte 1 to 0x1D and clears bytes 2 through 4. No meaning beyond
+the public delay-byte definition is assigned to the reserved bytes.
+
+This supersedes the earlier claim that no reachable modulation-output transaction was established.
+The port omitted this field entirely. Add the exact typed field to startup after the configured vocoder
+and before gain/control and codec-register writes, waiting for its acknowledgment. A refusal must stop
+voice setup. This restores a known command; the current profile does not reproduce the complete stock
+vocoder preload sequence, and neither retention across vocoder changes nor a mic-level repair is proven.
+Ordinary mode-entry emitters are not established callers of this startup wrapper; do not add speculative
+per-PTT or mode-change output writes.
+
+
+### Runtime vocoder selection qualification
+
+A subsequent reachable stock trace distinguishes stored vocoder selection from the emitted value.
+Ordinary initialization stores protocol/mode 3 and requested vocoder 4. When the mode is at least 2 and
+requested vocoder is not 16, the first-send and retry helpers emit TYPE 0 `VOCODER_SEL = 12`, wait for
+field-0x10 status zero, and cache the requested value. A request for 16 emits 16. This qualifies earlier
+wording that the radio-field flush simply sends stored selection 4 again.
+
+The extracted index-12 stream exists, but its vendor-specific role is undecoded. The current layer-2
+engine selects 4 directly; the stock runtime selection is a wire difference, not proof that substituting
+12 in the layer-2 engine repairs microphone audio. No such substitution is implemented.
+
+The mode-entry and vocoder completion paths do not establish a full codec/audio-cache invalidation
+caused solely by switching vocoders. The trace does not justify resending every codec trim after each
+switch. The verified modulation-output startup command is the only new setup correction from this pass.

@@ -114,6 +114,11 @@ static const sct_field_t analog_setup[] = {
 	{ SCT_F_SQ_LEVEL, sizeof(sq_analog), sq_analog },
 	{ SCT_F_MISC_GAIN, sizeof(misc_gain), misc_gain },
 };
+// The normal startup wrapper uses the DMR protocol for this field; the reserved bytes are board data.
+static const uint8_t modout_config[] = { 0, 0x1D, 0, 0, 0 };
+static const sct_setup_field_t voice_setup_fields[] = {
+	{ SCT_TYPE_DMR, { SCT_F_MODOUT_CONFIG, sizeof(modout_config), modout_config } },
+};
 static const sct_field_t voice_fields[] = {
 	{ SCT_F_DEMOD_GAIN, sizeof(demod_gain_v), demod_gain_v },
 	{ SCT_F_DIGI_MIC_GAIN, sizeof(mic_gain_v), mic_gain_v },
@@ -147,6 +152,8 @@ static const sct_voice_t voice = {
 	// Normal startup selects the TI codec and waits for its ACK before selecting the vocoder or trimming gains.
 	.codec = 1,
 	.vocoder = 4,
+	.setup_fields = voice_setup_fields,
+	.setup_count = sizeof(voice_setup_fields) / sizeof(voice_setup_fields[0]),
 	.fields = voice_fields,
 	.field_count = sizeof(voice_fields) / sizeof(voice_fields[0]),
 	.codec_writes = codec_writes,

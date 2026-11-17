@@ -45,11 +45,13 @@ answer before the next:
 | --- | --- | --- |
 | 1 | TYPE 0x00, CODEC_SELECT (the board's `codec`; 0 skips the step) | `2D 00`, 1 s |
 | 2 | TYPE 0x00, VOCODER_SEL (the board's `vocoder`; 0 skips the step) | `10 00`, 3 s |
-| 3 | TYPE 0x00, one packet per entry of the board's `fields`, in order (control fields such as DIGI_SPEAKER_GAIN and DIGI_MIC_GAIN) | `ID 00`, 200 ms |
-| 4 | TYPE 0x40, `00 page register value 00 00` (LEN 6), one packet per entry of the board's `codec_writes`, in order | `17 00`, 200 ms |
+| 3 | Optional typed `setup_fields`, in order, after vocoder selection; TYPE 0x00, 0x03 or 0x05 | `ID 00`, 200 ms |
+| 4 | TYPE 0x00, one packet per entry of the board's `fields`, in order (control fields such as DIGI_SPEAKER_GAIN and DIGI_MIC_GAIN) | `ID 00`, 200 ms |
+| 5 | TYPE 0x40, `00 page register value 00 00` (LEN 6), one packet per entry of the board's `codec_writes`, in order | `17 00`, 200 ms |
 
 The waits are the Packet Interface document's field timeouts; the document gives none for the control field and the
-codec write. A field of the wrong length is not sent and fails the set-up.
+codec write. A field of the wrong length is not sent and fails the set-up. A typed setup field with an unsupported TYPE
+also fails; program-data and codec-bypass flags are not accepted through that interface.
 An `ACK_MESSAGE` with an error code answers any step and fails it.
 
 Results (`sct_boot_result_t`): `OK`, `NO_BLOCK` (no block given), `BUS` (a write failed), `NO_APP` (the chip

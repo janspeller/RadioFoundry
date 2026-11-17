@@ -25,6 +25,12 @@ typedef enum {
 	SCT_BOOT_ROM,		// SCT3288: the boot ROM greets with ACK NOT_LOADED; the start command runs the application
 } sct_boot_t;
 
+// A board-supplied startup field whose protocol TYPE matters (control, dPMR or DMR).
+typedef struct {
+	uint8_t type;
+	sct_field_t field;
+} sct_setup_field_t;
+
 // The voice set-up the boot sends once the application runs (docs/spec/modem-sct.md 2). A zero selection is not sent
 // and leaves the chip's default
 typedef struct {
@@ -35,6 +41,9 @@ typedef struct {
 	uint8_t field_count;
 	const sct_codec_write_t *codec_writes;	// then these, in order: gains and routing for the board's audio wiring
 	uint8_t codec_count;
+	// After vocoder selection and before control gains or codec writes; NULL with count zero skips it.
+	const sct_setup_field_t *setup_fields;
+	uint8_t setup_count;
 } sct_voice_t;
 
 typedef struct {

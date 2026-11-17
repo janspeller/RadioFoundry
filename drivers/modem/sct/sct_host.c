@@ -92,12 +92,13 @@ static int wait_ack(const sct_host_t *h, sct_rx_t *rx, uint32_t deadline)
 #define CODEC_WRITE_MS		200u
 #define FIELD_MS		200u
 
-// One TYPE 0 write of a single field, answered by the field's status
-static bool control1(const sct_host_t *h, sct_rx_t *rx, uint8_t id, const uint8_t *data, uint8_t len, uint32_t wait_ms)
+// One typed field write, answered by the field's status
+static bool write_field(const sct_host_t *h, sct_rx_t *rx, uint8_t type, uint8_t id,
+			const uint8_t *data, uint8_t len, uint32_t wait_ms)
 {
 	sct_pkt_t p;
 
-	sct_pkt_begin(&p, SCT_TYPE_CONTROL);
+	sct_pkt_begin(&p, type);
 	sct_pkt_add(&p, id, data, len);
 	uint16_t n = sct_pkt_end(&p, false);
 
@@ -106,15 +107,23 @@ static bool control1(const sct_host_t *h, sct_rx_t *rx, uint8_t id, const uint8_
 
 static sct_boot_result_t voice_setup(const sct_host_t *h, sct_rx_t *rx, const sct_voice_t *v)
 {
-	if (v->codec != 0 && !control1(h, rx, SCT_F_CODEC_SELECT, &v->codec, 1, CODEC_SELECT_MS))
+	if (v->codec != 0 && !write_field(h, rx, SCT_TYPE_CONTROL, SCT_F_CODEC_SELECT, &v->codec, 1, CODEC_SELECT_MS))
 		return SCT_BOOT_NO_VOICE;
-	if (v->vocoder != 0 && !control1(h, rx, SCT_F_VOCODER_SEL, &v->vocoder, 1, VOCODER_SEL_MS))
+	if (v->vocoder != 0 && !write_field(h, rx, SCT_TYPE_CONTROL, SCT_F_VOCODER_SEL, &v->vocoder, 1, VOCODER_SEL_MS))
 		return SCT_BOOT_NO_VOICE;
+	if (v->setup_count != 0 && v->setup_fields == NULL) return SCT_BOOT_NO_VOICE;
+	for (uint8_t i = 0; i < v->setup_count; i++) {
+		const sct_setup_field_t *f = &v->setup_fields[i];
+
+		if ((f->type != SCT_TYPE_CONTROL && f->type != SCT_TYPE_DPMR && f->type != SCT_TYPE_DMR) ||
+		    !write_field(h, rx, f->type, f->field.id, f->field.data, f->field.len, FIELD_MS))
+			return SCT_BOOT_NO_VOICE;
+	}
 	for (uint8_t i = 0; i < v->field_count; i++) {
 		const sct_field_t *f = &v->fields[i];
 
 		// A field of the wrong length makes no packet (sct_host_send refuses 0 bytes)
-		if (!control1(h, rx, f->id, f->data, f->len, FIELD_MS))
+		if (!write_field(h, rx, SCT_TYPE_CONTROL, f->id, f->data, f->len, FIELD_MS))
 			return SCT_BOOT_NO_VOICE;
 	}
 	for (uint8_t i = 0; i < v->codec_count; i++) {
