@@ -1495,3 +1495,23 @@ engine selects 4 directly; the stock runtime selection is a wire difference, not
 The mode-entry and vocoder completion paths do not establish a full codec/audio-cache invalidation
 caused solely by switching vocoders. The trace does not justify resending every codec trim after each
 switch. The verified modulation-output startup command is the only new setup correction from this pass.
+
+
+### Separate stock microphone controls and ordinary work mode
+
+The owner reports working stock settings DigiMic 4 and AnaMic 3. These are separate saved controls.
+The digital producer selects the codec PGA/AGC table; the analog producer selects RF transmit register
+0x44 from `07FF`, `08FF`, `09FF`, `0AFF`, `0CFF`. Analog raw index 2 therefore matches the port's current
+`09FF`. The mapping from the displayed numbers to raw indexes has not been established, so no numeric
+stock level is silently converted to a new gain.
+
+The analog-setting helper also writes RF register 0x64, but this is VOX configuration. The public
+[AT1846S programming guide, section 9](https://device.report/m/3c3831cb8a4faeacfd8c45ad662fb36c9ff3232018d83d1e7ece0938337cb578.pdf)
+identifies its two thresholds; register 0x30 bit 4 enables detection. Stock's separate VOX setting is
+zero for off and 1 through 3 for its three levels. The port's normal TX value 0x4046 leaves VOX disabled.
+These threshold writes are not evidence for a missing microphone amplitude adjustment.
+
+Ordinary initialized stock FM sends `WORK_MODE` TX `02 00 00`, then bare `DMR_CALL_START`, and returns
+with RX `01 00 00`. These values match the analog engine. Nonzero `VOCODER_IO_SET` callers belong to
+recording, playback or special tones; the ordinary TX recording branch is conditional on recording
+being enabled. No additional ordinary work-mode or vocoder-I/O fix follows from this pass.

@@ -8,6 +8,19 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Prepared candidate: `build/d878uv2-output-setup/rfoundry_d878uv2_codec.bin`, embedded version `91209ba0`,
+1,030,144 bytes, SHA-256 `6dd8a075d8fcb76856c4e86be029e03d4ee17a64e0333ea4f6f37686a9f51563`.
+Its matching application, ELF and map are preserved beside it. It adds the verified TYPE-5 modulation-output
+startup command and includes the codec readback-parser correction. It changes no mic gains. The owner
+reports stock DigiMic 4 / AnaMic 3; exact displayed-level to raw-index mapping remains unconfirmed.
+Stock remains the verified working hardware baseline; this candidate has not been flashed or audio-tested.
+
+The completed follow-up audit confirms ordinary FM work-mode bytes already match and finds no mandatory
+unrecorded-voice `VOCODER_IO_SET` omission. Analog raw index 2 matches the current RF 0x44 value 0x09FF.
+RF 0x64 writes are VOX thresholds and do not justify a voice-gain patch. The dirty worker's resumed pass
+completed these checks after its earlier usage-limit interruption; it found no further supported register
+correction beyond the implemented modulation-output command. The hardware page records the boundaries.
+
 New supported startup correction: the normal stock final startup stage sends TYPE 0x05,
 `MODOUT_CONFIG` (0x41), payload `00 1D 00 00 00`, before queued gains. Our profile omitted it.
 The board now supplies that exact packet through optional typed startup fields in the shared host;
