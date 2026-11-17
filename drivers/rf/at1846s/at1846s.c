@@ -195,11 +195,18 @@ void at1846s_cache_clear(at1846s_t *dev)
 void at1846s_attach(at1846s_t *dev, const at1846s_bus_t *bus)
 {
 	dev->bus = bus;
+	dev->profile = NULL;
 	dev->control_values = NULL;
 	at1846s_cache_clear(dev);
 	dev->bw = -1;
 	dev->mode = -1;
 	dev->state = AT1846S_STATE_OFF;
+}
+
+void at1846s_set_profile(at1846s_t *dev, const at1846s_profile_t *profile)
+{
+	dev->profile = profile;
+	dev->bw = dev->mode = -1;
 }
 
 static bool select_page(at1846s_t *dev, uint8_t page)
@@ -269,6 +276,22 @@ static bool write_list(at1846s_t *dev, const reg_val_t *list, uint32_t n)
 	return ok;
 }
 
+static bool write_steps(at1846s_t *dev, const at1846s_step_t *steps, uint8_t count, bool force)
+{
+	if (count != 0 && steps == NULL) return false;
+	bool ok = true;
+	for (unsigned i = 0; i < count; i++) {
+		const at1846s_step_t *s = &steps[i];
+		if (s->reg != AT1846S_STEP_WAIT) {
+			ok &= force ? at1846s_write_force(dev, s->page, s->reg, s->value) :
+				at1846s_write(dev, s->page, s->reg, s->value);
+			if (s->page == 0 && s->reg == REG_CTRL && s->value == 1) at1846s_cache_clear(dev);
+		}
+		if (s->delay_ms != 0) dev->bus->delay_ms(s->delay_ms);
+	}
+	return ok;
+}
+
 // --- Chip operations ---
 
 bool at1846s_init(at1846s_t *dev)
@@ -277,6 +300,17 @@ bool at1846s_init(at1846s_t *dev)
 	dev->bw = -1;
 	dev->mode = -1;
 	bool ok = select_page(dev, 0);
+	if (dev->profile != NULL && dev->profile->init != NULL) {
+		for (unsigned i = 0; i < dev->profile->probe_tries; i++) {
+			uint16_t id;
+			if (at1846s_read(dev, 0, 0, &id) && id == 0x1846u) break;
+			dev->bus->delay_ms(dev->profile->probe_delay_ms);
+		}
+		ok &= write_steps(dev, dev->profile->init, dev->profile->init_count, true);
+		ok &= at1846s_set_bandwidth(dev, AT1846S_BW_12K5);
+		dev->state = AT1846S_STATE_IDLE;
+		return ok;
+	}
 	ok &= at1846s_write_force(dev, 0, REG_CTRL, 0x0001);	// soft reset
 	dev->bus->delay_ms(50);
 	at1846s_cache_clear(dev);	// the reset put every register back to its default
@@ -303,8 +337,15 @@ bool at1846s_set_bandwidth(at1846s_t *dev, at1846s_bw_t bw)
 	}
 	int col = bw == AT1846S_BW_25K ? 1 : 0;
 	bool ok = true;
-	for (uint32_t i = 0; i < sizeof(bw_rows) / sizeof(bw_rows[0]); i++) {
-		ok &= at1846s_write(dev, bw_rows[i].page, bw_rows[i].reg, bw_rows[i].val[col]);
+	if (dev->profile != NULL && dev->profile->bandwidth != NULL) {
+		for (unsigned i = 0; i < dev->profile->bandwidth_count; i++) {
+			const at1846s_bw_step_t *s = &dev->profile->bandwidth[i];
+			if (s->widths & (1u << col)) ok &= at1846s_write(dev, s->page, s->reg, s->value[col]);
+		}
+	} else {
+		for (uint32_t i = 0; i < sizeof(bw_rows) / sizeof(bw_rows[0]); i++) {
+			ok &= at1846s_write(dev, bw_rows[i].page, bw_rows[i].reg, bw_rows[i].val[col]);
+		}
 	}
 	ok &= select_page(dev, 0);
 	ok &= at1846s_write_force(dev, 0, REG_CTRL, control_value(dev, bw, AT1846S_STATE_IDLE));
@@ -316,11 +357,17 @@ bool at1846s_set_bandwidth(at1846s_t *dev, at1846s_bw_t bw)
 
 bool at1846s_set_mode(at1846s_t *dev, at1846s_mode_t mode)
 {
+	if (mode != AT1846S_MODE_FM && mode != AT1846S_MODE_DMR) return false;
 	if (dev->mode == (int8_t)mode) {
 		return true;
 	}
-	bool ok = mode == AT1846S_MODE_DMR ? write_list(dev, dmr_regs, sizeof(dmr_regs) / sizeof(dmr_regs[0]))
-					   : write_list(dev, fm_regs, sizeof(fm_regs) / sizeof(fm_regs[0]));
+	bool ok;
+	if (dev->profile != NULL && dev->profile->mode[mode] != NULL) {
+		ok = write_steps(dev, dev->profile->mode[mode], dev->profile->mode_count[mode], false);
+	} else {
+		ok = mode == AT1846S_MODE_DMR ? write_list(dev, dmr_regs, sizeof(dmr_regs) / sizeof(dmr_regs[0]))
+					    : write_list(dev, fm_regs, sizeof(fm_regs) / sizeof(fm_regs[0]));
+	}
 	dev->mode = ok ? (int8_t)mode : -1;
 	return ok;
 }

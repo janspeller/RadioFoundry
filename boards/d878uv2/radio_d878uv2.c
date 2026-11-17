@@ -21,6 +21,7 @@
 #include "hal_time.h"
 #include "rf/at1846s/at1846s.h"
 #include "rf/rfbus/rfbus.h"
+#include "rf_profile.h"
 
 // Above this the radio is on its UHF path, at or below on VHF (4.3: a plain constant in the stock firmware)
 #define BAND_SPLIT_HZ		300000000u
@@ -232,6 +233,27 @@ static void tx_ramp(uint8_t from8, uint8_t to8)
 
 static radio_mode_t mode_now = RADIO_MODE_FM;
 
+static void configure_profile(uint32_t rx_frequency)
+{
+	if (d878uv2_cal_rf_type() != D878UV2_RF_1846N) {
+		at1846s_set_profile(&rf, NULL);
+		return;
+	}
+#if CONFIG_FM
+	if (mode_now == RADIO_MODE_FM) {
+		bool middle = rx_frequency >= 200000000u && rx_frequency < 300000000u;
+		rf_n_fm_bw[RF_N_BW_32].value[1] = middle ? 0x75E4 : 0x75E3;
+		rf_n_fm_bw[RF_N_BW_34].value[1] = middle ? 0x2B8B : 0x2B89;
+		at1846s_set_profile(&rf, &rf_n_analog);
+		return;
+	}
+#else
+	(void)rx_frequency;
+#endif
+	at1846s_set_profile(&rf, &rf_n_digital);
+}
+
+
 // --- The per-slot PA gate ---
 //
 // On this radio the PA is keyed per TDMA slot, not for the whole transmission: the baseband's slot-timing output
@@ -371,6 +393,7 @@ static void init(void)
 
 	rfbus_3w_attach(&rf3w, &bus_pins);
 	at1846s_attach(&rf, &rf_bus);
+	configure_profile(0);
 	rf.control_values = control_values;
 	at1846s_init(&rf);
 	gpio_shadow = RF_GPIO_SETUP;
@@ -412,7 +435,7 @@ static bool restore_rx_audio(void)
 	return ok;
 }
 
-static bool apply_tx_audio(void)
+static bool apply_tx_audio(uint32_t hz, const subtone_t *tone)
 {
 	// These registers were initialized by the RF driver. Save their RX values before temporary TX trims.
 	if (!rx_audio.valid) {
@@ -430,7 +453,16 @@ static bool apply_tx_audio(void)
 	ok &= at1846s_modify(&rf, 0, 0x0A, 0x780Fu, 0x03A0u);
 	ok &= at1846s_write(&rf, 0, 0x44, mode_now == RADIO_MODE_FM ? RF_TX_GAIN_FM : RF_TX_GAIN_DMR);
 	ok &= at1846s_write(&rf, 0, 0x41, RF_TX_VOICE_GAIN);
-	ok &= at1846s_write(&rf, 0, 0x59, RF_TX_DEVIATION);
+	uint16_t deviation = RF_TX_DEVIATION;
+#if CONFIG_FM
+	if (mode_now == RADIO_MODE_FM) {
+		bool dcs = tone != NULL && (tone->type == TONE_DCS || tone->type == TONE_DCS_INV);
+		deviation = d878uv2_cal_rf_deviation(hz, dcs);
+	}
+#else
+	(void)hz; (void)tone;
+#endif
+	ok &= at1846s_write(&rf, 0, 0x59, deviation);
 	return ok;
 }
 
@@ -442,6 +474,10 @@ static bool apply_mode(void)
 	ok &= at1846s_write(&rf, 0, 0x58, dmr ? RF_AUDIO_58_DMR : RF_AUDIO_58_FM);
 	ok &= at1846s_write(&rf, 0, 0x40, dmr ? RF_AUDIO_FILTER_DMR : RF_AUDIO_FILTER_FM);
 	ok &= at1846s_write(&rf, 0, 0x44, dmr ? RF_AUDIO_TRIM_DMR : RF_AUDIO_TRIM_FM);
+	if (d878uv2_cal_rf_type() == D878UV2_RF_1846N) {
+		ok &= at1846s_modify(&rf, 0, 0x7A, 0x7FFFu, 0);
+		ok &= at1846s_modify(&rf, 0, 0x79, 0x3FFFu, 0);
+	}
 	// The codec's modulator outputs are wired to the RF chip's microphone input (spec 4.6.4).
 	ok &= at1846s_modify(&rf, 0, 0x3A, 0x8FFFu, 0x4000u);
 	return ok;
@@ -450,6 +486,7 @@ static bool apply_mode(void)
 static void set_mode(radio_mode_t mode)
 {
 	mode_now = mode;
+	configure_profile(rx_hz);
 #if CONFIG_FM
 	if (mode != RADIO_MODE_FM) {
 		d878uv2_modem_analog(false, false, true);
@@ -482,6 +519,7 @@ static bool rx(uint32_t hz, radio_bw_t bw, const subtone_t *rx_tone)
 {
 	pa_off();
 	bool ok = restore_rx_audio();
+	configure_profile(hz);
 	ok &= at1846s_set_bandwidth(&rf, bw_of(bw));
 	ok &= apply_mode();
 	control_dac();
@@ -525,6 +563,7 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 	if (d878uv2_analog_value(10)) return false;
 #endif
 	bool ok = at1846s_set_state(&rf, AT1846S_STATE_IDLE);
+	configure_profile(rx_hz);
 	ok &= at1846s_set_bandwidth(&rf, bw_of(bw));
 	ok &= apply_mode();
 	control_dac();
@@ -534,7 +573,7 @@ static bool tx(uint32_t hz, radio_bw_t bw, uint8_t power, const subtone_t *tx_to
 	} else {
 		ok &= at1846s_set_tx_tone(&rf, AT1846S_TONE_NONE, 0);
 	}
-	ok &= apply_tx_audio();
+	ok &= apply_tx_audio(hz, tx_tone);
 #if CONFIG_DMR || CONFIG_FM
 	d878uv2_modem_set_deviation(hz);	// this radio's own deviation, before the carrier goes up
 #endif

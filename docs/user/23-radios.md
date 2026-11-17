@@ -766,6 +766,13 @@ A keypad microphone unplugged while the radio is on stops its PTT within 3 secon
 - The hotspot, single frequency repeating, privacy, the USB network and zone sharing are left out: the
   radio's memory is too small for all of them, and the vocoder runs in the DMR chip, out of the processor's reach.
 
+## AnyTone AT-D878UVII PLUS
+
+This port is in bring-up. Transmit microphone audio remains under investigation; stock firmware provides
+the working comparison. Factory RF identity and calibration are read automatically and are never rewritten
+by these audio corrections. Keep the original firmware available until transmit audio has been verified.
+See the [bring-up record](../testing/d878uv2-bringup.md) for the current limitations.
+
 ## AnyTone AT-D578UV (AT32)
 
 The AT-D578UV with an AT32F435 or AT32F437 processor (version screen `AT_Ver`). The radio around it is the

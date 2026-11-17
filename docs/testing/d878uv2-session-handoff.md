@@ -6,42 +6,43 @@
 Supersedes the 2026-11-15 handoff. The bring-up history is in [d878uv2-bringup.md](d878uv2-bringup.md); this file
 is only what the next session needs to continue.
 
-## Current hardware checkpoint
+## Current hardware checkpoint — 2026-11-17
 
-Prepared candidate: `build/d878uv2-output-setup/rfoundry_d878uv2_codec.bin`, embedded version `91209ba0`,
-1,030,144 bytes, SHA-256 `6dd8a075d8fcb76856c4e86be029e03d4ee17a64e0333ea4f6f37686a9f51563`.
-Its matching application, ELF and map are preserved beside it. It adds the verified TYPE-5 modulation-output
-startup command and includes the codec readback-parser correction. It changes no mic gains. The owner
-reports stock DigiMic 4 / AnaMic 3; exact displayed-level to raw-index mapping remains unconfirmed.
-Stock remains the verified working hardware baseline; this candidate has not been flashed or audio-tested.
+Stock is installed. The owner confirms its microphone audio works more than fine, with DigiMic 4 and
+AnaMic 3. RadioFoundry's weak, hissy transmit audio has not yet been repaired on air. Exact displayed
+mic-level to raw-index mapping remains unconfirmed. Do not treat stock as a debug-link target.
 
-The completed follow-up audit confirms ordinary FM work-mode bytes already match and finds no mandatory
-unrecorded-voice `VOCODER_IO_SET` omission. Analog raw index 2 matches the current RF 0x44 value 0x09FF.
-RF 0x64 writes are VOX thresholds and do not justify a voice-gain patch. The dirty worker's resumed pass
-completed these checks after its earlier usage-limit interruption; it found no further supported register
-correction beyond the implemented modulation-output command. The hardware page records the boundaries.
+Read-only stock codeplug reads confirmed factory identity `1846N`, frequency calibration FQCU 3180,
+and deviation bytes MODU `2A`, CTCW `12`, DCSW `0C`. No settings were written and no RF was keyed.
+The stock programming session disconnected during END after the successful checked reads.
 
-New supported startup correction: the normal stock final startup stage sends TYPE 0x05,
-`MODOUT_CONFIG` (0x41), payload `00 1D 00 00 00`, before queued gains. Our profile omitted it.
-The board now supplies that exact packet through optional typed startup fields in the shared host;
-it is acknowledged after the configured vocoder and before control gains or codec writes. Unsupported
-packet types, invalid lengths, refusal and timeout stop setup. Other profiles leave the new list empty.
-The board-profile regression fails before the correction and passes after, including rejection gating.
-Shared SCT tests pass 751 checks; codec-profile, raw-I2C, analog and codec-owner tests pass. Default
-handheld and mobile builds and the handheld DMR-off build pass without warnings. Default stack check
-passes with its previous margin. Documentation links and generic checks pass. No radio flash or RF
-was performed; this corrects a proven missing command, not a verified microphone repair.
+The completed default-path trace found two additional setup differences. The factory identity selects
+an RF revision profile whose reset sequence and FM bandwidth/filter tables differ from the shared
+legacy defaults. Ordinary FM also writes calibrated register 0x59 after tone setup; the old port retained
+an intermediate `0C50`. For this radio at 433.500 MHz, final 0x59 is `0A92` without DCS and `0A8C` with
+DCS. These are verified setup differences, not proof that either alone explains the microphone fault.
 
-Remaining trace limits: stock's runtime vocoder helper can emit vendor index 12 for stored selection 4;
-that is not established as a valid replacement for layer-2 selection 4. No full codec-trim resend after
-each vocoder switch was proven. These remain separate from the implemented startup field. The dirty
-worker hit its usage limit before completing the new WORK_MODE/VOCODER_IO_SET/RF conditional audit.
-Do not report those unfinished checks as verified. The owner's actual stock analog/digital mic settings
-have been requested to distinguish working saved settings from reset defaults.
+The implementation now selects the revision profile from the active factory identity copy, keeps chip
+sequence execution in the shared driver, and supplies board register data. Split-channel bandwidth
+selection uses RX frequency, while final FM deviation uses the uncorrected TX frequency. Calibration
+copy/remapping and defensive fallback behavior have host tests. DMR receives the common revision init;
+its remaining mode-specific RF setup is not claimed to match stock. No microphone gain was raised.
 
-Current owner baseline: stock firmware has been restored, and its microphone audio works more than fine.
-The weak/noisy microphone fault remains specific to RadioFoundry under this comparison. Do not treat the
-stock radio as a running debug-link target or assume the diagnostic image has been flashed.
+The next candidate will be pinned in `build/d878uv2-rf-profile/`, including its ELF and map. The old
+`build/d878uv2-output-setup/` image, embedded version `91209ba0`, is superseded; do not recommend it.
+The new image includes its TYPE-5 `MODOUT_CONFIG` startup command and the codec readback-parser fix.
+It has not been flashed or audio-tested. The owner performs flashing manually.
+
+Host RF-driver, factory-calibration and board-sequence regressions pass. Default, FM-off and DMR-off
+firmware builds pass without warnings, as does another board using the shared RF driver. The default
+stack check passes with its previous margin. Passive RF-profile HIL checks were added and collected;
+they have not run against the new firmware. Documentation links and generic checks pass.
+
+The follow-up trace confirms ordinary FM work-mode bytes already match and finds no mandatory
+unrecorded-voice `VOCODER_IO_SET` omission. Analog raw index 2 matches RF 0x44 value `09FF`.
+RF 0x64 controls VOX thresholds, so it does not justify a voice-gain patch. Stock's runtime vocoder
+helper can emit vendor index 12 for stored selection 4; that is not established as a valid replacement
+for layer-2 selection 4. No full codec-trim resend after each vocoder switch was proven.
 
 History audit requested by the owner:
 

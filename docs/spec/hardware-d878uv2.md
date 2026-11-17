@@ -1515,3 +1515,288 @@ Ordinary initialized stock FM sends `WORK_MODE` TX `02 00 00`, then bare `DMR_CA
 with RX `01 00 00`. These values match the analog engine. Nonzero `VOCODER_IO_SET` callers belong to
 recording, playback or special tones; the ordinary TX recording branch is conditional on recording
 being enabled. No additional ordinary work-mode or vocoder-I/O fix follows from this pass.
+
+
+### Expanded reachable FM RF initialization and PTT audit, November 2026
+
+This recheck supersedes any earlier claim that the complete normal TX register
+sequence was already accounted for. The earlier detailed section 4.7.4 describes
+the entry selected for runtime states 0x14 through 0x16. The ordinary top-level
+TX dispatcher has another reachable branch. Both share several helpers, but
+one branch is not proof of the entire other's behavior.
+
+#### Common RF initialization
+
+After the RF identity/reset helper, the common initialization issues the
+following ordered bank-0 writes. These are fixed initialization constants,
+not readings from the owner's calibration:
+
+| Order | Register/value |
+| --- | --- |
+| 1 | 0A=4380 |
+| 2 | If the separate hardware flag is nonzero: 0F=8C24 |
+| 3 | 1F=5AE2; 31=0031; 41=470F; 42=1036; 43=00A9 |
+| 4 | 45=100F; 47=7F2F; 4F=2C62; 53=0094 |
+| 5 | 54=2A18; 55=0081; 57=1C00; 58=840D; 59=0C50 |
+| 6 | 5A=0CDD; 63=3FFF |
+| 7 | 30=40A4, wait 50 ms; 30=40A6, wait 50 ms twice; 30=4006, wait 50 ms |
+| 8 | 27=74A4, wait 5 ms; 27=7CA4; 27=6CA4 |
+| 9 | 67=0; 68=0; 69=0; 6A=0410; 6B through 76=0 |
+| 10 | 77=2284; 78=D984; 79=1E3C |
+| 11 | 30=7006, wait 50 ms; 30=70A6 |
+
+A whole-image direct-call audit located the explicit writes to 54, 5A and 63
+only in this initialization block. They are not missing per-PTT writes. Whether
+a clean profile already supplies them must be checked against its startup table.
+The common initialization itself is reachable from normal platform startup;
+its presence is not inferred from a dormant service wrapper.
+
+#### Ordinary pure-FM TX order
+
+The ordinary dispatcher performs the following relevant operations. This is
+the pure-FM branch, channel mode byte +8 bits 1:0 equal zero; digital and mixed
+branches have additional conditions and should not blindly share its values.
+
+1. Update RF GPIO shadow register 1F: clear mask 0303, then add 0202 for the
+   zero argument used on ordinary entry. Put register 30 in its idle state;
+   VOX disabled uses 4006, VOX enabled uses 4016.
+2. Select normal microphone source: 3A becomes its prior value AND 8FFF, OR
+   4000; clear 7A bit 15 and clear 79 bits 15:14.
+3. Program TX frequency and its independent reference/tuning/power controls.
+   The ordinary channel correction byte is signed and added to the channel
+   frequency except in the service/calibration context.
+4. Outside the digital predicate, write 58=8405 and 40=0030.
+5. Apply the narrow or wide RF table. Pure-FM channel byte +8 bits 5:4 equal
+   zero selects narrow; nonzero selects wide. The source register 3A ends as
+   40C3 narrow or 44C3 wide. It is not left at a source-only literal.
+6. Insert source selection 7 into 0A bits 14:11. The next helper preserves
+   mask 780F and adds 03A0. Thus its result is 3BA0 plus preserved low bits.
+7. Apply the analog Mic table to register 44, then 41=070F and 59=0C50.
+8. Apply the VOX-dependent register 64 helper described above. This is not
+   established as a speech-volume adjustment.
+9. Configure channel CTCSS, DCS or cleared tone generation.
+10. **Overwrite register 59 with the calibrated combined/subtone deviations,**
+    as specified below. The earlier 0C50 write is not the final ordinary-FM
+    value.
+11. Enter TX with the two register-30 writes: narrow 4006 then 4046, or wide
+    7006 then 7046. With VOX enabled, bit 4 is included in both writes.
+12. Select TX RF GPIO5 according to frequency greater than 300 MHz and complete
+    the PA/gate/indicator state. The RX band-enable restoration belongs to the
+    subsequent receive-entry path.
+
+#### Final calibrated register 59
+
+The producer is reached after ordinary channel tone configuration and before
+TX enable. The input digital predicate is false for pure FM. If that predicate
+is true, the helper instead writes zero to register 59; this is not a request
+to apply the FM deviation calculation to DMR.
+
+Both RF bands use the UHF calibration record's bytes: logical calibration base
+0x02F60000 plus 06 is MODU, plus 07 is CTCW, plus 08 is DCSW. The fallback copy
+is 0x02F80000 with the same offsets. The factory reset writer supplies 2A, 12
+and 0C respectively. Those are factory defaults, not confirmed owner values,
+and the VHF record's similarly named fields do not substitute here.
+
+Start the combined-deviation byte at MODU. Add a frequency-class increment:
+above 300 MHz, class 1 adds 16 and class 2 adds 6; at or below 300 MHz, class 1
+adds 6 and class 2 adds 17. Addition wraps to eight bits. No width-dependent
+increment occurs in this producer. Shift this byte left six, keep bits FFC0,
+and OR the selected subtone calibration byte. The subtone byte is not masked
+to six bits by the stock helper.
+
+DCS selects DCSW; both CTCSS and **no tone** select CTCW. This is a stored
+register value even with tone generation disabled. The normal tone selector
+uses channel byte +9 bits 3:2 unless the channel's reverse predicate is true,
+in which case it uses bits 1:0. That predicate requires channel mode other than
+1 or 3, byte +9 bit 4 set, and byte +9 bit 7 clear. Tone value 2 selects DCSW;
+other values select CTCW. In the separate service-tone context, its stored
+service tone type selects the same two calibration bytes.
+
+At 433.500 and 145.500 MHz, both frequency classifiers return class zero.
+Therefore a factory-default example gives final 59=0A92 for no tone/CTCSS and
+0A8C for DCS. A port must use the owner's actual calibration bytes, not replace
+them with these examples. The final 59 calculation is a concrete stage omitted
+by an implementation that always leaves 0C50 after its TX audio setup.
+
+#### Deviation correction frequency classes
+
+All frequencies below are MHz; interval endpoints are inclusive. Start at class zero. Test class-2 intervals, then class-1 intervals; a class-1 match takes precedence. The final exact-frequency tests override either interval result. UHF exact class-1 tests run before exact class-2 tests. VHF exact class-1 tests precede its two final class-2 frequencies. Frequencies are compared as integer units of 10 Hz.
+
+Above 300 MHz, class 2: 400.5–400.7, 432.3025–433.3, 454.9–454.9975, 455.0025–455.3, 471.26–471.35, 471.98–472.06, 472.07–472.2, 473.58–473.8, 474.3–474.65, 475.1–475.5, 476–480, 480.04–480.4, 481–481.15, 481.6–482.
+
+Above 300 MHz, class 1: 408.5–408.8, 409.1–410, 410.2–410.4, 431.15–432.3, 454.7–454.8975, 455.7–455.9, 484.25–484.35, 484.9–485.06, 485.07–485.2, 488.2–488.42, 489.08–489.2.
+
+At or below 300 MHz, class 2: 136.205–136.225, 136.2325–136.2475, 136.42–136.4975, 136.5025–136.59, 136.755–136.7675, 136.7775–136.7875, 143.98–144.0775, 144.0825–144.18, 144.33–144.35, 144.36–144.3725, 158.1725–158.1975, 158.4175–158.43, 158.4475–158.4575, 158.935–159.515, 159.5225–159.565, 160.34–160.3575, 166.5675–166.59, 166.7775–166.8275, 166.8325–166.91, 167.0825–167.1, 167.11–167.125.
+
+At or below 300 MHz, class 1: 151.6025–151.6675, 151.6725–151.7875, 173.31–173.3275, 173.3375–173.36, 173.58–173.5975, 173.61–173.6275.
+
+Above 300 MHz, exact class 1: 409.5, 420.875, 420.8725, 420.8775, 432.25, 443.6225, 443.625, 443.6275, 466.3725, 466.375, 466.3775, 477.7475, 477.75, 477.7525, 489.125, 500.5, 511.875.
+
+Above 300 MHz, exact class 2: 455, 494, 520.
+
+At or below 300 MHz, exact class 1: 140.2875, 140.29, 140.2925, 140.29375, 140.295, 144.08, 144.08125, 147.8725, 147.875, 147.8775, 151.67, 151.66875, 155.455, 155.45625, 155.4575, 155.46, 155.4625, 163.0375, 163.0425, 163.04375, 163.045, 163.04, 166.83, 166.83125, 170.6225, 170.625, 170.6275.
+
+At or below 300 MHz, final exact class 2: 136.5, 159.25.
+
+#### Pure-FM narrow/wide prerequisite tables
+
+These are the ordinary pure-FM table writes in their issued order. They are
+RF register values, not SCT command payloads. The frequency word used by the
+width helper is the active RX-frequency word; do not silently substitute the
+TX word on a split channel. All numeric register values below are hexadecimal.
+
+| Stage | Narrow | Wide |
+| --- | --- | --- |
+| Start | 0A=4380 | 0A=43A0 |
+| Hardware flag | 13=B100 if set, otherwise A100 | Same |
+| Base | 15=1100; 34=2B8E | 15=1F00 |
+| RF frequency at least 300 MHz | 32=4495; 33=4493; 34=2B8E | 32=75E3; 33=4495; 34=2B89 |
+| RF frequency 200 to below 300 MHz | Same narrow values | 32=75E4; 33=4495; 34=2B8B |
+| RF frequency below 200 MHz | Same narrow values | 32=75E3; 33=4495; 34=2B89 |
+| Remaining front end | 35=51EC; 36=51EC; 3A=40C3 | 3A=44C3; no 35/36 write in this wide helper |
+| Audio/filter group | 3C=0408; 41=070F; 3F=28D0; 48=1D3B | 3C=0408; 41=070F; 3F=29D2; 48=1E3B |
+| Additional filter group | 50=010A; 56=0B22; 60=1CB8; 62=0A10; 65=2494; 66=EB2E | 50=010A; 56=0B22; 60=203E; 62=2346; 65=248A; 66=FF2E |
+| Bank select | 7F=0001 | 7F=0001 |
+| Bank 1 sequence | 07=020C; 08=0214; 09=030C; 0A=0314; 0B=0324; 0C=0344; 0D=1344; 0E=1B44; 0F=3F44; 12=E0EB | 07=0214; 08=0224; 09=0314; 0A=0324; 0B=0344; 0C=0384; 0D=1384; 0E=1B84; 0F=3F84; 12=E0EB |
+| Return | 7F=0000 | 7F=0000 |
+
+The helper names alone do not prove every undocumented bit's meaning. The
+manufacturer register guide should be used to interpret fields; these tables
+establish the actual reachable stock producers and their ordering. Nonzero
+channel-mode tables are different and are not interchangeable with this
+pure-FM table.
+
+#### Normal receive restoration
+
+The receive-entry path restores speaker/PA GPIO state, puts register 30 idle,
+and invokes the normal source helper: 3A source 4, 7A bit 15 cleared and 79 bits
+15:14 cleared. An optional FM setting invokes an additional source-related
+helper; its semantics are not resolved here. The path then updates frequency,
+reference/tuning voltage and other band-dependent receive calibration.
+
+Before its final width-table and RX-enable steps, the receive path explicitly
+writes 58=8085 and 40=0030 for pure FM; nonzero channel mode uses 58=80E5 and
+40=0031 at that point. Its register-44 receive values are independently selected
+by analog Mic raw index: 07F9, 08F9, 09F9, 0AF9 and 0CF9. Nonzero mode uses 0AFA.
+It clears RF GPIO7 and restores the appropriate receive band enables.
+
+It configures channel receive tone decoding, applies the width table, updates
+calibrated squelch thresholds and enters RX with register 30 idle then RX:
+narrow 4006 then 4026, wide 7006 then 7026. VOX-enabled variants add bit 4 to both
+values. Above 300 MHz, RF GPIO4 is enabled and GPIO0 disabled; at or below
+300 MHz, GPIO4 is disabled and GPIO0 enabled. PA gate state is lowered before
+this receive restoration. This ordered re-entry is why merely stopping a TX
+carrier does not restore the complete receive path.
+
+The calibrated RX squelch and tuning helpers have their own service-context,
+frequency-grid and volume/channel conditions. Their full previously recovered
+rules remain in sections 5.1 and 5.2. This new table is complete for the listed
+RF source/width prerequisites, but is not a claim that every service, scanning,
+APRS, mixed-mode or tone-signaling state was collapsed into one default path.
+
+For the final-deviation helper, the digital predicate is directly proven:
+channel mode 1 returns true immediately and mode 0 returns false immediately.
+Thus ordinary pure-DMR TX reaches the zero-register-59 case, while pure FM
+reaches the calibrated case. Modes 2 and 3 depend on additional protocol and
+runtime state; do not infer their behavior from a generic nonzero-mode test.
+
+#### RF hardware-identity flag and reset prerequisite
+
+The previously unnamed flag controlling the RF-init/width variations has a
+concrete persisted producer. Normal startup reads five bytes at logical NAND
+0x02FA0120. The containing identity block starts at 0x02FA0000; if that block's
+validity check fails, the reader selects the mirrored block at +0x20000, making
+the five-byte location 0x02FC0120. It compares all five bytes exactly with the
+ASCII hardware identifier `1846N`. An exact match sets the flag to one; any
+mismatch sets it to zero. This is not inferred from the radio model string,
+calibration contents or an automatic RF chip-ID read.
+
+| Identity result | Common initialization | Width table |
+| --- | --- | --- |
+| Exact `1846N` | Write 0F=8C24; clear the associated cached halfword | Write 13=B100 |
+| Any other five bytes | No conditional 0F=8C24 write | Write 13=A100 |
+
+The identity loader invokes the comparator during ordinary startup. A separate
+stock service request can replace the five RAM bytes, rerun the comparator and
+apply 0F=8C24 on a match; that service producer does not replace the normal
+persisted-identity evidence. The later read-only stock check confirmed the owner's
+identifier as `1846N`; see the applied-profile record below.
+
+The normal reset/identity-check helper runs before common RF initialization.
+It polls RF register 00 for identity 1846, with a maximum 200 iterations and a
+5 ms wait per iteration. It continues after a match or exhaustion; there is no
+newly established fatal error at exhaustion. It then waits 50 ms, writes
+30=0001, waits 50 ms twice, writes 30=0004, writes 0A=43A5 and writes 04=0FD0.
+The later common initialization starts with 0A=4380 and the conditional 0F
+write above. These are two ordered startup phases; no reset-stage 13 write
+was found. Register 13 is selected by the subsequent width table.
+
+The final-register-59 frequency classifier explicitly uses the TX-frequency
+word, including for its 300 MHz band split and both region classifiers. This
+is distinct from the width-table frequency branch, which uses the RX word.
+The stored frequency units are 10 Hz; the 300 MHz comparison constant is
+30,000,000. The classifier has no rounding adjustment. An implementation whose
+input is integer Hz can obtain that representation by integer division by ten.
+Stock receives the already stored 10 Hz word rather than executing an Hz
+conversion inside this helper.
+
+The ordinary frequency programmer may add the channel's signed correction byte
+to the RF frequency argument, but the deviation classifier separately rereads
+the TX word. Therefore its regions use the channel TX word before that temporary
+correction, not the corrected RF-register argument and not the receive word.
+The calibration bytes used here are the normal reader's selected logical NAND
+record at 0x02F60000 or mirror 0x02F80000, offsets 06/07/08. No separate PC-mode
+calibration alias supplies this ordinary path. This trace establishes no
+per-byte FF replacement rule for those three calibration bytes.
+
+
+### Applying the final RF deviation
+
+The default-path trace supersedes earlier statements that register 0x59 = 0x0C50 accounts for the final
+transmit setting. The board must apply the calibrated final value after tone selection and before TX
+enable. Pure FM uses MODU/CTCW/DCSW at +0x06/+0x07/+0x08 of the selected active calibration copy.
+Stock pure DMR writes zero; its complete runtime profile differs from the current layer-2 path, so this
+FM correction retains the existing digital setting pending a separate comparison. The frequency classifier
+uses TX frequency, divided into integer 10 Hz units;
+the separate bandwidth table's frequency branches use RX frequency.
+
+Read this calibration independently of PA-table plausibility. Missing/unreadable calibration or an
+all-erased three-byte record uses reset defaults 2A/12/0C as a defensive port policy, not a recovered
+stock automatic fallback. Preserve zero and individual 0xFF bytes in an otherwise supplied record.
+The final value is not guessed from a desired audio level. Tests must cover tone selection, both bands,
+interval boundaries, exact-frequency overrides, byte wrap and unmasked subtone bits, selected copies,
+replacement mapping, and the final RF write at transmit entry.
+
+
+### Verified factory RF identity and applied profiles
+
+The owner's stock PC-mode reads returned hardware identifier `1846N`, deviation bytes `2A 12 0C`, and
+reference DAC word 3180. Only those factory fields were requested. The stock device disconnected during
+`END` before its acknowledgment could be read; no settings or flash write was sent.
+
+The identity pair at 0x02FA0000/0x02FC0000 uses the same active marker and retirement predicate as
+calibration. The reader selects a marked, unretired copy and compares its five bytes at +0x120 exactly.
+The port additionally requires a valid mirror marker rather than accepting an unchecked mirror. Unknown
+or other identities keep the existing generic RF profile. Identity loading is independent of PA tables.
+Diagnostics expose `board.rf.hardware_type` (0 unknown, 1 other, 2 exact 1846N) and `board.rf.profile`.
+
+For an exact 1846N identity, the shared RF driver applies board-provided ordered reset/init steps and the
+pure-FM width and mode tables above. The wide 0x32/0x34 fields follow RX frequency on split channels.
+The shared default tables remain the fallback for other identities and for the digital bandwidth/mode
+path; digital still receives the revision's common initialization. This is not a claim that all stock
+DMR runtime configuration has been reproduced. The FM final-deviation correction uses TX frequency and
+restores the prior RX trims on release. Host tests cover the selected revision, narrow/wide profiles,
+split-frequency selection, return to RX, and identity selection with retired/mirrored records. A passive
+FM HIL check compares the advertised profile's live registers; it neither keys nor retunes.
+
+The manufacturer's programming guide gives meanings for the documented gain, filter, deviation and VOX
+fields. The audited stock sequences supply remaining board-specific constants; reserved values are not
+assigned invented meanings. On-radio transmit audio for this correction is still unverified.
+
+
+The shared [register-profile interface](rf-at1846s.md) executes these board data; the board does not
+copy the shared initialization or bandwidth logic. FM-only profile tables and correction classes are
+compiled under CONFIG_FM. Factory identity and the revision's common initialization also serve DMR.
+The exact supported pure-FM reset path is implemented for 1846N; generic fallback for other identities
+is retained and is not claimed to match their stock setup. New microphone audio remains unverified
+until the owner tests the resulting image.

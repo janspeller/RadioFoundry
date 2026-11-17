@@ -41,8 +41,23 @@ typedef enum { AT1846S_TONE_NONE, AT1846S_TONE_CTCSS, AT1846S_TONE_DCS, AT1846S_
 // The CTCSS register value used to send DCS (134.4 Hz, the DCS bit rate)
 #define AT1846S_DCS_TONE_REG	13440u
 
+// Optional board data for chip revisions whose reset, mode or bandwidth setup differs.
+#define AT1846S_STEP_WAIT 0xFFu
+typedef struct { uint8_t page, reg; uint16_t value, delay_ms; } at1846s_step_t;
+typedef struct { uint8_t page, reg, widths; uint16_t value[2]; } at1846s_bw_step_t;
+typedef struct {
+	const at1846s_step_t *init;
+	uint8_t init_count;
+	uint16_t probe_tries, probe_delay_ms;
+	const at1846s_bw_step_t *bandwidth;
+	uint8_t bandwidth_count;
+	const at1846s_step_t *mode[2];
+	uint8_t mode_count[2];
+} at1846s_profile_t;
+
 typedef struct {
 	const at1846s_bus_t *bus;
+	const at1846s_profile_t *profile;
 	// Optional board control words [state][12.5/25 kHz], with static lifetime. Set after attach, before init.
 	const uint16_t (*control_values)[2];
 	uint16_t cache[2][128];
@@ -70,6 +85,8 @@ bool at1846s_tone_match(uint16_t flags, at1846s_tone_t type);
 // --- Register access ---
 
 void at1846s_attach(at1846s_t *dev, const at1846s_bus_t *bus);
+// Static-lifetime data; reapplying also invalidates cached mode/bandwidth after mutable data changes.
+void at1846s_set_profile(at1846s_t *dev, const at1846s_profile_t *profile);
 // Cached write: skipped when the cache already holds the value
 bool at1846s_write(at1846s_t *dev, uint8_t page, uint8_t reg, uint16_t val);
 // Always written

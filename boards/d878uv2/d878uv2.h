@@ -126,12 +126,18 @@ uint32_t d878uv2_analog_value(uint8_t key);
 // --- Factory calibration, read from the NAND (cal_d878uv2.c, docs/spec/hardware-d878uv2.md 5) ---
 bool d878uv2_cal_load(void);
 bool d878uv2_cal_ready(void);
+enum { D878UV2_RF_UNKNOWN, D878UV2_RF_OTHER, D878UV2_RF_1846N };
+uint8_t d878uv2_cal_rf_type(void);
 bool d878uv2_cal_control(uint16_t *value);
 int d878uv2_cal_map_count(void);
 uint32_t d878uv2_cal_map_info(uint8_t key);
 bool d878uv2_cal_tx_drive(uint8_t level, uint32_t hz, uint8_t *drive);
 // The modulator's gain for a frequency: the radio's own deviation, or the factory default
 uint16_t d878uv2_cal_mod_gain(uint32_t hz);
+#if CONFIG_FM
+// Final RF deviation after tone setup; none/CTCSS use CTCW and DCS uses DCSW.
+uint16_t d878uv2_cal_rf_deviation(uint32_t hz, bool dcs);
+#endif
 
 // The radio's own audio values (docs/spec/hardware-d878uv2.md 4.6.6): three gain bytes the baseband passes to the
 // codec, and three 16-bit baseband levels. from_radio is false when the factory defaults were used instead

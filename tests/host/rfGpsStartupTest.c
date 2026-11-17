@@ -18,6 +18,13 @@ bool RF_CAL_TUNE(uint32_t hz, uint16_t *duty)
 	return tune_valid;
 }
 uint16_t RF_CAL_MOD_GAIN(uint32_t hz) { (void)hz; return 3500u; }
+static uint32_t rf_deviation_hz;
+static uint8_t factory_rf_type = RF_KIND_N;
+uint8_t RF_CAL_TYPE(void) { return factory_rf_type; }
+uint16_t RF_CAL_DEVIATION(uint32_t hz, bool dcs)
+{
+	rf_deviation_hz = hz; return dcs ? 0x0A8Cu : 0x0A92u;
+}
 static uint32_t modulation_hz;
 void RF_MODEM_DEVIATION(uint32_t hz) { modulation_hz = hz; }
 static bool mic_prepared;
@@ -79,6 +86,33 @@ bool RF_CAL_DRIVE(uint8_t level, uint32_t hz, uint8_t *drive)
 	return true;
 }
 
+static void test_revision_profiles(void)
+{
+	assert(rf.cache[0][0x0F] == 0x8C24 && rf.cache[0][0x13] == 0xB100);
+	assert(rf.cache[0][0x54] == 0x2A18 && rf.cache[0][0x5A] == 0x0CDD && rf.cache[0][0x63] == 0x3FFF);
+	assert(rx(250000000u, RADIO_BW_25K, NULL));
+	assert(rf.cache[0][0x32] == 0x75E4 && rf.cache[0][0x34] == 0x2B8B);
+	assert(tx(433500000u, RADIO_BW_25K, 0, NULL));
+	assert(rf.cache[0][0x32] == 0x75E4 && rf.cache[0][0x34] == 0x2B8B); // width follows RX on a split
+	assert(rf_deviation_hz == 433500000u); // final deviation follows TX
+	tx_off();
+	assert(rx(433500000u, RADIO_BW_25K, NULL));
+	assert(rf.cache[0][0x32] == 0x75E3 && rf.cache[0][0x34] == 0x2B89);
+	assert(rf.cache[0][0x3F] == 0x29D2 && rf.cache[0][0x60] == 0x203E && rf.cache[0][0x62] == 0x2346);
+	assert(rx(145500000u, RADIO_BW_12K5, NULL));
+	assert(rf.cache[0][0x33] == 0x4493 && rf.cache[0][0x34] == 0x2B8E);
+	assert(rf.cache[0][0x3C] == 0x0408 && rf.cache[0][0x3F] == 0x28D0);
+	assert(rf.cache[0][0x60] == 0x1CB8 && rf.cache[0][0x62] == 0x0A10);
+	assert(rf.cache[1][7] == 0x020C && rf.cache[1][0x12] == 0xE0EB);
+	factory_rf_type = RF_KIND_OTHER; configure_profile(145500000u);
+	assert(rf.profile == NULL);
+	assert(at1846s_set_bandwidth(&rf, AT1846S_BW_12K5));
+	assert(rf.cache[0][0x3C] == 0x1B34); // other/unknown identities retain the existing profile
+	factory_rf_type = RF_KIND_UNKNOWN; configure_profile(145500000u);
+	assert(rf.profile == NULL);
+	factory_rf_type = RF_KIND_N; configure_profile(145500000u);
+}
+
 static void test_audio_path(void)
 {
 	set_mode(RADIO_MODE_FM);
@@ -110,7 +144,7 @@ static void test_audio_path(void)
 	assert(rf.cache[0][0x30] == 0x4046 && rf.cache[0][0x58] == RF_AUDIO_58_FM_TX);
 	assert(rf.cache[0][0x0A] == (uint16_t)(0x3BA0u | (input & 0xFu)));
 	assert(rf.cache[0][0x44] == RF_TX_GAIN_FM && rf.cache[0][0x41] == RF_TX_VOICE_GAIN);
-	assert(rf.cache[0][0x59] == RF_TX_DEVIATION);
+	assert(rf.cache[0][0x59] == (mode_now == RADIO_MODE_FM ? 0x0A92u : RF_TX_DEVIATION));
 	tx_off();
 	assert(rf.cache[0][0x30] == 0x4026 && rf.cache[0][0x58] == RF_AUDIO_58_FM);
 	assert(rf.cache[0][0x0A] == input && rf.cache[0][0x41] == voice && rf.cache[0][0x59] == deviation);
@@ -156,11 +190,21 @@ static void test_audio_path(void)
 	tx_off();
 	assert(rf.cache[0][0x58] == RF_AUDIO_58_FM);
 	assert(modulation_hz == 145500000u);
+	uint16_t fm_rx_voice = rf.cache[0][0x41], fm_rx_deviation = rf.cache[0][0x59];
 	// Entering RX directly must also undo TX trims, including ones not rewritten by a cached mode table.
 	assert(tx(433500000u, RADIO_BW_12K5, 0, NULL));
 	assert(rx(433500000u, RADIO_BW_12K5, NULL));
-	assert(rf.cache[0][0x41] == voice && rf.cache[0][0x59] == deviation);
+	assert(rf.cache[0][0x41] == fm_rx_voice && rf.cache[0][0x59] == fm_rx_deviation);
 	assert(rf.cache[0][0x44] == RF_AUDIO_TRIM_FM);
+	// Tone selection precedes the calibrated final deviation; a split uses its TX frequency.
+	const subtone_t tones[] = { { TONE_CTCSS, 885 }, { TONE_DCS, 23 }, { TONE_DCS_INV, 23 } };
+	for (unsigned i = 0; i < sizeof(tones) / sizeof(tones[0]); i++) {
+		assert(tx(438500000u, RADIO_BW_12K5, 0, &tones[i]));
+		assert(rf.cache[0][0x59] == (i == 0 ? 0x0A92u : 0x0A8Cu));
+		assert(rf_deviation_hz == 438500000u);
+		tx_off();
+		assert(rf.cache[0][0x59] == fm_rx_deviation);
+	}
 }
 
 int main(void)
@@ -190,6 +234,7 @@ int main(void)
 	volume(20);
 	assert(!speaker_muted && !(hpl_gain & 0x40));
 	audio(false);
+	test_revision_profiles();
 	test_audio_path();
 	uint32_t route = 0x20;
 	assert(!RF_AUDIO_REG(1, 1, 52, &route, false));

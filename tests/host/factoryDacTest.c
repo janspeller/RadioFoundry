@@ -7,13 +7,14 @@
 #include FACTORY_CAL_SOURCE
 
 static uint8_t primary[0x20000], mirror[0x20000], metadata[0x20000], replacement[0x20000];
+static uint8_t identity_primary[0x20000], identity_mirror[0x20000];
 // The board's fingerprint check is stubbed; this test exercises selection, not the shared CRC implementation.
 uint32_t storage_crc32(uint32_t crc, const void *buf, uint32_t n)
 {
 	assert(crc == 0 && n == 25);
 	return ((const uint8_t *)buf)[0] == 0xA5 ? 0xD0D91952u : 0;
 }
-static bool fail_control_read, fail_analog_read, raw_ecc_failed;
+static bool fail_control_read, fail_analog_read, fail_deviation_read, raw_ecc_failed;
 bool CAL_NAND_READ(uint32_t addr, void *out, uint32_t n)
 {
 	if (addr < sizeof(metadata) && n <= sizeof(metadata) - addr) {
@@ -22,8 +23,15 @@ bool CAL_NAND_READ(uint32_t addr, void *out, uint32_t n)
 	if (addr >= 0x03000000u && addr - 0x03000000u + n <= sizeof(replacement)) {
 		memcpy(out, replacement + addr - 0x03000000u, n); return true;
 	}
+	if (fail_deviation_read && (addr == CAL_A + 6u || addr == CAL_B + 6u)) return false;
 	if (fail_control_read && (addr == CAL_A || addr == CAL_B)) return false;
 	if (fail_analog_read && (addr == CAL_A + 0x40u || addr == CAL_B + 0x40u)) return false;
+	if (addr >= 0x02FA0000u && addr - 0x02FA0000u + n <= sizeof(identity_primary)) {
+		memcpy(out, identity_primary + addr - 0x02FA0000u, n); return true;
+	}
+	if (addr >= 0x02FC0000u && addr - 0x02FC0000u + n <= sizeof(identity_mirror)) {
+		memcpy(out, identity_mirror + addr - 0x02FC0000u, n); return true;
+	}
 	if (addr >= CAL_A && addr - CAL_A + n <= sizeof(primary)) {
 		memcpy(out, primary + addr - CAL_A, n); return true;
 	}
@@ -53,6 +61,94 @@ static void expect(bool valid, uint16_t expected)
 	assert(CAL_CONTROL(&value) == valid);
 	assert(value == expected);
 }
+#if CONFIG_FM
+static void test_rf_deviation(void)
+{
+	memset(metadata, 0xFF, sizeof(metadata)); metadata[0x1FF00] = 0xA5;
+	metadata[0x1F4] = 0x55; metadata[0x1F5] = 0; metadata[0x1F6] = 0; metadata[0x1F7] = 0;
+	record(primary, 3620); record(mirror, 1901);
+	const uint8_t normal[] = { 0x2A, 0x12, 0x0C };
+	memcpy(primary + 6, normal, sizeof(normal));
+	mirror[6] = 0x55; mirror[7] = 0x13; mirror[8] = 0x0D;
+	assert(CAL_LOAD());
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x0A92);
+	assert(CAL_RF_DEVIATION(145500000u, false) == 0x0A92); // both bands use the first record
+	assert(CAL_RF_DEVIATION(433500000u, true) == 0x0A8C);
+	assert(CAL_RF_DEVIATION(477750000u, false) == 0x0E92); // exact class 1 overrides class-2 interval
+	assert(CAL_RF_DEVIATION(455000000u, false) == 0x0C12); // exact class 2 fills a gap
+	assert(CAL_RF_DEVIATION(151670000u, false) == 0x0C12); // VHF class 1 adds six, not sixteen
+	assert(CAL_RF_DEVIATION(136500000u, false) == 0x0ED2); // VHF class 2 adds seventeen
+	const struct { uint32_t hz; uint8_t expected; } classes[] = {
+		{ 400499990u, 0 }, { 400500000u, 2 }, { 400700009u, 2 }, { 400700010u, 0 },
+		{ 432300000u, 1 }, { 432302490u, 0 }, { 432302500u, 2 }, { 433300000u, 2 },
+		{ 433300010u, 0 }, { 140293750u, 1 }, { 166831250u, 1 }, { 159250000u, 2 },
+		{ 300000000u, 0 }, { 300000010u, 0 }, { 520000000u, 2 },
+	};
+	for (unsigned i = 0; i < sizeof(classes) / sizeof(classes[0]); i++)
+		assert(rf_deviation_class(classes[i].hz) == classes[i].expected);
+	primary[6] = 0xFF;
+	assert(CAL_RF_DEVIATION(477750000u, false) == 0x03D2); // addition wraps at eight bits
+	primary[6] = 0; primary[7] = 0xC0; primary[8] = 0x80;
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x00C0); // subtone byte is ORed unmasked
+	assert(CAL_RF_DEVIATION(433500000u, true) == 0x0080);
+	memset(primary + 6, 0, 3);
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0);
+	memset(primary + 6, 0xFF, 3);
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x0A92); // defensive erased-record policy
+	fail_deviation_read = true;
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x0A92);
+	fail_deviation_read = false;
+	memcpy(primary + CAL_RETIRE_OFF, retire_mark, sizeof(retire_mark));
+	assert(CAL_LOAD());
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x1553);
+	assert(CAL_RF_DEVIATION(433500000u, true) == 0x154D);
+	// PA-table failure does not erase independent calibration for this stage.
+	record(primary, 3620); primary[6] = 0x30; primary[7] = 5; primary[8] = 6;
+	memset(primary + CAL_UHF_0, 0xFF, CAL_UHF_LEN);
+	assert(!CAL_LOAD());
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x0C05);
+	// The saved replacement map must select the calibrated replacement, not stale primary bytes.
+	record(primary, 1000); record(replacement, 3620);
+	replacement[6] = 0x55; replacement[7] = 0x13; replacement[8] = 0x0D;
+	metadata[0] = (uint8_t)(CAL_A >> 17); metadata[1] = (uint8_t)(CAL_A >> 25);
+	metadata[0xFA] = 0x80; metadata[0xFB] = 1; metadata[0x1F6] = 1;
+	assert(CAL_LOAD());
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x1553);
+	metadata[0x1FF00] = 0;
+	assert(!CAL_LOAD());
+	assert(CAL_RF_DEVIATION(433500000u, false) == 0x0A92); // reload clears stale base
+}
+#endif
+
+static void test_rf_identity(void)
+{
+	memset(metadata, 0xFF, sizeof(metadata)); metadata[0x1FF00] = 0xA5;
+	metadata[0x1F4] = 0x55; metadata[0x1F5] = 0; metadata[0x1F6] = 0; metadata[0x1F7] = 0;
+	record(primary, 3620); record(mirror, 1901);
+	record(identity_primary, 0); record(identity_mirror, 0);
+	memcpy(identity_primary + 0x120, "1846N", 5);
+	memcpy(identity_mirror + 0x120, "1846S", 5);
+	assert(CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_N);
+	memcpy(identity_primary + CAL_RETIRE_OFF, retire_mark, sizeof(retire_mark));
+	assert(CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_OTHER);
+	memcpy(identity_mirror + 0x120, "1846N", 5);
+	assert(CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_N);
+	memcpy(identity_mirror + CAL_RETIRE_OFF, retire_mark, sizeof(retire_mark));
+	assert(CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_UNKNOWN);
+	record(identity_primary, 0); memcpy(identity_primary + 0x120, "1846n", 5);
+	assert(CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_OTHER); // exact, case-sensitive hardware ID
+	memcpy(identity_primary + 0x120, "1846N", 5);
+	memset(primary + CAL_UHF_0, 0xFF, CAL_UHF_LEN);
+	assert(!CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_N); // identity is independent of PA data
+	record(primary, 3620); record(identity_primary, 0); record(replacement, 0);
+	memcpy(identity_primary + 0x120, "1846S", 5); memcpy(replacement + 0x120, "1846N", 5);
+	metadata[0] = (uint8_t)(0x02FA0000u >> 17); metadata[1] = (uint8_t)(0x02FA0000u >> 25);
+	metadata[0xFA] = 0x80; metadata[0xFB] = 1; metadata[0x1F6] = 1;
+	assert(CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_N); // mapped identity, not stale raw bytes
+	metadata[0x1FF00] = 0;
+	assert(!CAL_LOAD() && CAL_RF_TYPE() == CAL_KIND_UNKNOWN);
+}
+
 int main(void)
 {
 	expect(false, 0);
@@ -145,6 +241,10 @@ int main(void)
 	metadata[0x1F6] = 90;
 	assert(!CAL_LOAD()); expect(false, 0);
 	assert(map_status == 3);
+#if CONFIG_FM
+	test_rf_deviation();
+#endif
+	test_rf_identity();
 	puts("factoryDacTest PASSED");
 	return 0;
 }

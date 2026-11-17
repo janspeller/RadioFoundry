@@ -1572,15 +1572,15 @@ run-webctlassets: httpAssetsTestWebctl
 
 # RF-powered GPS must start after the board's RF bus and chip initialization.
 TESTS += rfGpsStartupTest
-rfGpsStartupTest: rfGpsStartupTest.c stubs/rf_startup/mcu_io.h $(ROOT)/boards/d878uv2/radio_d878uv2.c $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS)
+rfGpsStartupTest: rfGpsStartupTest.c stubs/rf_startup/mcu_io.h $(ROOT)/boards/d878uv2/radio_d878uv2.c $(ROOT)/boards/d878uv2/rf_profile.h $(ROOT)/drivers/rf/at1846s/at1846s.c $(RFBUS)
 	$(CC) $(CFLAGS) -I$(ROOT)/hal -Istubs/rf_startup -ffunction-sections -fdata-sections \
 		'-DRF_STARTUP_SOURCE="../../boards/d878uv2/radio_d878uv2.c"' \
 		-DRF_GPS_INIT=d878uv2_gps_init -DRF_GPS_POWER=d878uv2_gps_power -DRF_GPIO_READ=d878uv2_rf_gpio \
-		-DRF_CAL_DRIVE=d878uv2_cal_tx_drive -DRF_CAL_CONTROL=d878uv2_cal_control -DRF_ANALOG_REQUEST=d878uv2_modem_analog \
+		-DRF_KIND_N=D878UV2_RF_1846N -DRF_KIND_OTHER=D878UV2_RF_OTHER -DRF_KIND_UNKNOWN=D878UV2_RF_UNKNOWN -DRF_CAL_TYPE=d878uv2_cal_rf_type -DRF_CAL_DRIVE=d878uv2_cal_tx_drive -DRF_CAL_CONTROL=d878uv2_cal_control -DRF_ANALOG_REQUEST=d878uv2_modem_analog \
 		-DRF_CODEC_WRITE=d878uv2_codec_write -DRF_AUDIO_REG=d878uv2_audio_reg -DRF_ANALOG_VALUE=d878uv2_analog_value \
 		-DRF_MODEM_LOOPBACK=d878uv2_modem_loopback -DRF_MODEM_MIC_GAIN=d878uv2_modem_mic_gain -DRF_CHIP_BYTES=d878uv2_chip_bytes \
 		-DRF_CAL_BYTES=d878uv2_cal_bytes -DRF_RADIO=d878uv2_radio \
-		-DRF_CAL_TUNE=d878uv2_cal_tune_duty -DRF_CAL_MOD_GAIN=d878uv2_cal_mod_gain \
+		-DRF_CAL_TUNE=d878uv2_cal_tune_duty -DRF_CAL_MOD_GAIN=d878uv2_cal_mod_gain -DRF_CAL_DEVIATION=d878uv2_cal_rf_deviation \
 		-DRF_MODEM_DEVIATION=d878uv2_modem_set_deviation \
 		-DRF_MODEM_PA_ARM=d878uv2_modem_pa_arm -DRF_MODEM_PA_READY=d878uv2_modem_pa_ready \
 		-DRF_TUNING_VALUE=d878uv2_tuning_value \
@@ -1641,9 +1641,9 @@ run-codecsetup: codecSetupTest
 	./codecSetupTest
 
 TESTS += factoryDacTest
-factoryDacTest: factoryDacTest.c $(ROOT)/boards/d878uv2/cal_d878uv2.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
+factoryDacTest: factoryDacTest.c $(ROOT)/boards/d878uv2/rf_deviation.h $(ROOT)/boards/d878uv2/cal_d878uv2.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
 	$(CC) $(CFLAGS) -I$(ROOT)/hal '-DFACTORY_CAL_SOURCE="../../boards/d878uv2/cal_d878uv2.c"' \
-		-DCAL_NAND_READ=d878uv2_nand_read -DCAL_NAND_READ_FACTORY=d878uv2_nand_read_factory -DCAL_NAND_READ_ANY=d878uv2_nand_read_any -DCAL_LOAD=d878uv2_cal_load -DCAL_CONTROL=d878uv2_cal_control -DCAL_BYTES=d878uv2_cal_bytes -DCAL_AUDIO_TYPE=d878uv2_cal_audio_t -DCAL_AUDIO_READ=d878uv2_cal_audio \
+		-DCAL_NAND_READ=d878uv2_nand_read -DCAL_NAND_READ_FACTORY=d878uv2_nand_read_factory -DCAL_NAND_READ_ANY=d878uv2_nand_read_any -DCAL_LOAD=d878uv2_cal_load -DCAL_KIND_N=D878UV2_RF_1846N -DCAL_KIND_OTHER=D878UV2_RF_OTHER -DCAL_KIND_UNKNOWN=D878UV2_RF_UNKNOWN -DCAL_RF_TYPE=d878uv2_cal_rf_type -DCAL_CONTROL=d878uv2_cal_control -DCAL_BYTES=d878uv2_cal_bytes -DCAL_AUDIO_TYPE=d878uv2_cal_audio_t -DCAL_AUDIO_READ=d878uv2_cal_audio -DCAL_RF_DEVIATION=d878uv2_cal_rf_deviation \
 		-o $@ factoryDacTest.c $(ROOT)/drivers/flash/nand_remap/nand_remap.c
 .PHONY: run-factorydac
 run: run-factorydac

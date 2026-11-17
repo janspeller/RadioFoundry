@@ -15,6 +15,9 @@
 // Logical reads follow the saved NAND replacement map; map reconstruction is never attempted.
 #include "d878uv2.h"
 #include "config.h"
+#if CONFIG_FM
+#include "rf_deviation.h"
+#endif
 #include <stddef.h>
 #include "storage/storage.h"
 #include "flash/nand_remap/nand_remap.h"
@@ -49,6 +52,8 @@ static nand_remap_t calibration_map;
 static uint8_t map_status;
 static uint32_t signature_crc;
 static uint32_t cal_base;
+static uint8_t rf_type;
+uint8_t d878uv2_cal_rf_type(void) { return rf_type; }
 
 // The factory's regions are read with the chip's on-die ECC off: a checked read refuses them, which is what a
 // region written without that ECC looks like (nand_d878uv2.c). The diagnostic inspection further down keeps the
@@ -97,6 +102,8 @@ static void tune_build(void);	// defined below, called as the block is loaded
 bool d878uv2_cal_load(void)
 {
 	loaded = false;
+	cal_base = 0;
+	rf_type = D878UV2_RF_UNKNOWN;
 	control = 0;
 	control_valid = false;
 	calibration_map.ready = false;
@@ -110,6 +117,13 @@ bool d878uv2_cal_load(void)
 	map_status = 3;
 	if (!nand_remap_load(&calibration_map, raw_read, NULL, 2048, 0x180, 0x200)) return false;
 	map_status = 4;
+	uint32_t identity = copy_good(0x02FA0000u) ? 0x02FA0000u : copy_good(0x02FC0000u) ? 0x02FC0000u : 0;
+	uint8_t id[5];
+	if (identity != 0 && cal_read(identity + 0x120u, id, sizeof(id))) {
+		static const uint8_t n_id[] = { '1', '8', '4', '6', 'N' };
+		rf_type = D878UV2_RF_1846N;
+		for (unsigned i = 0; i < sizeof(id); i++) if (id[i] != n_id[i]) rf_type = D878UV2_RF_OTHER;
+	}
 	uint32_t base = copy_good(CAL_A) ? CAL_A : copy_good(CAL_B) ? CAL_B : 0;
 	if (base == 0) {
 		return false;
@@ -161,6 +175,19 @@ uint16_t d878uv2_cal_mod_gain(uint32_t hz)
 
 	return v != 0u && v != 0xFFFFu ? v : CAL_MOD_GAIN_DEFAULT;
 }
+
+#if CONFIG_FM
+uint16_t d878uv2_cal_rf_deviation(uint32_t hz, bool dcs)
+{
+	uint8_t values[3] = { 0x2A, 0x12, 0x0C }, saved[3];
+	// Both bands use the first record, independently of whether all PA tables are usable.
+	if (cal_base != 0 && cal_read(cal_base + 6u, saved, sizeof(saved)) &&
+	    !(saved[0] == 0xFFu && saved[1] == 0xFFu && saved[2] == 0xFFu)) {
+		for (unsigned i = 0; i < sizeof(saved); i++) values[i] = saved[i];
+	}
+	return rf_deviation_value(hz, values[0], values[1], values[2], dcs);
+}
+#endif
 
 // The audio record's per-radio values (docs/spec/hardware-d878uv2.md 4.6.6, 5.3). Three gain bytes that the
 // baseband passes to the codec, and three 16-bit levels that are baseband fields of their own. The factory

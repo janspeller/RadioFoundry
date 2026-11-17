@@ -185,6 +185,12 @@ bool d878uv2_diag_line(uint8_t i, char *buf, uint8_t len)
 bool d878uv2_view_line(uint8_t i, char *buf, uint8_t len)
 {
 	if (len == 0) return false;
+	if (i < 2u) {
+		if (i == 0) dl_fmt(buf, len, "rf.hardware_type=%u", (unsigned)d878uv2_cal_rf_type());
+		else dl_fmt(buf, len, "rf.profile=%s", d878uv2_cal_rf_type() == D878UV2_RF_1846N ? "at1846n" : "default");
+		return true;
+	}
+	i -= 2u;
 	// Keep tuning and microphone controls before the verbose codec snapshot: a view reply has a byte limit.
 	if (i < 3u) {
 		static const char *const names[] = { "ready", "compare", "expected" };

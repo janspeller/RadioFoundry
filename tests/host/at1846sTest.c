@@ -22,6 +22,7 @@ static int n_wr;
 static uint32_t delay_total;
 static uint16_t read_value;
 static int n_rd;
+static int fail_write_reg = -1;
 
 static bool fake_write(void *ctx, uint8_t reg, uint16_t val)
 {
@@ -30,7 +31,7 @@ static bool fake_write(void *ctx, uint8_t reg, uint16_t val)
 		log_wr[n_wr].val = val;
 	}
 	n_wr++;
-	return true;
+	return reg != fail_write_reg;
 }
 
 static bool fake_read(void *ctx, uint8_t reg, uint16_t *val)
@@ -131,6 +132,40 @@ static void test_cache(void)
 	read_value = 0x00C3;
 	CHECK(at1846s_modify(&dev, 0, 0x3A, 0xFFE0, 0x0008));
 	CHECK(n_rd == 1 && last_write(0x3A) == 0x00C8);
+}
+
+static void test_board_profile(void)
+{
+	static const at1846s_step_t init[] = { { 0, AT1846S_STEP_WAIT, 0, 7 }, { 0, 0x30, 1, 5 },
+		{ 0, 0x54, 0x1234, 0 } };
+	static const at1846s_bw_step_t widths[] = { { 0, 0x15, 3, { 0x1100, 0x1F00 } },
+		{ 1, 7, 3, { 0x020C, 0x0214 } }, { 0, 0x35, 1, { 0x51EC, 0 } } };
+	static const at1846s_step_t fm[] = { { 0, 0x41, 0x070F, 0 } };
+	static const at1846s_profile_t profile = { .init = init, .init_count = 3, .probe_tries = 2,
+		.probe_delay_ms = 5, .bandwidth = widths, .bandwidth_count = 3,
+		.mode = { fm, NULL }, .mode_count = { 1, 0 } };
+	at1846s_t dev;
+	at1846s_attach(&dev, &bus); at1846s_set_profile(&dev, &profile);
+	log_reset(); read_value = 0;
+	CHECK(at1846s_init(&dev));
+	CHECK(n_rd == 2 && delay_total == 22); // probe exhaustion is not fatal
+	CHECK(last_write(0x54) == 0x1234 && last_page() == 0);
+	log_reset(); read_value = 0x1846;
+	CHECK(at1846s_init(&dev) && n_rd == 1 && delay_total == 12);
+	CHECK(last_write(0x35) == 0x51EC);
+	log_reset();
+	CHECK(at1846s_set_bandwidth(&dev, AT1846S_BW_25K));
+	CHECK(last_write(0x15) == 0x1F00 && last_write(0x35) == -1 && last_page() == 0);
+	CHECK(at1846s_set_mode(&dev, AT1846S_MODE_FM) && last_write(0x41) == 0x070F);
+	CHECK(at1846s_set_mode(&dev, AT1846S_MODE_DMR) && last_write(0x41) == 0x4122);
+	log_reset();
+	CHECK(!at1846s_set_mode(&dev, (at1846s_mode_t)99) && n_wr == 0);
+	fail_write_reg = 0x54;
+	CHECK(!at1846s_init(&dev));
+	fail_write_reg = -1;
+	at1846s_set_profile(&dev, NULL);
+	CHECK(dev.bw == -1 && dev.mode == -1);
+	CHECK(at1846s_init(&dev) && last_write(0x54) == 0x2A3C);
 }
 
 static void test_init(void)
@@ -317,6 +352,7 @@ int main(void)
 {
 	test_pure();
 	test_cache();
+	test_board_profile();
 	test_init();
 	test_dcs();
 	test_ctcss();
