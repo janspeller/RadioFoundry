@@ -28,6 +28,8 @@ is), `reset` runs the board's power and reset sequence, `boot` is `SCT_BOOT_BLOC
 
 ## 2. Boot
 
+The offline flash-image container and load-record format are specified in [modem-sct-image.md](modem-sct-image.md).
+
 `sct_host_boot` resets the chip and waits for its application, once at start-up. Packets that arrive with the boot
 answer are dropped.
 
