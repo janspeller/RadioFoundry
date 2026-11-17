@@ -8,6 +8,37 @@ is only what the next session needs to continue.
 
 ## Current hardware checkpoint
 
+Current owner baseline: stock firmware has been restored, and its microphone audio works more than fine.
+The weak/noisy microphone fault remains specific to RadioFoundry under this comparison. Do not treat the
+stock radio as a running debug-link target or assume the diagnostic image has been flashed.
+
+History audit requested by the owner:
+
+- Local `main` is 6b7fd4bb; `origin/main` is 838c041f. The saved mobile-branch tip is fbdc7284.
+- The original port backup ca658bac already descends from fbdc7284. It did not start on main and then
+  acquire the mobile port only during rebase.
+- The rebase onto d6df55aa replayed all eleven original port commits unchanged, as verified by
+  `git range-diff origin/d578uv-bringup..backup/d878uv2-prerebase d6df55aa..17cbea4f`.
+  The modem and RF board source blobs are identical before and immediately after that rebase.
+- The new base commits were 1cacb7b8 (debug-link documentation/formatting) and d6df55aa (the other board's
+  receive GPIO/APRS path). Neither changes this board's audio setup.
+- 8569e152 changes QA4818 microphone gain and serial-microphone handling. Neither path is linked into
+  this image; its shared stack-override mechanism is not configured here. It changes no SCT or TI codec setup.
+- 60119262 adds optional end-of-call ADC mute/restore hooks. This board configures neither hook, so those
+  codec writes do not run. 7f164adf changes FM tail handling, but this board supplies no `tx_tail` hook.
+  The inherited hardware-beep hooks are likewise unset. These are not demonstrated sources of the fault.
+- 72e52ab1 changes DMR mode acknowledgments, slot handling and startup/restart behavior. It can affect
+  DMR signaling; it is not a common FM/DMR microphone-gain change. 109972e0 removes an unused raw
+  baseband memory-read diagnostic. No confirmed common microphone regression was found in these changes.
+- Settings, MCU AMBE, USB PCM routes and the AT1846S driver have no changes in
+  `origin/main...origin/d578uv-bringup`.
+  The SCT driver and GD32 platform were introduced on the port branch (6b98d822), rather than replacing
+  an earlier main implementation for this hardware. There is no verified working main-based microphone
+  image to use as the good endpoint of a hardware bisect.
+
+This is a static history audit, not proof that every inherited line is correct. It found no justified
+revert or new audio register patch. No radio access, flash or transmission was performed for this audit.
+
 Read-only USB follow-up: the radio runs `8a566a6a`, idle on FM 433.500 MHz, with the requested analog
 packet acknowledged and no modem errors. The board view truncates before the cached codec fields. An
 isolated rebuild of the exact commit matches the pinned application except five compiler build-date/time
