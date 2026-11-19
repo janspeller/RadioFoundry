@@ -537,8 +537,8 @@ of them as `dmrc.<key>` (`hal_dmr_call_t.view_line`). While the HF6853 holds the
 | Flash | 246 KB for the application | An FM-only MD-9600 build (`CONFIG_DMR=n CONFIG_USB=n CONFIG_VFO=n CONFIG_DIAG=n CONFIG_SUBTONE=n CONFIG_FONT_XL=n`) is 191 KB of code; the default MD-9600 build is 478 KB |
 | RAM | 48 KB, no CCM | The same FM-only build uses about 77 KB: a 28 KB FreeRTOS heap, about 34 KB of static data and buffers, plus stacks |
 
-FM fits the flash. RAM has to come down by about 30 KB before anything runs. Without the burst-level DMR stack (the
-HF6853 replaces it), DMR on this radio is a small driver plus UI, not the core's DMR layers.
+FM fits the flash, and the RAM came down by about 30 KB before anything ran (7.2.1). Without the burst-level DMR
+stack (the HF6853 replaces it), DMR on this radio is a small driver plus UI, not the core's DMR layers.
 
 The core's DMR features (`CONFIG_DMR` and everything under it: hotspot, SFR, privacy, data, the IP gateway) assume a
 burst-level modem. On the HF6853 they are `BOARD_UNSUPPORTED` except what the chip offers itself (calls, SMS, radio
@@ -582,8 +582,8 @@ encryption off. The bytes in the stock record go to the chip unchanged. AES with
 
 | Budget | FM only (`CONFIG_DMR_CALL=n`) | With call-level DMR (the default) |
 |---|---|---|
-| Flash | 199,696 of 251,904 B | 232,000 B: 32,304 B for DMR (the DMR screens, contacts, Recent, the core's call-level part, the driver, the board glue); 19,904 B free. Hear all, the signal level and the receive audio hook are about 0.9 KB of it. Calls (5.4.2) are about 1.7 KB of it, `CONFIG_DMR_AES` 728 B. Both columns have the FM TX tones and DTMF (2,168 B) |
-| RAM | 45,096 of 49,152 B | 49,064 B: 88 B free. The 14,336 B heap and the 1,536 B main stack are in it. The driver is about 340 B of state (one frame each way, the key until sent, the call and the call heard, the signal level) and the 256-byte ring |
+| Flash | 209,324 of 251,904 B | 243,996 B: 34,672 B more than the FM-only build (the DMR screens, contacts, Recent, the core's call-level part, the driver and the board glue); 7,908 B free. Hear all, the signal level and the receive audio hook are about 0.9 KB of it. Calls (5.4.2) are about 1.7 KB of it, `CONFIG_DMR_AES` 728 B. Both columns have the FM TX tones and DTMF (2,168 B) |
+| RAM | 44,944 of 49,152 B | 49,144 B: 8 B free. The 14,208 B heap and the 1,536 B main stack are in it. The driver is about 340 B of state (one frame each way, the key until sent, the call and the call heard, the signal level) and the 256-byte ring |
 
 How the RAM was found, each step measured: a stub driver first (flash 222,700 B; RAM 52,672 B with the 16 KB heap,
 3,520 B over). Then, static: `radio_view_t`'s empty copy const (456 B), 9 cached talk group names (576 B), the debug
@@ -591,8 +591,10 @@ log ring at 512 B (512 B), the CPS request buffer at 1.5 KB (512 B), the view's 
 `CONFIG_DMR_TALKER_ALIAS` (192 B), the UI's privacy toggle without a settings copy (396 B). On the heap: the radio
 task's stack at 512 words without the burst-level stack (1 KB), the host link's at 496 words, the start-up task's at
 512, the timer task's at 160 (`make stack-check`: the least free is the radio task's, 44 bytes over its margin), and
-the heap from 16,384 to 14,336 B: the stacks (10,272 B), the kernel's task and queue blocks (about 2 KB) and some 2 KB
-to spare. `tasks.heap_min_free` on the radio says whether that holds. `CPS_FAST` and `DUAL_WATCH` stay on.
+the heap from 16,384 to 14,208 B: the stacks (10,272 B), the kernel's task and queue blocks (about 2 KB) and under 2 KB
+to spare. `tasks.heap_min_free` on the radio says whether that holds. `CPS_FAST` and `DUAL_WATCH` stay on. The rebase
+onto upstream main added about 200 B of core state, so the build now has 8 B to spare: the next core growth needs a
+static buffer trimmed (7.3).
 
 ### 7.3 Open questions
 

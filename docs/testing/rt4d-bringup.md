@@ -82,7 +82,7 @@ python3 -m pytest tests/hil -v -rs --radio-port /dev/ttyUSB0 -k "health or boot 
 | Look for | Proves | If not |
 |---|---|---|
 | `board=RT-4D`, `display=128x64x1`, features with `HOSTLINK,DEBUGLINK` and no `USB` | USART6, its interrupt, the clock tree | Garbage: the baud divisor (`uart.c`, PCLK2 / 115200) or the system clock not at 72 MHz (`clock.c`) |
-| `tasks.heap_min_free` above 1 KB after a few minutes of use | the RTOS heap fits | `configTOTAL_HEAP_SIZE` in `boards/rt4d/board.mk` (14,336 B); RAM is 99.6 % used |
+| `tasks.heap_min_free` above 1 KB after a few minutes of use | the RTOS heap fits | `configTOTAL_HEAP_SIZE` in `boards/rt4d/board.mk` (14,208 B); RAM is 100 % used (8 B free) |
 
 ## 3. Keys, PTT, LEDs, battery
 
