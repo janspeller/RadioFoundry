@@ -311,6 +311,79 @@ static void test_zones(void)
 }
 
 #if CONFIG_DMR
+static void foreign_image(void);
+
+// The contact editor's scan (ct_problem in ui_menus.c): the first free slot and a duplicate, stopping at neither
+typedef struct {
+	uint32_t id;
+	uint16_t free, slots, dup;
+} ct_scan_t;
+
+static bool ct_scan(uint16_t index, const contact_t *c, void *ctx)
+{
+	ct_scan_t *s = ctx;
+	s->slots++;
+	if (c == NULL && s->free == 0) {
+		s->free = index;
+	}
+	if (c != NULL && c->id == s->id) {
+		s->dup = index;
+	}
+	return true;
+}
+
+static bool first_only(uint16_t index, const contact_t *c, void *ctx)
+{
+	(void)index;
+	(void)c;
+	(*(unsigned *)ctx)++;
+	return false;
+}
+
+// A radio still on the built-in set: the first New contact saves (the scan sees every slot empty, the write
+// materializes the codeplug), and the contact is then a channel's TX contact
+static void test_builtin_contact(void)
+{
+	fresh();
+	CHECK(codeplug_source() == CODEPLUG_BUILTIN);
+	ct_scan_t s = { .id = 91 };
+	CHECK(codeplug_contacts_each(ct_scan, &s));
+	CHECK(s.slots == CODEPLUG_CONTACTS_MAX && s.free == 1 && s.dup == 0);
+	unsigned calls = 0;
+	CHECK(codeplug_contacts_each(first_only, &calls) && calls == 1);	// fn stops it
+	contact_t c, back;
+	memset(&c, 0, sizeof(c));
+	strcpy(c.name, "TG 91");
+	c.id = 91;
+	c.type = CONTACT_GROUP;
+	CHECK(codeplug_set_contact(s.free, &c));
+	CHECK(codeplug_source() == CODEPLUG_OPENFW && codeplug_channel_count() == 6);
+	CHECK(codeplug_contact(1, &back) && back.id == 91 && strcmp(back.name, "TG 91") == 0);
+	// Now stored: the same scan finds it, and the next free slot
+	s = (ct_scan_t){ .id = 91 };
+	CHECK(codeplug_contacts_each(ct_scan, &s) && s.dup == 1 && s.free == 2);
+	// Picked as a built-in channel's TX contact (the picker reads codeplug_contact), saved, and its talk target
+	channel_t ch;
+	CHECK(codeplug_channel(1, &ch));
+	ch.mode = RADIO_MODE_DMR;
+	ch.color_code = 1;
+	ch.timeslot = 1;
+	ch.contact = 1;
+	CHECK(codeplug_set_channel(1, &ch));
+	CHECK(codeplug_channel(1, &ch) && ch.contact == 1 && codeplug_channel_talk_contact(&ch) == 1);
+	CHECK(codeplug_init() == CODEPLUG_OPENFW && codeplug_contact(1, &back) && back.id == 91);
+	// Another firmware's codeplug: the scan still passes, the write refuses (the UI asks first)
+	sim_flash_create(FLASH_SIZE, &map);
+	foreign_image();
+	CHECK(storage_init());
+	codeplug_accept(false);
+	CHECK(codeplug_init() == CODEPLUG_BUILTIN && codeplug_foreign());
+	s = (ct_scan_t){ .id = 91 };
+	CHECK(codeplug_contacts_each(ct_scan, &s) && s.free == 1);
+	CHECK(!codeplug_set_contact(1, &c) && codeplug_source() == CODEPLUG_BUILTIN);
+	CHECK(sim_flash_violations() == 0);
+}
+
 static void test_dmr(void)
 {
 	contact_t c, back;
@@ -780,6 +853,7 @@ int main(void)
 	test_zones();
 #if CONFIG_DMR
 	test_dmr();
+	test_builtin_contact();
 #endif
 #if CONFIG_APRS
 	test_aprs_path();

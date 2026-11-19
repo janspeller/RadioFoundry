@@ -221,7 +221,8 @@ bool codeplug_contact(uint16_t index, contact_t *out);
 // Every contact slot in order, many records per flash read: a scan with codeplug_contact (one read per slot) took
 // about 0.7 s for 1024 slots on an HR_C7000 radio and kept the idle task out. fn gets the slot (1-based) and the contact,
 // or NULL for an empty slot, under the storage lock, and returns false to stop. It may call codeplug functions, a
-// nested scan included (that one reads slot by slot). False when the codeplug can't be read
+// nested scan included (that one reads slot by slot). On the built-in set every slot is empty (true). False when the
+// codeplug can't be read, and with no codeplug (CODEPLUG_NONE)
 typedef bool (*codeplug_contact_fn)(uint16_t index, const contact_t *c, void *ctx);
 bool codeplug_contacts_each(codeplug_contact_fn fn, void *ctx);
 // RX group lists 1..CODEPLUG_LISTS_MAX; false if unused or unreadable

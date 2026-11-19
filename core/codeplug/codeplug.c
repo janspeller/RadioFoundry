@@ -1523,6 +1523,13 @@ bool codeplug_contact(uint16_t index, contact_t *out)
 
 bool codeplug_contacts_each(codeplug_contact_fn fn, void *ctx)
 {
+	if (source == CODEPLUG_BUILTIN) {
+		// The built-in set has no contacts: every slot empty, so a first save (which materializes) finds slot 1 and no
+		// duplicate. Not a failure: the callers would refuse the save as a scan that missed a block
+		for (uint16_t index = 1; index <= CODEPLUG_CONTACTS_MAX && fn(index, NULL, ctx); index++) {
+		}
+		return true;
+	}
 	if (source != CODEPLUG_OPENFW) {
 		return false;
 	}
