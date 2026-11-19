@@ -542,7 +542,9 @@ for bm in boards/*/board.mk boards/*/; do
 	while err=$(make -s BOARD="$b" $all_on $maximal_vars print-config 2>&1 >/dev/null); [ -n "$err" ]; do
 		f=$(printf '%s\n' "$err" | sed -n 's/.*CONFIG_\([A-Z0-9_]*\)=y needs .*/\1/p' | head -1)
 		case "$all_on " in *" CONFIG_$f=y "*) ;; *) break ;; esac	# not a dependency: the build reports it
-		all_on=$(printf '%s ' $all_on | sed "s/CONFIG_$f=y //")
+		# The leading space keeps the token check above exact after the first drop (the first switch in the list is
+		# then at the start, with none before it)
+		all_on=" $(printf '%s ' $all_on | sed "s/CONFIG_$f=y //")"
 		dropped="$dropped $f"
 	done
 	[ -n "$dropped" ] && echo "ci: $b maximal: off, their parent left out:$dropped"
