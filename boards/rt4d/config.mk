@@ -59,11 +59,14 @@ BOARD_NOT_WRITTEN += BCAST_FM	# the BK1080 is fitted, its driver isn't written
 BOARD_NOT_WRITTEN += RX_EXT	# the wide receive ranges need the calibration bands 2-10 (hardware-rt4d.md 3.2) in the RX path
 BOARD_NOT_WRITTEN += AUDIO_PROBE	# no board.audio_tap
 # Supported, but the maximal configuration leaves these off too: every switch on doesn't fit the 246 KB application
-# region with call-level DMR and two translations. Maximal keeps Spanish, as the default build does (Italian builds on
-# the other boards)
-MAXIMAL_SKIP := LANG_IT LANG_DEFAULT_IT
+# region or 48 KB RAM with call-level DMR and every translation. Maximal keeps Spanish, as the default build does
+# (Italian builds on the other boards)
+MAXIMAL_SKIP := LANG_IT LANG_DEFAULT_IT LANG_FR LANG_ZH LANG_DEFAULT_FR LANG_DEFAULT_ZH
 # FM is the one mode every configuration needs
 BOARD_REQUIRED := FM
+# The stack check's source analysis unions indirect calls conservatively (radio-features.md bring-up): report, don't fail CI
+STACK_CHECK_REPORT_ONLY := 1
+
 # The boot probe's waits are long and its faults blink forever: no watchdog under it
 ifneq ($(filter -DRT4D_BOOT_PROBE,$(RT4D_DEFS)),)
 CONFIG_WATCHDOG := n

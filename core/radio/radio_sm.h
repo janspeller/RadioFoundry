@@ -216,7 +216,9 @@ typedef struct {
 #ifndef RADIO_NAMES_MAX
 #define RADIO_NAMES_MAX		(1 + CODEPLUG_LIST_LEN)	// talk target and the listen list's contacts
 #endif
+#ifndef RADIO_LOOKUPS
 #define RADIO_LOOKUPS		4	// IDs looked up in all contacts / the DMR ID database, most recent kept
+#endif
 
 // A contact name the screens show for a talkgroup or an ID
 typedef struct {

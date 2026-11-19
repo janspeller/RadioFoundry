@@ -15,13 +15,13 @@ BOARD_DMR_CALL_DIRS := drivers/dmr/hf6853
 MCU_DEFS   := -DCODEPLUG_OPENFW_EEPROM_BASE=0x700000u -DCODEPLUG_OPENFW_FLASH_BASE=0x720000u
 # The 128x64 panel is 1 bit per pixel (display_rt4d.c): 1 KB of frame buffer and 64 rows, not the 40 KB / 160 row default
 MCU_DEFS   += -DGFX_FB_BYTES=1024u -DGFX_MAX_ROWS=64u
-# 48 KB of RAM in all (hardware-rt4d.md 7.2, 7.2.1): the debug link's log ring at a quarter of its default, fewer
-# cached talk group names, the 1.5 KB CPS request buffer (open-firmware-cps.md 1.1), and task stacks cut to what
-# make stack-check reads plus its margin. The heap is those stacks (10,272 B), the kernel's task and queue blocks
-# (about 2 KB) and under 2 KB to spare: tasks.heap_min_free on the radio says whether it holds
-MCU_DEFS   += -DDLOG_RING_BYTES=512 -DRADIO_NAMES_MAX=9u -DCPS_REQUEST_MAX=1536
+# 48 KB of RAM in all (hardware-rt4d.md 7.2, 7.2.1): the debug link's log ring and the name caches are cut down,
+# with the 1.5 KB CPS request buffer (open-firmware-cps.md 1.1), and task stacks sized from make stack-check. The heap
+# is those stacks (10,272 B), the kernel's task and queue blocks (about 2 KB) and a little under 2 KB to spare:
+# tasks.heap_min_free on the radio says whether it holds
+MCU_DEFS   += -DDLOG_RING_BYTES=384 -DRADIO_NAMES_MAX=8u -DRADIO_LOOKUPS=2 -DCPS_REQUEST_MAX=1536
 MCU_DEFS   += -DHOSTLINK_TASK_STACK=496 -DSTART_TASK_STACK=512 -DconfigTIMER_TASK_STACK_DEPTH=160 \
-	-DconfigTOTAL_HEAP_SIZE=14208
+	-DconfigTOTAL_HEAP_SIZE=14144
 # Bench knobs: RT4D_DEFS="-DRT4D_KEEP_SWD" leaves PA13 / PA14 to the debugger instead of the LEDs
 # RT4D_DEFS="-DRT4D_BOOT_PROBE": the boot-stage probe, progress blinked on the backlight (PA3) with the watchdog off
 # (docs/testing/rt4d-bringup.md)
