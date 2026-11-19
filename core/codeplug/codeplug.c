@@ -1661,35 +1661,64 @@ bool codeplug_delete_listen_list(uint16_t index)
 	return ok;
 }
 
-typedef struct {
-	uint32_t id;
-	bool group;
-	contact_t *out;
-	uint16_t index;
-} find_t;
-
-static bool find_one(uint16_t index, const contact_t *c, void *ctx)
-{
-	find_t *f = ctx;
-	if (c == NULL || c->id != f->id || (c->type == CONTACT_PRIVATE) == f->group) {
-		return true;
-	}
-	if (f->out != NULL) {
-		*f->out = *c;
-	}
-	f->index = index;
-	return false;
-}
-
 uint16_t codeplug_contact_find_index(uint32_t id, bool group, contact_t *out)
 {
 	if (id == 0 || id > 0xFFFFFFu) {
 		return 0;
 	}
-	// Locked like every other reader: the radio task and the UI task both search, and an edit may be writing
-	find_t f = { .id = id, .group = group, .out = out };
-	codeplug_contacts_each(find_one, &f);
-	return f.index;
+	if (source != CODEPLUG_OPENFW) {
+		return 0;
+	}
+	contact_t c;
+	// A direct scan, not codeplug_contacts_each: the radio task calls this at boot and the callback union of every
+	// contacts scan would count every UI callback's stack against it. Locked like every other reader
+	if (in_scan) {
+		// Nested in a contacts scan's callback (same task, recursive lock): scan_blk is in use, so read one by one
+		for (uint16_t index = 1; index <= CODEPLUG_CONTACTS_MAX; index++) {
+			if (!codeplug_contact(index, &c)) {
+				continue;
+			}
+			if (c.id != id || (c.type == CONTACT_PRIVATE) == group) {
+				continue;
+			}
+			if (out != NULL) {
+				*out = c;
+			}
+			return index;
+		}
+		return 0;
+	}
+	storage_lock();
+	in_scan = true;
+	for (uint16_t base = 1; base <= CODEPLUG_CONTACTS_MAX; base += CONTACTS_PER_READ) {
+		uint16_t n = CODEPLUG_CONTACTS_MAX - base + 1u;
+		if (n > CONTACTS_PER_READ) {
+			n = CONTACTS_PER_READ;
+		}
+		if (!flash_read(CONTACT_BASE + (base - 1u) * CONTACT_SIZE, scan_blk, (uint32_t)n * CONTACT_SIZE)) {
+			in_scan = false;
+			storage_unlock();
+			return 0;
+		}
+		for (uint16_t i = 0; i < n; i++) {
+			if (!contact_decode(&scan_blk[(uint32_t)i * CONTACT_SIZE], &c)) {
+				continue;
+			}
+			if (c.id != id || (c.type == CONTACT_PRIVATE) == group) {
+				continue;
+			}
+			if (out != NULL) {
+				*out = c;
+			}
+			uint16_t index = base + i;
+			in_scan = false;
+			storage_unlock();
+			return index;
+		}
+	}
+	in_scan = false;
+	storage_unlock();
+	return 0;
 }
 
 bool codeplug_contact_find(uint32_t id, bool group, contact_t *out)
