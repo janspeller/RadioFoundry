@@ -495,6 +495,11 @@ msgid "No privacy key: set one in Settings > Privacy"
 msgstr "无密钥：在设置 > 加密 中设置"
 
 #: core/ui/ui_app.c
+msgctxt "QUICK_WHY_NO_ENC_KEY"
+msgid "No encryption key in the radio"
+msgstr "收音机中没有加密密钥"
+
+#: core/ui/ui_app.c
 msgctxt "QUICK_TOAST_POWER"
 msgid "Power "
 msgstr "功率 "
@@ -3060,6 +3065,61 @@ msgid "Up to 10.0 ppm"
 msgstr "最大 10.0 ppm"
 
 #: core/ui/ui_menus.c
+msgctxt "FD_STATUS_SEARCHING"
+msgid "Searching..."
+msgstr "搜索中..."
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_STOPPED"
+msgid "Stopped"
+msgstr "已停止"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_BUSY"
+msgid "Radio busy"
+msgstr "电台忙"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_FM_ONLY"
+msgid "FM channels only"
+msgstr "仅FM信道"
+
+#: core/ui/ui_menus.c
+msgctxt "WHY_NOT_ON_THIS_RADIO"
+msgid "Not on this radio"
+msgstr "本机不支持"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_REFUSED"
+msgid "Can't search here"
+msgstr "无法在此搜索"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_TITLE"
+msgid "Freq Detect"
+msgstr "频率检测"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_LABEL_RANGE"
+msgid "Range"
+msgstr "范围"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_HINT_TUNE"
+msgid "Up Down range  OK tune"
+msgstr "上下 范围  OK 调谐"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_HINT_BACK"
+msgid "Up Down range  Back"
+msgstr "上下 范围  返回"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_TOAST_NOTHING_FOUND"
+msgid "Nothing found yet"
+msgstr "尚未找到"
+
+#: core/ui/ui_menus.c
 msgctxt "ABOUT_BODY_FIRMWARE"
 msgid "Firmware: "
 msgstr "固件： "
@@ -3433,6 +3493,11 @@ msgstr "诊断"
 msgctxt "TOOLS_ROW_SHARES_RECEIVED"
 msgid "Zones/Chs Received"
 msgstr "收到的区域/信道"
+
+#: core/ui/ui_menus.c
+msgctxt "TOOLS_ROW_FREQ_DETECT"
+msgid "Freq detect"
+msgstr "频率检测"
 
 #: core/ui/ui_menus.c
 msgctxt "WORD_DUAL_WATCH"
@@ -4213,11 +4278,6 @@ msgstr "麦克风 AGC 设定电平"
 msgctxt "WHY_NOISE_REDUCTION_NOT_IN_BUILD"
 msgid "Noise reduction: not in this build"
 msgstr "降噪：本版本无"
-
-#: core/ui/ui_menus.c
-msgctxt "WHY_NOT_ON_THIS_RADIO"
-msgid "Not on this radio"
-msgstr "本机不支持"
 
 #: core/ui/ui_menus.c
 msgctxt "WHY_MIC_AGC_NOT_IN_BUILD"

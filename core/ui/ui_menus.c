@@ -5382,13 +5382,13 @@ static void fd_enter(void)
 static const char *fd_status(const radio_view_t *v)
 {
 	if (v->fd_on)
-		return TR("Searching...");
+		return TR(FD_STATUS_SEARCHING, "Searching...");
 	switch (v->fd_refused) {
-	case RFD_OK: return TR("Stopped");
-	case RFD_BUSY: return TR("Radio busy");
-	case RFD_MODE: return TR("FM channels only");
-	case RFD_NO_HW: return TR("Not on this radio");
-	default: return TR("Can't search here");
+	case RFD_OK: return TR(FD_STATUS_STOPPED, "Stopped");
+	case RFD_BUSY: return TR(FD_STATUS_BUSY, "Radio busy");
+	case RFD_MODE: return TR(FD_STATUS_FM_ONLY, "FM channels only");
+	case RFD_NO_HW: return TR(WHY_NOT_ON_THIS_RADIO, "Not on this radio");
+	default: return TR(FD_STATUS_REFUSED, "Can't search here");
 	}
 }
 
@@ -5400,7 +5400,7 @@ static void fd_draw(void)
 	char buf[24];
 	sbuf_t b;
 	gfx_clear(ui_col.bg);
-	int y = ui_draw_top(v, &ui_st, TR("Freq Detect"), NULL) + 2;
+	int y = ui_draw_top(v, &ui_st, TR(FD_TITLE, "Freq Detect"), NULL) + 2;
 
 	// The range: the label at the left (dim), the MHz at the right
 	uint32_t lo, hi;
@@ -5412,7 +5412,7 @@ static void fd_draw(void)
 		sb_str(&b, " MHz");
 	}
 	const font_t *f = L->small;
-	gfx_text(f, 2, y, TR("Range"), ui_col.dim);
+	gfx_text(f, 2, y, TR(FD_LABEL_RANGE, "Range"), ui_col.dim);
 	gfx_text(f, w - 2 - gfx_text_width(f, buf), y, buf, ui_col.fg);
 	y += f->h + 3;
 
@@ -5439,7 +5439,7 @@ static void fd_draw(void)
 		sb_chr(&b, 'x');
 		gfx_text(f, (w - gfx_text_width(f, buf)) / 2, y, buf, ui_col.dim);
 	}
-	ui_draw_bottom(&ui_st, CONFIG_VFO && hz != 0 ? TR("Up Down range  OK tune") : TR("Up Down range  Back"));
+	ui_draw_bottom(&ui_st, CONFIG_VFO && hz != 0 ? TR(FD_HINT_TUNE, "Up Down range  OK tune") : TR(FD_HINT_BACK, "Up Down range  Back"));
 }
 
 static bool fd_key(const input_event_t *ev)
@@ -5458,7 +5458,7 @@ static bool fd_key(const input_event_t *ev)
 	if (ev->action == ACT_SELECT && press) {
 		uint32_t hz = fd_shown_hz(ui_view());
 		if (!CONFIG_VFO || hz == 0) {
-			ui_toast(TR("Nothing found yet"));
+			ui_toast(TR(FD_TOAST_NOTHING_FOUND, "Nothing found yet"));
 			return true;
 		}
 #if CONFIG_VFO

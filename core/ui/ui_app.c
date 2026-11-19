@@ -85,7 +85,7 @@ static bool ptt_held;			// the PTT key is down (its DOWN came, its UP not yet)
 static bool power_off_due;		// auto power off: the housekeeping task switches off (ui_app_power_off_due)
 static bool batt_warned;		// the low battery banner was shown at this level (cleared 3 % above it)
 static uint32_t batt_warned_ms;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static uint32_t hear_all_key;		// the channel hear all by default last latched on (vfo, zone, position, mode)
 #endif
 static char emerg_name[CODEPLUG_NAME_LEN + 1];
@@ -348,7 +348,7 @@ static void filter_type(char key)
 
 static ui_recent_t recent[UI_RECENT_MAX];
 static uint8_t recent_n;
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static uint32_t recent_seen_ms;
 static bool recent_tx;
 #endif
@@ -886,7 +886,7 @@ static void entry_commit(void)
 
 // --- input helpers ---
 
-#if CONFIG_DMR
+#if CONFIG_DMR_ANY
 static bool dmon_at_press;	// the hear all latch when the monitor key went down (ui_app_key)
 
 // Digital monitor (the DMR hear all latch: every talkgroup on the slot and color code)

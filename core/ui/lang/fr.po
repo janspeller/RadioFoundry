@@ -493,6 +493,11 @@ msgid "No privacy key: set one in Settings > Privacy"
 msgstr "Définir clé de chiff. (Reglages)"
 
 #: core/ui/ui_app.c
+msgctxt "QUICK_WHY_NO_ENC_KEY"
+msgid "No encryption key in the radio"
+msgstr "Aucune clé de chiffrement dans la radio"
+
+#: core/ui/ui_app.c
 msgctxt "QUICK_TOAST_POWER"
 msgid "Power "
 msgstr "Puissance "
@@ -3058,6 +3063,61 @@ msgid "Up to 10.0 ppm"
 msgstr "Max 10,0 ppm"
 
 #: core/ui/ui_menus.c
+msgctxt "FD_STATUS_SEARCHING"
+msgid "Searching..."
+msgstr "Recherche..."
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_STOPPED"
+msgid "Stopped"
+msgstr "Arrêté"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_BUSY"
+msgid "Radio busy"
+msgstr "Radio occupée"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_FM_ONLY"
+msgid "FM channels only"
+msgstr "Canaux FM seulement"
+
+#: core/ui/ui_menus.c
+msgctxt "WHY_NOT_ON_THIS_RADIO"
+msgid "Not on this radio"
+msgstr "Indisponible radio"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_STATUS_REFUSED"
+msgid "Can't search here"
+msgstr "Recherche impossible ici"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_TITLE"
+msgid "Freq Detect"
+msgstr "Détect. fréquence"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_LABEL_RANGE"
+msgid "Range"
+msgstr "Plage"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_HINT_TUNE"
+msgid "Up Down range  OK tune"
+msgstr "Haut Bas plage  OK régler"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_HINT_BACK"
+msgid "Up Down range  Back"
+msgstr "Haut Bas plage  Retour"
+
+#: core/ui/ui_menus.c
+msgctxt "FD_TOAST_NOTHING_FOUND"
+msgid "Nothing found yet"
+msgstr "Rien trouvé encore"
+
+#: core/ui/ui_menus.c
 msgctxt "ABOUT_BODY_FIRMWARE"
 msgid "Firmware: "
 msgstr "Firmware : "
@@ -3431,6 +3491,11 @@ msgstr "Diagnostics"
 msgctxt "TOOLS_ROW_SHARES_RECEIVED"
 msgid "Zones/Chs Received"
 msgstr "Zones/Canaux reçus"
+
+#: core/ui/ui_menus.c
+msgctxt "TOOLS_ROW_FREQ_DETECT"
+msgid "Freq detect"
+msgstr "Détect. fréquence"
 
 #: core/ui/ui_menus.c
 msgctxt "WORD_DUAL_WATCH"
@@ -4211,11 +4276,6 @@ msgstr "AGC mic fixe le niv."
 msgctxt "WHY_NOISE_REDUCTION_NOT_IN_BUILD"
 msgid "Noise reduction: not in this build"
 msgstr "Réd. bruit indispo"
-
-#: core/ui/ui_menus.c
-msgctxt "WHY_NOT_ON_THIS_RADIO"
-msgid "Not on this radio"
-msgstr "Indisponible radio"
 
 #: core/ui/ui_menus.c
 msgctxt "WHY_MIC_AGC_NOT_IN_BUILD"
